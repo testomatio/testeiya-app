@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "skills": {
+    "electrobun-debugging": {
+      "source": "rajavijayach/electrobun-skills",
+      "sourceType": "github",
+      "skillPath": "electrobun-debugging/SKILL.md",
+      "computedHash": "100c1ef61d1610d6003b0b886ba3ef00c5275b172d5595623e1e7942f2738fe5"
+    },
+    "electrobun-distribution": {
+      "source": "rajavijayach/electrobun-skills",
+      "sourceType": "github",
+      "skillPath": "electrobun-distribution/SKILL.md",
+      "computedHash": "461a96be112f16ef285c4f7836adcc694527da639259da279fca784d8b966ac7"
+    },
+    "electrobun-native-ui": {
+      "source": "rajavijayach/electrobun-skills",
+      "sourceType": "github",
+      "skillPath": "electrobun-native-ui/SKILL.md",
+      "computedHash": "d224912dbe1f5595798cecf756354ccd3a54e5f712abaa7a5b98d22a91cf7cbf"
+    },
+    "electrobun-rpc-patterns": {
+      "source": "rajavijayach/electrobun-skills",
+      "sourceType": "github",
+      "skillPath": "electrobun-rpc-patterns/SKILL.md",
+      "computedHash": "eaf1ec65af11e4292b99cd48934c0d74d099159222a53fd2b55e039ed3a3ed95"
+    },
+    "electrobun-window-management": {
+      "source": "rajavijayach/electrobun-skills",
+      "sourceType": "github",
+      "skillPath": "electrobun-window-management/SKILL.md",
+      "computedHash": "be6f9c20d71f2edeaf2d9718ab906b3f5fd0b8575e954d2b2e0e7d31b842fbd9"
+    },
+    "nextjs": {
+      "source": "vercel-labs/vercel-plugin",
+      "sourceType": "github",
+      "computedHash": "228adbce76c9036e79d1177e5b9fe05062569b8aea7effb89152f83f6d4603b2"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/composition-patterns/SKILL.md",
+      "computedHash": "575757e3e25761c8c562d6e395d29f0b76c98b1273c0bd72d88e6ab1bc9c7d42"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
+    "vercel-react-view-transitions": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-view-transitions/SKILL.md",
+      "computedHash": "c8952fc9127fa0564d0cb71dccb4215a5608ac933b5831104f09173a97a46f85"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    }
+  }
+}

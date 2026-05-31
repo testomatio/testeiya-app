@@ -1,0 +1,137 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { FolderOpenIcon } from "lucide-react";
+import { toast } from "sonner";
+
+/**
+ * In-app Settings for the desktop build: workspace switching (open a local
+ * directory).
+ *
+ * The LLM provider/model + credentials are managed in the Providers & Models
+ * dialog (`ProvidersDialog`, opened from the header model name). MCP servers are
+ * managed in their own dialog (`McpServersDialog`).
+ */
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  cwd,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  cwd?: string | null;
+}) {
+  const [folder, setFolder] = useState("");
+  const [opening, setOpening] = useState(false);
+
+  useEffect(() => {
+    if (open) setFolder("");
+  }, [open]);
+
+  const openWorkspace = useCallback(async (rawPath: string) => {
+    const p = rawPath.trim();
+    if (!p) return;
+    setOpening(true);
+    try {
+      const res = await fetch("/api/workspace", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ path: p }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      toast.success(`Opening ${data.cwd}`);
+      // Switch the app to the new workspace session.
+      window.location.search = `?session=${encodeURIComponent(data.sessionId)}`;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open workspace");
+      setOpening(false);
+    }
+  }, []);
+
+  const browseFolder = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workspace/pick", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (!data.available) {
+        toast.info("Native folder picker is only available in the desktop app — type a path instead.");
+        return;
+      }
+      if (data.path) {
+        setFolder(data.path);
+        void openWorkspace(data.path);
+      }
+    } catch {
+      toast.error("Could not open the folder picker");
+    }
+  }, [openWorkspace]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>Workspace for the agent.</DialogDescription>
+        </DialogHeader>
+
+        {/* Workspace */}
+        <section className="space-y-3 py-2">
+          <h3 className="text-sm font-semibold">Workspace</h3>
+          {cwd && (
+            <p className="text-muted-foreground text-xs font-mono break-all">
+              Current: {cwd}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="/path/to/project"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void openWorkspace(folder);
+              }}
+            />
+            <Button
+              variant="outline"
+              onClick={() => void browseFolder()}
+              title="Browse for a folder (desktop app)"
+            >
+              <FolderOpenIcon className="size-4" />
+            </Button>
+            <Button
+              onClick={() => void openWorkspace(folder)}
+              disabled={!folder.trim() || opening}
+            >
+              {opening ? <Spinner className="size-3.5" /> : null}
+              Open
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Opens a local directory as the agent&apos;s workspace (reloads the session).
+          </p>
+        </section>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

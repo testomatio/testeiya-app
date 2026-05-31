@@ -1,0 +1,15 @@
+.git
+.next
+.DS_Store
+node_modules
+testclaw/node_modules
+testclaw/dist
+**/.env
+**/.env.*
+!**/.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage
+.vscode
+.idea

@@ -1,0 +1,52 @@
+/*
+ * Heading sizes for the BlockNote editor.
+ *
+ * BlockNote sizes headings via the `--level` custom property (default H1 = 3em
+ * ≈ 48px, H2 = 2em, H3 = 1.3em) — far too large for an embedded doc editor.
+ * We override the variable per level with a balanced, compact scale:
+ *   H1 22px · H2 20px · H3 18px · H4 16px · H5 15px · H6 14px  (base font 16px).
+ *
+ * Overriding the variable (rather than `font-size`) keeps BlockNote's own
+ * heading font-size rule intact; the `.testclaw-block-editor` scope + the extra
+ * class/attribute give these higher specificity than BlockNote's defaults.
+ */
+
+.testclaw-block-editor [data-content-type="heading"],
+.testclaw-block-editor [data-content-type="heading"][data-level="1"] {
+  --level: 1.375em; /* 22px */
+}
+.testclaw-block-editor [data-content-type="heading"][data-level="2"] {
+  --level: 1.25em; /* 20px */
+}
+.testclaw-block-editor [data-content-type="heading"][data-level="3"] {
+  --level: 1.125em; /* 18px */
+}
+.testclaw-block-editor [data-content-type="heading"][data-level="4"] {
+  --level: 1em; /* 16px */
+}
+.testclaw-block-editor [data-content-type="heading"][data-level="5"] {
+  --level: 0.9375em; /* 15px */
+}
+.testclaw-block-editor [data-content-type="heading"][data-level="6"] {
+  --level: 0.875em; /* 14px */
+}
+
+/* Keep the brief transition state (block following a heading) in sync. */
+.testclaw-block-editor [data-prev-level="1"] {
+  --prev-level: 1.375em;
+}
+.testclaw-block-editor [data-prev-level="2"] {
+  --prev-level: 1.25em;
+}
+.testclaw-block-editor [data-prev-level="3"] {
+  --prev-level: 1.125em;
+}
+.testclaw-block-editor [data-prev-level="4"] {
+  --prev-level: 1em;
+}
+.testclaw-block-editor [data-prev-level="5"] {
+  --prev-level: 0.9375em;
+}
+.testclaw-block-editor [data-prev-level="6"] {
+  --prev-level: 0.875em;
+}

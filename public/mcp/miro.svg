@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Miro">
+  <rect width="64" height="64" rx="14" fill="#FFD02F"/>
+  <g fill="#050038">
+    <path d="M16 46V22c0-1.6 2-2.3 3-1l5 6.5V22c0-1.6 2-2.3 3-1l5 6.5V22c0-1.6 2-2.3 3-1l6 8c.6.8.5 1.9-.3 2.6-.8.6-2 .5-2.7-.3L36 28v18h-4V31l-5-6.5V46h-4V31l-5-6.5V46h-4z"/>
+    <circle cx="44" cy="42" r="4"/>
+  </g>
+</svg>
