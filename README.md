@@ -105,7 +105,8 @@ cd testeiya && bun run serve:app    # serve out/ + API + WS on one port
 Everything can be set in the app's **Settings**, but you can also preconfigure via a `.env` file in the project root (or `~/.testeiya/.env` for a packaged app). All keys are optional — set only what you need:
 
 ```bash
-# Testomat.io API key — lets Testeiya pull/push your tests
+# Testomat.io API key — OPTIONAL; you can connect Testomat.io in the app
+# instead. Lets Testeiya pull/push your tests.
 TESTOMATIO=your-testomatio-api-key
 
 # Testomat.io backend URL (defaults to https://app.testomat.io)
@@ -192,7 +193,7 @@ curl http://localhost:3050/api/agent/<sessionId>
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TESTOMATIO` | Testomat.io API key (pull/push tests) | — (or set via Settings) |
+| `TESTOMATIO` | Testomat.io API key (pull/push tests) | — (or connect Testomat.io in the app) |
 | `TESTOMATIO_URL` | Testomat.io backend for pulling tests | `https://app.testomat.io` |
 | `<PROVIDER>_API_KEY` | Your LLM provider key — name matches the provider (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) | — (or set via Settings) |
 | `TESTEIYA_WORKSPACE` | Web mode: folder opened automatically as the workspace on cold load | — |
