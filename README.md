@@ -149,10 +149,17 @@ One Bun server (`testeiya/src/app-server.ts`, from the Agent submodule) is the w
 
 ### Updating the Agent
 
-The Agent is pinned to a specific commit. To move it forward:
+The Agent (`testeiya/` submodule) ships fixes, new skills, and model updates on its own schedule. **Run this regularly to keep your Agent current:**
 
 ```bash
-git submodule update --remote testeiya   # pull the latest Agent from testomatio/testclaw
+bun run update:agent
+```
+
+It pulls the latest Agent from [`testomatio/testclaw`](https://github.com/testomatio/testclaw) (`master`) and refreshes its dependencies. Make a habit of running it — at least whenever you `git pull` the App.
+
+To pin the App to the updated Agent for everyone else, commit the bumped pointer:
+
+```bash
 git add testeiya && git commit -m "chore: bump Testeiya Agent"
 ```
 
