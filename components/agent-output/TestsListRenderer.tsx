@@ -31,8 +31,8 @@ interface McpTest {
   updated_at?: string | null;
 }
 
-// Title 7fr, suite 3fr, meta 2fr — tests are title-heavy.
-const TESTS_GRID = "minmax(0,7fr) minmax(0,3fr) minmax(0,2fr)";
+// Suite 3fr, title 7fr, meta 2fr — suite leads, then the title-heavy test.
+const TESTS_GRID = "minmax(0,3fr) minmax(0,7fr) minmax(0,2fr)";
 
 export default function TestsListRenderer({
   json,
@@ -71,8 +71,8 @@ export default function TestsListRenderer({
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
       <ListRowGroup>
         <ListRowHeader gridCols={TESTS_GRID}>
-          <div className="min-w-0 truncate">Test</div>
           <div className="min-w-0 truncate">Suite</div>
+          <div className="min-w-0 truncate">Test</div>
           <div className="min-w-0 truncate">State</div>
         </ListRowHeader>
         {items.map((t, idx) => {
@@ -84,6 +84,11 @@ export default function TestsListRenderer({
               gridCols={TESTS_GRID}
               onOpen={() => setSelected(t)}
             >
+              <div className="min-w-0 truncate text-xs text-muted-foreground">
+                <span className="truncate" title={suite}>
+                  {suite ?? "—"}
+                </span>
+              </div>
               <div className="flex min-w-0 items-center gap-x-2">
                 {(() => {
                   const kind = resolveType({ state: t.state });
@@ -111,11 +116,6 @@ export default function TestsListRenderer({
                   </span>
                 )}
                 <LabelsRow labels={t.labels} className="min-w-0" />
-              </div>
-              <div className="min-w-0 truncate text-xs text-muted-foreground">
-                <span className="truncate" title={suite}>
-                  {suite ?? "—"}
-                </span>
               </div>
               <div className="flex min-w-0 items-center gap-x-1">
                 {t.priority && t.priority !== "normal" && (

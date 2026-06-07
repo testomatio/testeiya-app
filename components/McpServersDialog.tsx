@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -34,9 +34,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { Trash2Icon, PlusIcon, InfoIcon } from "lucide-react";
+import { Trash2Icon, PlusIcon, InfoIcon, KeyRoundIcon } from "lucide-react";
 import { toast } from "sonner";
+import { observer } from "mobx-react-lite";
 import { mcpServiceDisplay } from "@/lib/mcp-services";
+import { useConnectionsService } from "@/lib/services/StoreProvider";
 
 type McpTransport = "http" | "sse" | "stdio";
 
@@ -49,6 +51,7 @@ interface McpServer {
   envKeys?: string[];
   headerKeys?: string[];
   auth?: "oauth" | "apikey";
+  authenticated?: boolean;
   source: "project" | "user";
   removable: boolean;
 }
@@ -72,121 +75,21 @@ interface CatalogService {
  * user-added ones, install predefined services, and add custom servers.
  * Changes take effect when a new agent session starts (clear chat / reload).
  */
-export function McpServersDialog({
+export const McpServersDialog = observer(function McpServersDialog({
   open,
   onOpenChange,
-  sessionId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sessionId?: string;
 }) {
-  const [servers, setServers] = useState<McpServer[]>([]);
-  const [catalog, setCatalog] = useState<CatalogService[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const conn = useConnectionsService();
+  const sessionId = conn.sessionId;
 
-  const configuredNames = new Set(servers.map((s) => s.name));
-
-  const refresh = useCallback(() => {
-    if (!sessionId) {
-      setServers([]);
-      return;
-    }
-    setLoading(true);
-    fetch(`/api/mcp?session=${encodeURIComponent(sessionId)}`, {
-      credentials: "same-origin",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setServers(data?.servers ?? []))
-      .catch(() => setServers([]))
-      .finally(() => setLoading(false));
-  }, [sessionId]);
-
+  // Refresh the list/catalog each time the dialog opens (the service also
+  // reloads automatically when the session changes).
   useEffect(() => {
-    if (!open) return;
-    refresh();
-    fetch("/api/mcp/catalog", { credentials: "same-origin" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setCatalog(data?.services ?? []))
-      .catch(() => setCatalog([]));
-  }, [open, refresh]);
-
-  const toggle = useCallback(
-    async (server: string, enabled: boolean) => {
-      if (!sessionId) return;
-      setServers((prev) =>
-        prev.map((s) => (s.name === server ? { ...s, enabled } : s))
-      );
-      try {
-        const res = await fetch("/api/mcp", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ session: sessionId, server, enabled }),
-        });
-        if (!res.ok) throw new Error(`Request failed (${res.status})`);
-        const data = await res.json();
-        setServers(data.servers ?? []);
-        toast.success(
-          `${server} ${enabled ? "enabled" : "disabled"} — applies on next session`
-        );
-      } catch (err) {
-        setServers((prev) =>
-          prev.map((s) => (s.name === server ? { ...s, enabled: !enabled } : s))
-        );
-        toast.error(err instanceof Error ? err.message : "Failed to update MCP server");
-      }
-    },
-    [sessionId]
-  );
-
-  const remove = useCallback(
-    async (server: string) => {
-      if (!sessionId) return;
-      setBusy(server);
-      try {
-        const res = await fetch("/api/mcp/remove", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ session: sessionId, server }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-        setServers(data.servers ?? []);
-        toast.success(`${server} removed`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to remove MCP server");
-      } finally {
-        setBusy(null);
-      }
-    },
-    [sessionId]
-  );
-
-  const add = useCallback(
-    async (payload: Record<string, unknown>, label: string) => {
-      if (!sessionId) return false;
-      try {
-        const res = await fetch("/api/mcp/add", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ session: sessionId, ...payload }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-        setServers(data.servers ?? []);
-        toast.success(`${label} added — applies on next session`);
-        return true;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to add MCP server");
-        return false;
-      }
-    },
-    [sessionId]
-  );
+    if (open) void conn.load();
+  }, [open, conn]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -213,24 +116,26 @@ export function McpServersDialog({
 
             <TabsContent value="configured" className="space-y-2 pt-2 min-w-0">
               <ConfiguredList
-                servers={servers}
-                loading={loading}
-                busy={busy}
-                onToggle={toggle}
-                onRemove={remove}
+                servers={conn.servers}
+                loading={conn.loading}
+                busy={conn.busy}
+                authBusy={conn.authBusy}
+                onToggle={(name, enabled) => void conn.toggle(name, enabled)}
+                onRemove={(name) => void conn.remove(name)}
+                onAuthenticate={(name) => void conn.authenticate(name)}
               />
             </TabsContent>
 
             <TabsContent value="services" className="pt-2 min-w-0">
               <ServiceGallery
-                catalog={catalog}
-                configured={configuredNames}
-                onAdd={add}
+                catalog={conn.catalog}
+                configured={conn.configuredNames}
+                onAdd={conn.add}
               />
             </TabsContent>
 
             <TabsContent value="custom" className="pt-2 min-w-0">
-              <CustomForm configured={configuredNames} onAdd={add} />
+              <CustomForm configured={conn.configuredNames} onAdd={conn.add} />
             </TabsContent>
           </Tabs>
         )}
@@ -243,20 +148,24 @@ export function McpServersDialog({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 function ConfiguredList({
   servers,
   loading,
   busy,
+  authBusy,
   onToggle,
   onRemove,
+  onAuthenticate,
 }: {
   servers: McpServer[];
   loading: boolean;
   busy: string | null;
+  authBusy: string | null;
   onToggle: (name: string, enabled: boolean) => void;
   onRemove: (name: string) => void;
+  onAuthenticate: (name: string) => void;
 }) {
   if (loading) {
     return (
@@ -290,12 +199,36 @@ function ConfiguredList({
               <Badge variant="outline" className="text-[10px] uppercase shrink-0">
                 {s.type}
               </Badge>
+              {s.auth === "oauth" && (
+                <Badge
+                  variant={s.authenticated ? "secondary" : "outline"}
+                  className="text-[10px] uppercase shrink-0"
+                >
+                  {s.authenticated ? "authed" : "oauth"}
+                </Badge>
+              )}
             </div>
             <div className="text-muted-foreground text-[11px] font-mono truncate">
               {s.url ?? s.command ?? "—"}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {s.auth === "oauth" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title={s.authenticated ? "Re-authenticate" : "Authenticate in browser"}
+                disabled={authBusy === s.name}
+                onClick={() => onAuthenticate(s.name)}
+              >
+                {authBusy === s.name ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <KeyRoundIcon className="size-3.5" />
+                )}
+              </Button>
+            )}
             {s.removable && (
               <Button
                 variant="ghost"

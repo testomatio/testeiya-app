@@ -2,8 +2,8 @@
 .next
 .DS_Store
 node_modules
-testclaw/node_modules
-testclaw/dist
+testeiya/node_modules
+testeiya/dist
 **/.env
 **/.env.*
 !**/.env.example

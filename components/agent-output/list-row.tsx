@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
   CSSProperties,
@@ -182,4 +184,98 @@ export function ListRowCaption({
       {children}
     </div>
   );
+}
+
+/**
+ * Pager strip for fetch-backed lists (label on the left, controls on the right).
+ * Renders numbered page buttons (1 2 3 … N) when `totalPages` is known, falling
+ * back to plain Prev/Next when the total is unknown.
+ */
+export function ListPager({
+  label,
+  page,
+  totalPages,
+  hasPrev,
+  hasNext,
+  onPage,
+  className,
+}: {
+  label: string;
+  page: number;
+  totalPages?: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  onPage: (page: number) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 px-2 py-1.5 text-xs text-muted-foreground",
+        className
+      )}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      <div className="flex items-center gap-1">
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={!hasPrev}
+          onClick={() => onPage(page - 1)}
+        >
+          <ChevronLeftIcon className="size-3.5" />
+          Prev
+        </Button>
+        {totalPages != null &&
+          pageRange(page, totalPages).map((p, i) => {
+            if (p === "ellipsis") {
+              return (
+                <span key={`gap-${i}`} className="px-1">
+                  …
+                </span>
+              );
+            }
+            let variant: "secondary" | "ghost" = "ghost";
+            if (p === page) variant = "secondary";
+            return (
+              <Button
+                key={p}
+                size="icon-xs"
+                variant={variant}
+                aria-current={p === page}
+                onClick={() => onPage(p)}
+              >
+                {p}
+              </Button>
+            );
+          })}
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={!hasNext}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+          <ChevronRightIcon className="size-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Page numbers to show around the current page: always first + last, the
+ * current page ±1, and an "ellipsis" marker wherever a gap is collapsed.
+ * e.g. pageRange(9, 17) → [1, "ellipsis", 8, 9, 10, "ellipsis", 17].
+ */
+function pageRange(current: number, total: number): (number | "ellipsis")[] {
+  const pages: (number | "ellipsis")[] = [];
+  const left = Math.max(2, current - 1);
+  const right = Math.min(total - 1, current + 1);
+  pages.push(1);
+  if (left > 2) pages.push("ellipsis");
+  for (let p = left; p <= right; p++) pages.push(p);
+  if (right < total - 1) pages.push("ellipsis");
+  if (total > 1) pages.push(total);
+  return pages;
 }

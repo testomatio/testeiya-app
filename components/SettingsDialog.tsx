@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { FolderOpenIcon } from "lucide-react";
-import { toast } from "sonner";
+import { useWorkspaceService } from "@/lib/services/StoreProvider";
 
 /**
  * In-app Settings for the desktop build: workspace switching (open a local
@@ -32,6 +32,7 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void;
   cwd?: string | null;
 }) {
+  const workspace = useWorkspaceService();
   const [folder, setFolder] = useState("");
   const [opening, setOpening] = useState(false);
 
@@ -39,47 +40,25 @@ export function SettingsDialog({
     if (open) setFolder("");
   }, [open]);
 
-  const openWorkspace = useCallback(async (rawPath: string) => {
-    const p = rawPath.trim();
-    if (!p) return;
-    setOpening(true);
-    try {
-      const res = await fetch("/api/workspace", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ path: p }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      toast.success(`Opening ${data.cwd}`);
-      // Switch the app to the new workspace session.
-      window.location.search = `?session=${encodeURIComponent(data.sessionId)}`;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open workspace");
-      setOpening(false);
-    }
-  }, []);
+  // The WorkspaceService owns the open-folder flow (pick → POST → navigate).
+  const openWorkspace = useCallback(
+    async (rawPath: string) => {
+      const p = rawPath.trim();
+      if (!p) return;
+      setOpening(true);
+      try {
+        await workspace.openFolder(p);
+      } finally {
+        setOpening(false);
+      }
+    },
+    [workspace]
+  );
 
-  const browseFolder = useCallback(async () => {
-    try {
-      const res = await fetch("/api/workspace/pick", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-      const data = await res.json();
-      if (!data.available) {
-        toast.info("Native folder picker is only available in the desktop app — type a path instead.");
-        return;
-      }
-      if (data.path) {
-        setFolder(data.path);
-        void openWorkspace(data.path);
-      }
-    } catch {
-      toast.error("Could not open the folder picker");
-    }
-  }, [openWorkspace]);
+  const browseFolder = useCallback(
+    () => void workspace.openFolder(),
+    [workspace]
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

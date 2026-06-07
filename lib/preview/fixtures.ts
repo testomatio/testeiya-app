@@ -363,6 +363,50 @@ export const testrunsFixture = {
   meta: { total: 2128, page: 1, per_page: 8 },
 };
 
+export const requirementsFixture = {
+  data: [
+    {
+      id: "9f31a0",
+      jira_key: "QA-142",
+      title: "Checkout supports Apple Pay",
+      source: "jira",
+      status: "In Progress",
+      url: "https://example.atlassian.net/browse/QA-142",
+      tests_count: 8,
+      labels: [{ title: "payments" }],
+    },
+    {
+      id: "7b2c4d",
+      jira_key: "QA-118",
+      title: "Password reset email delivered within 60s",
+      source: "jira",
+      status: "Done",
+      url: "https://example.atlassian.net/browse/QA-118",
+      tests_count: 3,
+    },
+    {
+      id: "1a8e9c",
+      key: "#312",
+      title: "Cart total recalculates after coupon removal",
+      source: "github",
+      status: "Open",
+      url: "https://github.com/acme/shop/issues/312",
+      tests_count: 5,
+      labels: [{ title: "regression" }],
+    },
+    {
+      id: "55d0f1",
+      jira_key: "QA-87",
+      title: "Braking distance below threshold at 5km/h",
+      source: "jira",
+      status: "Review",
+      url: "https://example.atlassian.net/browse/QA-87",
+      tests_count: 0,
+    },
+  ],
+  meta: { total: 37, page: 1, per_page: 8 },
+};
+
 /* ------------------------------------------------------------------------
  * Single-item fixtures (for item renderers)
  * ------------------------------------------------------------------------ */
@@ -375,10 +419,14 @@ export const runItemFixture = {
   status: "failed",
   environment: "staging",
   assigned_to: "davert@testomat.io",
-  tests_count: 6,
+  author: "Mike B.",
+  started_at: "2026-06-02T02:13:00Z",
+  created_at: "2026-06-02T02:12:00Z",
+  tests_count: 7,
   passed_count: 3,
   failed_count: 2,
   skipped_count: 1,
+  pending_count: 1,
   duration: 47.3,
   description:
     "Regression pass run manually before promoting the staging build. Two "
@@ -430,6 +478,13 @@ export const runItemFixture = {
       test_title: "Todos persist across browser sessions",
       suite_title: "Persist Todos",
       status: "skipped",
+      run_time: 0,
+    },
+    {
+      id: 307,
+      test_title: "Todos sync to the cloud backup",
+      suite_title: "Persist Todos",
+      status: "pending",
       run_time: 0,
     },
   ],

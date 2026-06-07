@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import {
+  Component,
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
   useCreateBlockNote,
@@ -35,10 +42,34 @@ export type BlockEditorProps = {
   onChange: (markdown: string) => void;
   readOnly?: boolean;
   theme?: "light" | "dark";
+  /** Scroll to and highlight the first block whose text contains this. */
+  scrollToText?: string;
   /** Fired on Cmd/Ctrl+S. */
   onSaveShortcut?: () => void;
   className?: string;
 };
+
+const SCROLL_MAX_FRAMES = 30;
+const SCROLL_HIGHLIGHT_MS = 2000;
+
+/** First block whose rendered text contains the needle, preferring the deepest
+ *  (innermost) match so the highlight lands tightly instead of on a parent. */
+function findMatchingBlock(
+  blocks: NodeListOf<HTMLElement>,
+  needle: string
+): HTMLElement | null {
+  const matches: HTMLElement[] = [];
+  for (const block of blocks) {
+    if ((block.textContent ?? "").toLowerCase().includes(needle)) {
+      matches.push(block);
+    }
+  }
+  if (matches.length === 0) return null;
+  const deepest = matches.find(
+    (block) => !matches.some((other) => other !== block && block.contains(other))
+  );
+  return deepest ?? matches[0];
+}
 
 /** Focus a step/snippet field once its block is rendered. */
 function focusStepField(
@@ -163,14 +194,54 @@ function CustomSlashMenu() {
   );
 }
 
+const MAX_EDITOR_RETRIES = 3;
+
+/**
+ * Recovers from BlockNote's transient render throws — most notably
+ * `getBlockFromPos` resolving an undefined ProseMirror position while a node
+ * view mounts during a flushSync. The condition clears on the next frame, so we
+ * drop the subtree and remount it (capped) instead of crashing the whole app.
+ */
+class EditorErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; nonce: number }
+> {
+  private retries = 0;
+  private frame: number | null = null;
+  state = { hasError: false, nonce: 0 };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {
+    if (this.retries >= MAX_EDITOR_RETRIES) return;
+    this.retries += 1;
+    this.frame = requestAnimationFrame(() =>
+      this.setState((s) => ({ hasError: false, nonce: s.nonce + 1 }))
+    );
+  }
+
+  componentWillUnmount() {
+    if (this.frame) cancelAnimationFrame(this.frame);
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return <Fragment key={this.state.nonce}>{this.props.children}</Fragment>;
+  }
+}
+
 export function BlockEditor({
   value,
   onChange,
   readOnly,
   theme = "light",
+  scrollToText,
   onSaveShortcut,
   className,
 }: BlockEditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const initial = markdownToBlocks(value);
   const editor = useCreateBlockNote({
     schema: customSchema,
@@ -216,9 +287,49 @@ export function BlockEditor({
     };
   }, [editor]);
 
+  // Defer the view mount past the parent's initial synchronous render so the
+  // editor isn't created mid-commit while the chat is streaming.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Scroll to and briefly highlight the first block whose rendered text matches
+  // (search result). BlockNote drops source line numbers, so we key off text.
+  useEffect(() => {
+    if (!mounted || !scrollToText?.trim()) return;
+    const needle = scrollToText.trim().toLowerCase();
+    let frame = 0;
+    let attempts = 0;
+    let cleanup: ReturnType<typeof setTimeout> | null = null;
+    const tryScroll = () => {
+      const blocks = containerRef.current?.querySelectorAll<HTMLElement>(
+        '[data-node-type="blockContainer"]'
+      );
+      const target = blocks && findMatchingBlock(blocks, needle);
+      if (!target) {
+        if (attempts++ < SCROLL_MAX_FRAMES) frame = requestAnimationFrame(tryScroll);
+        return;
+      }
+      target.scrollIntoView({ block: "center" });
+      target.classList.add("testeiya-search-hit");
+      cleanup = setTimeout(
+        () => target.classList.remove("testeiya-search-hit"),
+        SCROLL_HIGHLIGHT_MS
+      );
+    };
+    frame = requestAnimationFrame(tryScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (cleanup) clearTimeout(cleanup);
+    };
+  }, [mounted, scrollToText]);
+
   return (
     <div
-      className={cn("testclaw-block-editor h-full w-full overflow-auto", className)}
+      ref={containerRef}
+      className={cn("testeiya-block-editor h-full w-full overflow-auto", className)}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
           e.preventDefault();
@@ -226,15 +337,19 @@ export function BlockEditor({
         }
       }}
     >
-      <BlockNoteView
-        editor={editor}
-        editable={!readOnly}
-        theme={theme}
-        slashMenu={false}
-        className={testomatioEditorClassName}
-      >
-        <CustomSlashMenu />
-      </BlockNoteView>
+      {mounted && (
+        <EditorErrorBoundary>
+          <BlockNoteView
+            editor={editor}
+            editable={!readOnly}
+            theme={theme}
+            slashMenu={false}
+            className={testomatioEditorClassName}
+          >
+            <CustomSlashMenu />
+          </BlockNoteView>
+        </EditorErrorBoundary>
+      )}
     </div>
   );
 }

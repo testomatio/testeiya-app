@@ -1,7 +1,7 @@
 /**
  * Electrobun main-process entry (runs under Bun).
  *
- * It boots the unified TestClaw app-server (static UI + HTTP API + agent
+ * It boots the unified Testeiya app-server (static UI + HTTP API + agent
  * WebSocket) on a free localhost port, then opens a native window pointed at
  * it. The whole app — UI, API and agent — lives behind that single origin.
  *
@@ -13,13 +13,13 @@
 import { BrowserWindow } from "electrobun/bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { startAppServer } from "../../testclaw/src/app-server";
+import { startAppServer } from "../../testeiya/src/app-server";
 
 // Mark this process as the desktop (Electrobun) runtime. The app-server uses
 // this to decide whether it may import `electrobun/bun` to open external URLs —
 // in web/`bun src/app-server.ts` mode that import has heavy side effects
 // (boots an Electrobun server, fails an Updater) and must be skipped.
-process.env.TESTCLAW_RUNTIME = "desktop";
+process.env.TESTEIYA_RUNTIME = "desktop";
 
 /**
  * Locate the static Next export (`out/`) inside the bundle. `electrobun.config`
@@ -28,7 +28,7 @@ process.env.TESTCLAW_RUNTIME = "desktop";
  */
 function resolveStaticDir(): string {
   const candidates = [
-    process.env.TESTCLAW_STATIC_DIR,
+    process.env.TESTEIYA_STATIC_DIR,
     join(import.meta.dir, "out"),
     join(import.meta.dir, "../out"),
     join(import.meta.dir, "../../out"),
@@ -47,7 +47,7 @@ const url = `http://127.0.0.1:${server.port}/`;
 console.log(`[electrobun] app-server ready at ${url}`);
 
 const win = new BrowserWindow({
-  title: "TestClaw",
+  title: "Testeiya",
   url,
   frame: {
     width: 1280,

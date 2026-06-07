@@ -12,7 +12,7 @@ import { useHost } from "./host-bridge";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "testclaw.theme";
+const STORAGE_KEY = "testeiya.theme";
 
 interface ThemeContextValue {
   theme: Theme;

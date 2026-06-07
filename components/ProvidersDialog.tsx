@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,29 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { observer } from "mobx-react-lite";
 import { providerLogo } from "@/lib/provider-logos";
+import { useProvidersService } from "@/lib/services/StoreProvider";
+import type { ThinkingLevel } from "@/lib/services/types";
+
+const THINKING_LEVEL_LABELS: Record<ThinkingLevel, string> = {
+  off: "Off",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra high",
+};
+
+// Shown before the server's list loads (kept in sync with the SDK on the server).
+const FALLBACK_THINKING_LEVELS: ThinkingLevel[] = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
 
 interface ProviderInfo {
   id: string;
@@ -63,227 +85,39 @@ interface LoginState {
  * The provider list comes entirely from the SDK (`GET /api/providers`); models
  * come from live discovery (`GET /api/providers/models`). Subscriptions sign in
  * via the server-side OAuth bridge; API providers take a pasted key. Selection
- * is persisted to ~/.testclaw/config.json and applies on the next session start
+ * is persisted to ~/.testeiya/config.json and applies on the next session start
  * (clear chat / reload).
  */
-export function ProvidersDialog({
+export const ProvidersDialog = observer(function ProvidersDialog({
   open,
   onOpenChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [current, setCurrent] = useState<Current | null>(null);
-  const [loading, setLoading] = useState(false);
+  const providersSvc = useProvidersService();
+  const providers = providersSvc.providers;
+  const current = providersSvc.current;
+  const loading = providersSvc.loading;
+  const login = providersSvc.login;
+  const applied = providersSvc.applied;
+  const { startLogin, saveKey, logout, select, submitCode, setThinkingLevel } =
+    providersSvc;
+
+  const thinkingLevels = providersSvc.thinkingLevels.length
+    ? providersSvc.thinkingLevels
+    : FALLBACK_THINKING_LEVELS;
+
+  // Search + which provider is expanded are pure view state.
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [login, setLogin] = useState<LoginState | null>(null);
-  const [applied, setApplied] = useState<Current | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/providers", { credentials: "same-origin" });
-      const data = await res.json();
-      setProviders(data.providers ?? []);
-      setCurrent(data.current ?? null);
-    } catch {
-      setProviders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (!open) return;
     setSearch("");
     setExpandedId(null);
-    setLogin(null);
-    setApplied(null);
-    void refresh();
-  }, [open, refresh]);
-
-  // On a successful sign-in, make that provider the active one (its SDK default
-  // model) and surface a "reload to apply" banner — selection takes effect on
-  // the next session.
-  const applyLogin = useCallback(
-    async (provider: string) => {
-      try {
-        const res = await fetch("/api/providers/select", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ provider }), // no model → backend uses SDK default
-        });
-        const data = await res.json();
-        if (res.ok && data.current) {
-          setCurrent(data.current);
-          setApplied(data.current);
-        }
-      } catch {
-        // best-effort — refresh still reflects the new credential
-      }
-      await refresh();
-    },
-    [refresh]
-  );
-
-  // Poll an in-flight sign-in until it completes (or fails). Depends only on the
-  // provider + status so per-tick metadata updates don't restart the interval.
-  useEffect(() => {
-    if (!login || login.status !== "pending") return;
-    const provider = login.provider;
-    let active = true;
-    let settled = false;
-    const tick = async () => {
-      try {
-        const res = await fetch(
-          `/api/providers/login/${encodeURIComponent(provider)}`,
-          { credentials: "same-origin" }
-        );
-        const data = await res.json();
-        if (!active || settled) return;
-        if (data.status === "done") {
-          settled = true;
-          setLogin(null);
-          toast.success(`Signed in to ${provider}`);
-          await applyLogin(provider);
-        } else if (data.status === "error") {
-          settled = true;
-          setLogin((p) =>
-            p && p.provider === provider
-              ? { ...p, status: "error", error: data.error }
-              : p
-          );
-          toast.error(data.error || "Sign-in failed");
-        } else {
-          setLogin((p) =>
-            p && p.provider === provider
-              ? {
-                  ...p,
-                  authUrl: data.authUrl ?? p.authUrl,
-                  instructions: data.instructions ?? p.instructions,
-                  progress: data.progress ?? p.progress,
-                }
-              : p
-          );
-        }
-      } catch {
-        // transient — keep polling
-      }
-    };
-    const iv = setInterval(() => {
-      if (!settled) void tick();
-    }, 2000);
-    return () => {
-      active = false;
-      clearInterval(iv);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [login?.provider, login?.status]);
-
-  const submitCode = useCallback(async (provider: string, code: string) => {
-    const res = await fetch(
-      `/api/providers/login/${encodeURIComponent(provider)}/code`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ code }),
-      }
-    );
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error || "Failed to submit code");
-      return;
-    }
-    toast.success("Code submitted — finishing sign-in…");
-  }, []);
-
-  const startLogin = useCallback(async (provider: string) => {
-    setLogin({ provider, status: "pending" });
-    try {
-      const res = await fetch("/api/providers/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ provider }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      setLogin({
-        provider,
-        status: data.status,
-        authUrl: data.authUrl,
-        instructions: data.instructions,
-        error: data.error,
-      });
-      // Desktop opens the browser server-side; in a plain browser we open it too.
-      if (data.authUrl) window.open(data.authUrl, "_blank", "noopener");
-    } catch (err) {
-      setLogin({
-        provider,
-        status: "error",
-        error: err instanceof Error ? err.message : String(err),
-      });
-      toast.error(err instanceof Error ? err.message : "Sign-in failed");
-    }
-  }, []);
-
-  const saveKey = useCallback(
-    async (provider: string, apiKey: string) => {
-      const res = await fetch("/api/providers/key", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ provider, apiKey }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      toast.success(`Key saved for ${provider}`);
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const logout = useCallback(
-    async (provider: string) => {
-      const res = await fetch("/api/providers/logout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ provider }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || "Failed to sign out");
-        return;
-      }
-      if (login?.provider === provider) setLogin(null);
-      toast.success(`Removed credentials for ${provider}`);
-      await refresh();
-    },
-    [refresh, login]
-  );
-
-  const select = useCallback(
-    async (provider: string, model: string) => {
-      const res = await fetch("/api/providers/select", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ provider, model }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      setCurrent(data.current ?? { provider, model });
-      toast.success(
-        `Now using ${provider} / ${model} — applies on next session (clear chat or reload)`
-      );
-    },
-    []
-  );
+    void providersSvc.refresh();
+  }, [open, providersSvc]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -334,6 +168,31 @@ export function ProvidersDialog({
             </span>
           </div>
         )}
+
+        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 min-w-0">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Thinking</p>
+            <p className="text-[11px] text-muted-foreground">
+              Reasoning effort streamed as the thinking block. Needs a
+              reasoning-capable model; applies on next session.
+            </p>
+          </div>
+          <Select
+            value={providersSvc.thinkingLevel ?? undefined}
+            onValueChange={(v) => v && void setThinkingLevel(v as ThinkingLevel)}
+          >
+            <SelectTrigger className="w-32 shrink-0">
+              <SelectValue placeholder="Select" />
+            </SelectTrigger>
+            <SelectContent>
+              {thinkingLevels.map((lvl) => (
+                <SelectItem key={lvl} value={lvl}>
+                  {THINKING_LEVEL_LABELS[lvl] ?? lvl}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -399,7 +258,7 @@ export function ProvidersDialog({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 function ProviderGroup({
   title,
@@ -458,7 +317,7 @@ function ProviderGroup({
   );
 }
 
-function ProviderRow({
+const ProviderRow = observer(function ProviderRow({
   provider: p,
   current,
   expanded,
@@ -481,10 +340,11 @@ function ProviderRow({
   onSelect: (provider: string, model: string) => Promise<void>;
   onSubmitCode: (provider: string, code: string) => Promise<void>;
 }) {
+  const providers = useProvidersService();
   const isActive = current?.provider === p.id;
   const hasCredential = p.configured || p.loggedIn;
 
-  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
+  const models = providers.modelsFor(p.id);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [selModel, setSelModel] = useState<string>("");
   const [keyVal, setKeyVal] = useState("");
@@ -492,28 +352,23 @@ function ProviderRow({
   const [using, setUsing] = useState(false);
   const [codeVal, setCodeVal] = useState("");
 
-  // Load this provider's models from live discovery when expanded.
+  // Load this provider's models from live discovery when expanded (via service).
   useEffect(() => {
     if (!expanded || !hasCredential) return;
     let active = true;
     setModelsLoading(true);
-    fetch(`/api/providers/models?provider=${encodeURIComponent(p.id)}`, {
-      credentials: "same-origin",
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    providers
+      .loadModels(p.id)
+      .then((list) => {
         if (!active) return;
-        const list: { id: string; name: string }[] = data.models ?? [];
-        setModels(list);
-        const preferred =
-          isActive && current ? current.model : data.default ?? p.defaultModel;
+        const preferred = isActive && current ? current.model : p.defaultModel;
         const chosen =
           preferred && list.some((m) => m.id === preferred)
             ? preferred
-            : data.default ?? list[0]?.id ?? "";
+            : list[0]?.id ?? "";
         setSelModel(chosen);
       })
-      .catch(() => active && setModels([]))
+      .catch(() => {})
       .finally(() => active && setModelsLoading(false));
     return () => {
       active = false;
@@ -741,4 +596,4 @@ function ProviderRow({
       )}
     </li>
   );
-}
+});

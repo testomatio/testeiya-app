@@ -32,7 +32,7 @@ function describe(
   status: AgentStatusBarProps["status"],
   tool?: string | null
 ): string {
-  if (status === "connecting") return "Connecting to TestClaw…";
+  if (status === "connecting") return "Connecting to Testeiya…";
   if (tool) return `Running: ${prettyToolLabel(tool)}`;
   if (status === "submitted") return "Thinking…";
   if (status === "streaming") return "Responding…";

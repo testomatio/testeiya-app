@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { observer } from "mobx-react-lite";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
-import { useWorkspace } from "@/lib/workspace/WorkspaceContext";
+import { useWorkspaceService } from "@/lib/services/StoreProvider";
 
 interface Props {
   json: unknown;
@@ -46,8 +47,8 @@ function parseInput(raw: unknown): { path?: string; content?: string } | null {
  * the user can review and override without leaving the chat. Also pushes
  * the file into the shared workspace editor panel for persistent access.
  */
-export default function FileEditRenderer({ json }: Props) {
-  const { sessionId, open, triggerRefresh } = useWorkspace();
+function FileEditRenderer({ json }: Props) {
+  const { sessionId, open, triggerRefresh } = useWorkspaceService();
   const parsed = parseInput(json);
   const path = parsed?.path;
   const content = parsed?.content;
@@ -78,3 +79,5 @@ export default function FileEditRenderer({ json }: Props) {
     </div>
   );
 }
+
+export default observer(FileEditRenderer);

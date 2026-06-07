@@ -1,0 +1,200 @@
+// Shared client-side types for the service layer.
+
+/** Which file (if any) is shown in the workspace editor panel. */
+export interface OpenFile {
+  /** Path relative to session.cwd. */
+  path: string;
+  /** Seed content (used when the agent just wrote this file). */
+  initialContent?: string;
+  /** Monotonically increasing key so the editor re-mounts on re-open. */
+  key: number;
+  /** Fill the content area (hide the chat) vs. a strip above it. */
+  fullHeight?: boolean;
+  /** Text to scroll to and highlight once the editor renders (search result). */
+  scrollToText?: string;
+}
+
+export interface TreeNode {
+  name: string;
+  kind: "folder" | "file";
+  path: string;
+  children?: TreeNode[];
+}
+
+/** The Testomat.io project a workspace represents (from `.testeiya/testeiya.json`). */
+export interface WorkspaceProjectMeta {
+  projectId: string;
+  baseUrl: string;
+  title?: string;
+}
+
+/** GET /api/files/tree response: the tree plus workspace classification. */
+export interface WorkspaceTree {
+  cwd: string;
+  nodes: TreeNode[];
+  /** `""` (root), `".testeiya/manual-tests"`, or `null` when nothing is loaded. */
+  manualTestsDir: string | null;
+  isProject: boolean;
+  project: WorkspaceProjectMeta | null;
+}
+
+export type SearchScope = "manual" | "all";
+
+export interface SearchContextLine {
+  lineNumber: number;
+  line: string;
+}
+
+export interface SearchMatch {
+  lineNumber: number;
+  line: string;
+  before: SearchContextLine[];
+  after: SearchContextLine[];
+}
+
+export interface SearchFileResult {
+  path: string;
+  matches: SearchMatch[];
+}
+
+/** GET /api/workspace/search response. */
+export interface SearchResponse {
+  query: string;
+  scope: SearchScope;
+  /** Search root relative to cwd: `""` (root) or `".testeiya/manual-tests"`. */
+  scopePath: string;
+  totalMatches: number;
+  totalFiles: number;
+  truncated: boolean;
+  files: SearchFileResult[];
+}
+
+export type SyncAction = "pull" | "push";
+
+export interface SyncResult {
+  ok: boolean;
+  action: SyncAction;
+  dir: string;
+  output?: string;
+}
+
+export interface TestomatioProject {
+  id: string;
+  title: string;
+  framework?: string;
+  testsCount?: number;
+}
+
+/** The project the active session is open on, with live counts + base URL for links. */
+export interface CurrentProject {
+  id: string;
+  title: string;
+  baseUrl: string;
+  testsCount: number | null;
+  runsCount: number | null;
+}
+
+export interface TestomatioAuthState {
+  connected: boolean;
+  baseUrl: string;
+  signInUrl: string;
+  /** True when a previously stored token was rejected by the server. */
+  rejected?: boolean;
+  selectedProjectId?: string;
+  projects?: TestomatioProject[];
+}
+
+export interface CreatedSession {
+  sessionId: string;
+  cwd: string;
+  backendUrl: string;
+  project: { id: string; title: string };
+}
+
+export type McpTransport = "http" | "sse" | "stdio";
+
+export interface McpServer {
+  name: string;
+  enabled: boolean;
+  type: McpTransport;
+  command?: string;
+  url?: string;
+  envKeys?: string[];
+  headerKeys?: string[];
+  auth?: "oauth" | "apikey";
+  /** True once an OAuth token is stored for this server (never the token itself). */
+  authenticated?: boolean;
+  source: "project" | "user";
+  removable: boolean;
+}
+
+export type McpConnectionStatus = "connected" | "disconnected" | "unknown";
+
+export interface OauthState {
+  status: "idle" | "pending" | "done" | "error";
+  authUrl?: string | null;
+  instructions?: string | null;
+  progress?: string | null;
+  error?: string | null;
+}
+
+export interface CatalogSecret {
+  env: string;
+  label: string;
+  placeholder?: string;
+}
+
+export interface CatalogService {
+  id: string;
+  label: string;
+  transport: McpTransport;
+  auth: "oauth" | "apikey" | "none";
+  secrets?: CatalogSecret[];
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  canLogin: boolean;
+  canKey: boolean;
+  defaultModel: string | null;
+  configured: boolean;
+  loggedIn: boolean;
+  group: "subscription" | "api";
+}
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+}
+
+export interface Current {
+  provider: string;
+  model: string;
+}
+
+/** Agent reasoning effort — mirrors the SDK's ThinkingLevel (server is source). */
+export type ThinkingLevel =
+  | "off"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh";
+
+export type LoginStatus = "pending" | "done" | "error";
+
+export interface LoginState {
+  provider: string;
+  status: LoginStatus;
+  authUrl?: string | null;
+  instructions?: string | null;
+  progress?: string | null;
+  error?: string | null;
+}
+
+/** A bundled agent skill, as listed by `GET /api/skills`. */
+export interface SkillInfo {
+  name: string;
+  description: string;
+}

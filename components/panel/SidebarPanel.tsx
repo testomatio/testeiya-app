@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
 import { PANEL_SECTIONS } from "./sections/registry";
 
-const WIDTH_STORAGE_KEY = "testclaw.workspace-tree.width";
+const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 700;
@@ -36,7 +36,15 @@ export function SidebarPanel({ className }: { className?: string }) {
   const { open, activeSection, setActiveSection } = usePanel();
 
   // Resize handle — drag to change panel width, persisted in localStorage.
-  const [width, setWidth] = useState<number>(() => loadWidth());
+  // Start at the deterministic default so the first client render matches the
+  // server (reading localStorage in the initializer causes a hydration
+  // mismatch); apply the stored width after mount.
+  const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setWidth(loadWidth());
+    setHydrated(true);
+  }, []);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -68,10 +76,13 @@ export function SidebarPanel({ className }: { className?: string }) {
     },
     [width]
   );
-  // Persist final width after each state settle (belt-and-suspenders).
+  // Persist final width after each state settle (belt-and-suspenders). Gated on
+  // `hydrated` so the initial default doesn't overwrite the stored value before
+  // it's been read back in.
   useEffect(() => {
+    if (!hydrated) return;
     saveWidth(width);
-  }, [width]);
+  }, [width, hydrated]);
 
   if (!open) return null;
 

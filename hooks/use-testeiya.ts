@@ -10,6 +10,13 @@ export interface ToolCall {
   state: "input-available" | "output-available" | "output-error";
 }
 
+export interface AttachedFile {
+  filename: string;
+  mediaType: string;
+  /** base64 data URL — `data:<mime>;base64,...` */
+  dataUrl: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -20,11 +27,14 @@ export interface ChatMessage {
     duration?: number;
   };
   tools?: ToolCall[];
+  files?: AttachedFile[];
+  /** Set when this reply was driven by a `/<skill>` command. */
+  skill?: { name: string; description: string };
 }
 
 export type ChatStatus = "ready" | "connecting" | "submitted" | "streaming";
 
-export interface TestClawParams {
+export interface TesteiyaParams {
   projectIds?: string[];
   sessionId?: string;
   [key: string]: unknown;
@@ -33,7 +43,7 @@ export interface TestClawParams {
 /**
  * Resolve the agent WebSocket origin. In the desktop/static build the UI is
  * served by the Bun app-server, so the agent socket is same-origin — derive it
- * from `window.location`. An explicit `NEXT_PUBLIC_TESTCLAW_WS_URL` still wins
+ * from `window.location`. An explicit `NEXT_PUBLIC_TESTEIYA_WS_URL` still wins
  * (e.g. dev, where the UI runs under `next dev` and the server is elsewhere).
  */
 function getWsBase(): string {
@@ -43,22 +53,27 @@ function getWsBase(): string {
   // hence connecting to the agent server directly here.
   if (
     process.env.NODE_ENV === "development" &&
-    process.env.NEXT_PUBLIC_TESTCLAW_WS_URL
+    process.env.NEXT_PUBLIC_TESTEIYA_WS_URL
   ) {
-    return process.env.NEXT_PUBLIC_TESTCLAW_WS_URL;
+    return process.env.NEXT_PUBLIC_TESTEIYA_WS_URL;
   }
   // Production/static build: the unified server serves the UI *and* the agent
   // WebSocket on one origin (desktop random port, embedded web), so connect
-  // same-origin. This must win over any baked NEXT_PUBLIC_TESTCLAW_WS_URL — the
+  // same-origin. This must win over any baked NEXT_PUBLIC_TESTEIYA_WS_URL — the
   // desktop server's port is dynamic, so a baked value would hit a dead port.
   if (typeof window !== "undefined") {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${proto}//${window.location.host}`;
   }
-  return process.env.NEXT_PUBLIC_TESTCLAW_WS_URL || "ws://localhost:3210";
+  return process.env.NEXT_PUBLIC_TESTEIYA_WS_URL || "ws://localhost:3210";
 }
 
-export function useTestClaw(params?: TestClawParams) {
+/** No server signal — not even a heartbeat `ping` — for this long means the
+ *  socket is dead. Comfortably above the server's HEARTBEAT_MS (15s) so a couple
+ *  of dropped frames don't trip it. */
+const STALL_TIMEOUT_MS = 45000;
+
+export function useTesteiya(params?: TesteiyaParams) {
   const wsUrl = useMemo(() => {
     const base = getWsBase();
     if (params?.sessionId) {
@@ -100,11 +115,15 @@ export function useTestClaw(params?: TestClawParams) {
   const reasoningRef = useRef("");
   const reasoningStartRef = useRef<number>(0);
   const currentMsgIdRef = useRef("");
-  const pendingMessageRef = useRef<string | null>(null);
+  const pendingMessageRef = useRef<{ text: string; files?: AttachedFile[] } | null>(null);
+  // A `skill` event arrives just before the reply's `start`; stash it so the
+  // new assistant message can carry the "using skill" banner.
+  const pendingSkillRef = useRef<{ name: string; description: string } | null>(null);
   const paramsRef = useRef(params);
   paramsRef.current = params;
-  /** Fires if a sent prompt produces no server event at all (dropped socket,
-   *  prompt never delivered) — turns the silent failure into a visible error. */
+  /** Fires only when the socket goes fully silent — no events and no `ping`
+   *  heartbeat — for STALL_TIMEOUT_MS, which means the connection is dead, not
+   *  that the agent is busy. Turns that silent failure into a visible error. */
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearWatchdog = useCallback(() => {
     if (watchdogRef.current) {
@@ -115,11 +134,18 @@ export function useTestClaw(params?: TestClawParams) {
   const armWatchdog = useCallback(() => {
     clearWatchdog();
     watchdogRef.current = setTimeout(() => {
+      // The agent server heartbeats every ~15s while it works, so long tool
+      // calls and deep thinking keep this re-armed. Reaching here means no
+      // signal at all for STALL_TIMEOUT_MS — the socket is dead (a zombie
+      // connection can still report OPEN), so drop it and let the next send
+      // reconnect. Fires only on a real disconnect, never on a slow turn.
       setStatus((s) => (s === "submitted" || s === "streaming" ? "ready" : s));
       setError(
-        "The agent stopped responding (no activity for 45s). The connection may have dropped — please try sending your message again."
+        "Lost connection to the agent — your last message may not have finished. Send it again to reconnect."
       );
-    }, 45000);
+      wsRef.current?.close();
+      wsRef.current = null;
+    }, STALL_TIMEOUT_MS);
   }, [clearWatchdog]);
 
   const updateLastAssistant = useCallback(
@@ -144,9 +170,9 @@ export function useTestClaw(params?: TestClawParams) {
         return;
       }
 
-      // Any server event means the prompt was received and is being handled.
-      // Re-arm the stall detector for in-progress events; disarm on terminal
-      // ones (the turn ended, or we're idle waiting for the user).
+      // Any server event — including the periodic `ping` heartbeat sent while
+      // the agent works — means the connection is alive, so re-arm the stall
+      // detector. Disarm on terminal events (the turn ended, or we're idle).
       clearWatchdog();
       const terminal = ["finish", "done", "error", "abort", "session_cleared"];
       if (!terminal.includes(data.type as string)) armWatchdog();
@@ -160,10 +186,12 @@ export function useTestClaw(params?: TestClawParams) {
           // If there's a pending message, send it now
           if (pendingMessageRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             const { sessionId: _, ...wsParams } = paramsRef.current || {};
+            const pending = pendingMessageRef.current;
             wsRef.current.send(
               JSON.stringify({
                 type: "prompt",
-                message: pendingMessageRef.current,
+                message: pending.text,
+                files: pending.files,
                 ...wsParams,
               })
             );
@@ -171,16 +199,26 @@ export function useTestClaw(params?: TestClawParams) {
           }
           break;
 
-        case "start":
+        case "skill":
+          pendingSkillRef.current = {
+            name: data.name as string,
+            description: (data.description as string) ?? "",
+          };
+          break;
+
+        case "start": {
           currentMsgIdRef.current = data.messageId as string;
           contentRef.current = "";
           reasoningRef.current = "";
+          const skill = pendingSkillRef.current ?? undefined;
+          pendingSkillRef.current = null;
           setMessages((prev) => [
             ...prev,
-            { id: data.messageId as string, role: "assistant", content: "" },
+            { id: data.messageId as string, role: "assistant", content: "", skill },
           ]);
           setStatus("submitted");
           break;
+        }
 
         case "text-start":
           setStatus("streaming");
@@ -273,7 +311,7 @@ export function useTestClaw(params?: TestClawParams) {
           break;
 
         case "error":
-          console.error("TestClaw error:", data.error);
+          console.error("Testeiya error:", data.error);
           setError(
             typeof data.error === "string" ? data.error : "Unknown agent error"
           );
@@ -313,10 +351,12 @@ export function useTestClaw(params?: TestClawParams) {
       // arrives until a prompt is sent — so the first message could be lost.)
       if (pendingMessageRef.current && ws.readyState === WebSocket.OPEN) {
         const { sessionId: _, ...wsParams } = paramsRef.current || {};
+        const pending = pendingMessageRef.current;
         ws.send(
           JSON.stringify({
             type: "prompt",
-            message: pendingMessageRef.current,
+            message: pending.text,
+            files: pending.files,
             ...wsParams,
           })
         );
@@ -355,8 +395,9 @@ export function useTestClaw(params?: TestClawParams) {
   statusRef.current = status;
 
   const sendMessage = useCallback(
-    (text: string) => {
-      if (!text.trim()) return;
+    (text: string, files?: AttachedFile[]) => {
+      const hasFiles = !!files && files.length > 0;
+      if (!text.trim() && !hasFiles) return;
 
       // Block while the agent is still processing the previous turn.
       // Otherwise pi-coding-agent throws "Agent is already processing".
@@ -365,26 +406,47 @@ export function useTestClaw(params?: TestClawParams) {
       }
 
       setError(null);
+      pendingSkillRef.current = null;
       setMessages((prev) => [
         ...prev,
-        { id: `user-${Date.now()}`, role: "user", content: text },
+        { id: `user-${Date.now()}`, role: "user", content: text, files },
       ]);
       setStatus("submitted");
 
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         // Store the message and connect — it'll be sent after session_created
-        pendingMessageRef.current = text;
+        pendingMessageRef.current = { text, files };
         connect();
         return;
       }
 
       const { sessionId: _, ...wsParams } = paramsRef.current || {};
       wsRef.current.send(
-        JSON.stringify({ type: "prompt", message: text, ...wsParams })
+        JSON.stringify({ type: "prompt", message: text, files, ...wsParams })
       );
       armWatchdog();
     },
     [connect, armWatchdog]
+  );
+
+  const answerQuestion = useCallback(
+    (toolCallId: string, value: string) => {
+      // Optimistically mark the question answered so its pills disable and the
+      // picked option highlights immediately; the server echoes the same value
+      // back as the tool's output once the parked turn resumes.
+      updateLastAssistant((msg) => ({
+        ...msg,
+        tools: msg.tools?.map((t) =>
+          t.toolCallId === toolCallId
+            ? { ...t, output: value, state: "output-available" }
+            : t
+        ),
+      }));
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      wsRef.current.send(JSON.stringify({ type: "answer", toolCallId, value }));
+      armWatchdog();
+    },
+    [updateLastAssistant, armWatchdog]
   );
 
   const stop = useCallback(() => {
@@ -419,6 +481,7 @@ export function useTestClaw(params?: TestClawParams) {
     activeTool,
     error,
     sendMessage,
+    answerQuestion,
     stop,
     clearSession,
     clearError,

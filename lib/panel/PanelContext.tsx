@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -25,8 +26,8 @@ interface PanelContextValue {
 
 const PanelContext = createContext<PanelContextValue | null>(null);
 
-const OPEN_KEY = "testclaw.sidebar.open";
-const SECTION_KEY = "testclaw.sidebar.section";
+const OPEN_KEY = "testeiya.sidebar.open";
+const SECTION_KEY = "testeiya.sidebar.section";
 const SECTION_IDS: PanelSectionId[] = [
   "workspace",
   "project",
@@ -34,24 +35,26 @@ const SECTION_IDS: PanelSectionId[] = [
   "pipelines",
 ];
 
-function readOpen(fallback: boolean): boolean {
-  if (typeof window === "undefined") return fallback;
+/** Read persisted open state; null when nothing is stored. */
+function readStoredOpen(): boolean | null {
+  if (typeof window === "undefined") return null;
   try {
     const v = window.localStorage.getItem(OPEN_KEY);
     if (v === "1") return true;
     if (v === "0") return false;
   } catch {}
-  return fallback;
+  return null;
 }
 
-function readSection(fallback: PanelSectionId | null): PanelSectionId | null {
-  if (typeof window === "undefined") return fallback;
+/** Read persisted active section; undefined when nothing is stored. */
+function readStoredSection(): PanelSectionId | null | undefined {
+  if (typeof window === "undefined") return undefined;
   try {
     const v = window.localStorage.getItem(SECTION_KEY);
     if (v === "none") return null;
     if (v && (SECTION_IDS as string[]).includes(v)) return v as PanelSectionId;
   } catch {}
-  return fallback;
+  return undefined;
 }
 
 export function PanelProvider({
@@ -64,22 +67,39 @@ export function PanelProvider({
   defaultSection?: PanelSectionId;
   children: ReactNode;
 }) {
-  const [open, setOpenState] = useState<boolean>(
-    () => defaultOpen || readOpen(false)
-  );
+  // Initialize from the SSR-deterministic props only — reading localStorage in
+  // the initializer would make the first client render diverge from the server
+  // (hydration mismatch). Persisted values are applied after mount.
+  const [open, setOpenState] = useState<boolean>(defaultOpen);
   const [activeSection, setActiveSectionState] =
-    useState<PanelSectionId | null>(() => readSection(defaultSection));
+    useState<PanelSectionId | null>(defaultSection);
+
+  // Apply persisted UI state once, after hydration. `hydrated` gates the
+  // persist effects so they don't write the default over storage on the way in.
+  const [hydrated, setHydrated] = useState(false);
+  const didHydrate = useRef(false);
+  useEffect(() => {
+    if (didHydrate.current) return;
+    didHydrate.current = true;
+    const storedOpen = readStoredOpen();
+    if (storedOpen !== null) setOpenState(defaultOpen || storedOpen);
+    const storedSection = readStoredSection();
+    if (storedSection !== undefined) setActiveSectionState(storedSection);
+    setHydrated(true);
+  }, [defaultOpen]);
 
   useEffect(() => {
+    if (!hydrated) return;
     try {
       window.localStorage.setItem(OPEN_KEY, open ? "1" : "0");
     } catch {}
-  }, [open]);
+  }, [open, hydrated]);
   useEffect(() => {
+    if (!hydrated) return;
     try {
       window.localStorage.setItem(SECTION_KEY, activeSection ?? "none");
     } catch {}
-  }, [activeSection]);
+  }, [activeSection, hydrated]);
 
   const setOpen = useCallback((v: boolean) => setOpenState(v), []);
   const togglePanel = useCallback(() => setOpenState((v) => !v), []);

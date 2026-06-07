@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { ListChecksIcon } from "lucide-react";
 import RunItemRenderer from "./items/RunItemRenderer";
+import ManualRunRenderer from "./items/ManualRunRenderer";
 import { extractList } from "./extract-list";
 import {
   ListRow,
@@ -59,6 +60,16 @@ export default function RunsListRenderer({
 }) {
   const { items, meta } = useMemo(() => extractList<McpRun>(json), [json]);
   const [selected, setSelected] = useState<McpRun | null>(null);
+  const [manualRun, setManualRun] = useState(false);
+
+  if (selected && manualRun) {
+    return (
+      <ManualRunRenderer
+        data={selected as unknown as Record<string, unknown>}
+        onExit={() => setManualRun(false)}
+      />
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -77,7 +88,10 @@ export default function RunsListRenderer({
       <div className="space-y-2">
         {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
         <PreviewPane title={title} onBack={() => setSelected(null)}>
-          <RunItemRenderer data={selected as unknown as Record<string, unknown>} />
+          <RunItemRenderer
+            data={selected as unknown as Record<string, unknown>}
+            onStartManualRun={() => setManualRun(true)}
+          />
         </PreviewPane>
       </div>
     );

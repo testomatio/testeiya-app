@@ -7,46 +7,66 @@
  *   H1 22px · H2 20px · H3 18px · H4 16px · H5 15px · H6 14px  (base font 16px).
  *
  * Overriding the variable (rather than `font-size`) keeps BlockNote's own
- * heading font-size rule intact; the `.testclaw-block-editor` scope + the extra
+ * heading font-size rule intact; the `.testeiya-block-editor` scope + the extra
  * class/attribute give these higher specificity than BlockNote's defaults.
  */
 
-.testclaw-block-editor [data-content-type="heading"],
-.testclaw-block-editor [data-content-type="heading"][data-level="1"] {
+.testeiya-block-editor [data-content-type="heading"],
+.testeiya-block-editor [data-content-type="heading"][data-level="1"] {
   --level: 1.375em; /* 22px */
 }
-.testclaw-block-editor [data-content-type="heading"][data-level="2"] {
+.testeiya-block-editor [data-content-type="heading"][data-level="2"] {
   --level: 1.25em; /* 20px */
 }
-.testclaw-block-editor [data-content-type="heading"][data-level="3"] {
+.testeiya-block-editor [data-content-type="heading"][data-level="3"] {
   --level: 1.125em; /* 18px */
 }
-.testclaw-block-editor [data-content-type="heading"][data-level="4"] {
+.testeiya-block-editor [data-content-type="heading"][data-level="4"] {
   --level: 1em; /* 16px */
 }
-.testclaw-block-editor [data-content-type="heading"][data-level="5"] {
+.testeiya-block-editor [data-content-type="heading"][data-level="5"] {
   --level: 0.9375em; /* 15px */
 }
-.testclaw-block-editor [data-content-type="heading"][data-level="6"] {
+.testeiya-block-editor [data-content-type="heading"][data-level="6"] {
   --level: 0.875em; /* 14px */
 }
 
+/*
+ * Transient highlight for a block scrolled to from a search result. Added for a
+ * couple of seconds, then removed — a brief indigo wash that fades out.
+ */
+.testeiya-block-editor .testeiya-search-hit {
+  border-radius: 0.375rem;
+  animation: testeiya-search-hit-fade 2s ease-out forwards;
+}
+
+@keyframes testeiya-search-hit-fade {
+  0% {
+    background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
 /* Keep the brief transition state (block following a heading) in sync. */
-.testclaw-block-editor [data-prev-level="1"] {
+.testeiya-block-editor [data-prev-level="1"] {
   --prev-level: 1.375em;
 }
-.testclaw-block-editor [data-prev-level="2"] {
+.testeiya-block-editor [data-prev-level="2"] {
   --prev-level: 1.25em;
 }
-.testclaw-block-editor [data-prev-level="3"] {
+.testeiya-block-editor [data-prev-level="3"] {
   --prev-level: 1.125em;
 }
-.testclaw-block-editor [data-prev-level="4"] {
+.testeiya-block-editor [data-prev-level="4"] {
   --prev-level: 1em;
 }
-.testclaw-block-editor [data-prev-level="5"] {
+.testeiya-block-editor [data-prev-level="5"] {
   --prev-level: 0.9375em;
 }
-.testclaw-block-editor [data-prev-level="6"] {
+.testeiya-block-editor [data-prev-level="6"] {
   --prev-level: 0.875em;
 }

@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
-# Agent + TestClaw production image for Cloudflare Sandbox / Containers.
+# Agent + Testeiya production image for Cloudflare Sandbox / Containers.
 #
 # Two runtimes in one container:
-# - Bun (>=1.3.5) — required by TestClaw WS server (@oh-my-pi/pi-coding-agent
+# - Bun (>=1.3.5) — required by Testeiya WS server (@oh-my-pi/pi-coding-agent
 #   uses Bun.JSONL.parseChunk to parse MCP stdio traffic; not polyfilled).
 # - Node.js (>=22)  — required to spawn child MCP processes
 #   (@testomatio/mcp uses `#!/usr/bin/env node`) and as the Next.js runtime.
@@ -30,10 +30,10 @@ WORKDIR /app
 FROM base AS deps
 
 COPY package.json package-lock.json ./
-COPY testclaw/package.json testclaw/package-lock.json ./testclaw/
+COPY testeiya/package.json testeiya/package-lock.json ./testeiya/
 
 RUN npm ci --ignore-scripts \
- && (cd testclaw && npm ci --ignore-scripts)
+ && (cd testeiya && npm ci --ignore-scripts)
 
 # ---------- Build layer ----------
 FROM deps AS build
@@ -43,7 +43,7 @@ COPY . .
 # Build Next.js standalone output for smaller runtime
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build \
- && (cd testclaw && npm run build || true)
+ && (cd testeiya && npm run build || true)
 
 # ---------- Runtime layer ----------
 FROM base AS runtime
@@ -51,26 +51,26 @@ FROM base AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    TESTCLAW_PORT=3210
+    TESTEIYA_PORT=3210
 
 WORKDIR /app
 
 # Copy installed deps and built assets
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/testclaw/node_modules ./testclaw/node_modules
+COPY --from=build /app/testeiya/node_modules ./testeiya/node_modules
 COPY --from=build /app/package.json ./
-COPY --from=build /app/testclaw/package.json ./testclaw/
+COPY --from=build /app/testeiya/package.json ./testeiya/
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/app ./app
 COPY --from=build /app/lib ./lib
 COPY --from=build /app/components ./components
 COPY --from=build /app/hooks ./hooks
-COPY --from=build /app/testclaw ./testclaw
+COPY --from=build /app/testeiya ./testeiya
 COPY --from=build /app/next.config.ts ./
 COPY --from=build /app/tsconfig.json ./
 
-# Expose Next.js HTTP and TestClaw WebSocket ports
+# Expose Next.js HTTP and Testeiya WebSocket ports
 EXPOSE 3000 3210
 
 # Start both services under a single supervisor (concurrently)

@@ -1,5 +1,5 @@
 /**
- * Electrobun build configuration for the TestClaw desktop app.
+ * Electrobun build configuration for the Testeiya desktop app.
  *
  * The app is a single Bun main process (src/bun/index.ts) that serves the
  * statically-exported Next UI + HTTP API + agent WebSocket and opens a native
@@ -28,8 +28,8 @@
 
 const config = {
   app: {
-    name: "TestClaw",
-    identifier: "io.testomat.testclaw",
+    name: "Testeiya",
+    identifier: "io.testomat.testeiya",
     version: "0.1.0",
   },
   build: {
@@ -59,11 +59,15 @@ const config = {
     // Paths are <source on disk> : <destination in bundle>.
     copy: {
       out: "out",
-      // Ship testclaw's full node_modules so the externalized imports above
+      // Ship testeiya's full node_modules so the externalized imports above
       // resolve, and so the agent's dynamic require()/readFile/subprocess loads
       // (@testomatio/skills SKILL.md files, @testomatio/mcp bin, check-tests)
       // find their packages at runtime.
-      "testclaw/node_modules": "node_modules",
+      "testeiya/node_modules": "node_modules",
+      // @oh-my-pi/pi-natives is bundled INTO index.js (not externalized), so its
+      // loader resolves the prebuilt addon at import.meta.dir/../native i.e.
+      // Resources/app/native/. Ship the .node files there so the loader finds them.
+      "testeiya/node_modules/@oh-my-pi/pi-natives/native": "native",
     },
     mac: {
       // Enable once Apple Developer ID + notarization credentials are wired up.

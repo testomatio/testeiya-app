@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { WorkspaceProvider } from "@/lib/workspace/WorkspaceContext";
+import { ServicesProvider } from "@/lib/services/StoreProvider";
 import PlansListRenderer from "@/components/agent-output/PlansListRenderer";
+import RequirementsListRenderer from "@/components/agent-output/RequirementsListRenderer";
 import RunsListRenderer from "@/components/agent-output/RunsListRenderer";
 import SuitesListRenderer from "@/components/agent-output/SuitesListRenderer";
 import TestRunsListRenderer from "@/components/agent-output/TestRunsListRenderer";
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
 import {
   planItemFixture,
   plansFixture,
+  requirementsFixture,
   runItemFixture,
   runsFixture,
   suiteItemFixture,
@@ -124,6 +126,7 @@ export default function PreviewClient() {
     { id: "tests-list", label: "TestsListRenderer" },
     { id: "suites-list", label: "SuitesListRenderer" },
     { id: "plans-list", label: "PlansListRenderer" },
+    { id: "requirements-list", label: "RequirementsListRenderer" },
     { id: "testruns-list", label: "TestRunsListRenderer" },
     { id: "run-item", label: "RunItemRenderer" },
     { id: "testrun-item", label: "TestRunItemRenderer" },
@@ -134,7 +137,7 @@ export default function PreviewClient() {
   ];
 
   return (
-    <WorkspaceProvider sessionId={sessionId}>
+    <ServicesProvider sessionId={sessionId}>
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex max-w-6xl gap-8 px-6 py-10">
         <aside className="sticky top-10 hidden h-[calc(100vh-5rem)] w-48 shrink-0 self-start overflow-y-auto lg:block">
@@ -331,6 +334,17 @@ export default function PreviewClient() {
           </Section>
 
           <Section
+            id="requirements-list"
+            title="RequirementsListRenderer"
+            subtitle="render_list kind='requirements' / MCP issues_list"
+          >
+            <RequirementsListRenderer
+              json={requirementsFixture}
+              summary="37 linked requirements"
+            />
+          </Section>
+
+          <Section
             id="testruns-list"
             title="TestRunsListRenderer"
             subtitle="render_list kind='testruns' / MCP testruns_list"
@@ -397,6 +411,6 @@ export default function PreviewClient() {
         </main>
       </div>
     </div>
-    </WorkspaceProvider>
+    </ServicesProvider>
   );
 }

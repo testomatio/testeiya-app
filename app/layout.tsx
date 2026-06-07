@@ -9,7 +9,7 @@ import "./globals.css";
 // Set the theme class before React hydrates to avoid a light/dark flash.
 const themeInitScript = `
 try {
-  var t = localStorage.getItem('testclaw.theme');
+  var t = localStorage.getItem('testeiya.theme');
   if (t !== 'light' && t !== 'dark') {
     t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   }
@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TestClaw Agent",
+  title: "Testeiya Agent",
   description: "AI-powered QA testing agent",
 };
 

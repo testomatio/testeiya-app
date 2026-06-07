@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
         async rewrites() {
           // Dev only: forward API calls to the Bun agent server. (WebSocket
           // upgrades can't be rewritten — the client connects to the agent
-          // server directly via NEXT_PUBLIC_TESTCLAW_WS_URL in dev.)
+          // server directly via NEXT_PUBLIC_TESTEIYA_WS_URL in dev.)
           return [
             { source: "/api/:path*", destination: `${agentServer}/api/:path*` },
           ];

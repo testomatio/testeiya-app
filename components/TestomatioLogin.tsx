@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { observer } from "mobx-react-lite";
 import {
   Dialog,
   DialogContent,
@@ -19,94 +20,73 @@ import {
   KeyRoundIcon,
   SearchIcon,
 } from "lucide-react";
-import {
-  getAuthState,
-  readCachedAuthState,
-  connectTestomatio,
-  logoutTestomatio,
-  createProjectSession,
-  openExternalUrl,
-  buildSignInUrl,
-  DEFAULT_BASE_URL,
-  type TestomatioProject,
-} from "@/lib/testomatio-auth";
+import { useProjectService } from "@/lib/services/StoreProvider";
 
 type Phase = "loading" | "signin" | "projects";
 
 export interface TestomatioLoginProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called with the sessionId once a project session is created. */
-  onSession: (sessionId: string) => void;
 }
 
 /**
- * Testomat.io connect dialog. Opened on demand (from the empty state or the
- * header) — it never blocks app startup. Paste an app JWT, pick a project;
- * picking creates an agent session (pulls tests + wires the Testomat.io MCP)
- * and hands the sessionId back so the chat takes over.
+ * Testomat.io connect dialog — a thin view over ProjectService. Paste an app
+ * JWT, pick a project; picking calls `selectProject` (which creates the agent
+ * session and navigates). Seeds instantly from the service's cached state and
+ * revalidates in the background.
  */
-export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLoginProps) {
+export const TestomatioLogin = observer(function TestomatioLogin({
+  open,
+  onOpenChange,
+}: TestomatioLoginProps) {
+  const project = useProjectService();
   const [phase, setPhase] = useState<Phase>("loading");
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
   const [token, setToken] = useState("");
-  const [projects, setProjects] = useState<TestomatioProject[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** The previously-opened project (remembered across launches), if still present. */
-  const [rememberedId, setRememberedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** True while a background revalidation runs over cached (stale) projects. */
   const [refreshing, setRefreshing] = useState(false);
 
-  const showProjects = useCallback(
-    (list: TestomatioProject[], selected?: string) => {
-      setProjects(list);
-      setSelectedId(selected ?? list[0]?.id ?? null);
-      if (selected) setRememberedId(selected);
-      setPhase("projects");
-    },
-    []
-  );
-
   // Probe stored auth each time the dialog opens. Seed instantly from the
-  // cached project list (stale-while-revalidate) so a large account doesn't
-  // show a 10s spinner, then refresh in the background.
+  // service's cached state (stale-while-revalidate), then refresh.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setError(null);
     setQuery("");
 
-    const cached = readCachedAuthState();
-    const hasCache = !!cached?.projects && cached.projects.length > 0;
-    if (hasCache) {
-      if (cached!.baseUrl) setBaseUrl(cached!.baseUrl);
-      showProjects(cached!.projects!, cached!.selectedProjectId);
+    const hadProjects = project.connected && project.projects.length > 0;
+    if (hadProjects) {
+      setPhase("projects");
+      setSelectedId(project.selectedProjectId ?? project.projects[0]?.id ?? null);
       setRefreshing(true);
     } else {
       setPhase("loading");
     }
 
-    getAuthState()
+    project
+      .refreshStatus()
       .then((state) => {
         if (cancelled) return;
-        if (state.baseUrl) setBaseUrl(state.baseUrl);
         if (state.rejected) {
           setError("Your previous Testomat.io token was rejected. Please reconnect.");
         }
         if (state.connected && state.projects && state.projects.length > 0) {
-          showProjects(state.projects, state.selectedProjectId);
+          setPhase("projects");
+          setSelectedId(
+            (prev) => prev ?? state.selectedProjectId ?? state.projects![0].id
+          );
         } else if (!state.connected) {
           setPhase("signin");
         }
       })
       .catch((err) => {
         if (cancelled) return;
-        // Keep showing cached projects on a transient failure; only fall back to
-        // the sign-in step when we have nothing to show.
-        if (!hasCache) {
+        // Keep showing cached projects on a transient failure; only fall back
+        // to the sign-in step when we have nothing to show.
+        if (!hadProjects) {
           setError(err instanceof Error ? err.message : String(err));
           setPhase("signin");
         }
@@ -117,76 +97,73 @@ export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLog
     return () => {
       cancelled = true;
     };
-  }, [open, showProjects]);
+  }, [open, project]);
+
+  const rememberedId = project.selectedProjectId;
 
   // Filter by the search query, then float the remembered project to the top.
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const list = project.projects;
     const matched = q
-      ? projects.filter(
+      ? list.filter(
           (p) =>
             p.title.toLowerCase().includes(q) ||
             p.id.toLowerCase().includes(q) ||
             (p.framework?.toLowerCase().includes(q) ?? false)
         )
-      : projects;
+      : list;
     if (!rememberedId) return matched;
     const idx = matched.findIndex((p) => p.id === rememberedId);
     if (idx <= 0) return matched;
     return [matched[idx], ...matched.slice(0, idx), ...matched.slice(idx + 1)];
-  }, [projects, query, rememberedId]);
-
-  const handleOpenSignIn = useCallback(() => {
-    void openExternalUrl(buildSignInUrl(baseUrl));
-  }, [baseUrl]);
+  }, [project.projects, query, rememberedId]);
 
   const handleConnect = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
-      const state = await connectTestomatio(token.trim(), baseUrl || undefined);
+      const state = await project.connect(token.trim());
       if (!state.projects || state.projects.length === 0) {
         setError(
           "No projects are available for this account. Create one in Testomat.io, then reconnect."
         );
         return;
       }
-      showProjects(state.projects, state.selectedProjectId);
+      setPhase("projects");
+      setSelectedId(state.selectedProjectId ?? state.projects[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [token, baseUrl, showProjects]);
+  }, [project, token]);
 
   const handleContinue = useCallback(async () => {
     if (!selectedId) return;
     setError(null);
     setBusy(true);
     try {
-      const { sessionId } = await createProjectSession(selectedId);
-      onSession(sessionId);
-      onOpenChange(false); // close the dialog once the session is ready
+      await project.selectProject(selectedId);
+      onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
       setBusy(false);
     }
-  }, [selectedId, onSession, onOpenChange]);
+  }, [selectedId, project, onOpenChange]);
 
   const handleUseDifferentToken = useCallback(async () => {
     setBusy(true);
     try {
-      await logoutTestomatio();
+      await project.disconnect();
     } finally {
       setToken("");
-      setProjects([]);
       setSelectedId(null);
       setError(null);
       setBusy(false);
       setPhase("signin");
     }
-  }, []);
+  }, [project]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -198,13 +175,13 @@ export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLog
           </DialogTitle>
           <DialogDescription>
             {phase === "projects"
-              ? "Choose the project TestClaw should work with."
-              : "Authorize TestClaw to load your projects and work with your tests."}
+              ? "Choose the project Testeiya should work with."
+              : "Authorize Testeiya to load your projects and work with your tests."}
           </DialogDescription>
         </DialogHeader>
 
-        {/* min-w-0 so this grid item can shrink — without it the long project
-            slugs blow the dialog width out past its right edge. */}
+        {/* min-w-0 so this grid item can shrink — without it long project slugs
+            blow the dialog width out past its right edge. */}
         <div className="min-w-0 space-y-4">
           {phase === "loading" && (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -218,7 +195,7 @@ export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLog
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={handleOpenSignIn}
+                onClick={() => project.openSignIn()}
               >
                 Open Testomat.io &amp; authorize
                 <ArrowUpRightIcon className="size-4" />
@@ -273,7 +250,7 @@ export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLog
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={`Search ${projects.length} projects…`}
+                  placeholder={`Search ${project.projects.length} projects…`}
                   autoComplete="off"
                   spellCheck={false}
                   className="pl-8 text-sm"
@@ -357,4 +334,4 @@ export function TestomatioLogin({ open, onOpenChange, onSession }: TestomatioLog
       </DialogContent>
     </Dialog>
   );
-}
+});

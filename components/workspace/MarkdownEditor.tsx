@@ -9,19 +9,25 @@ import {
   Minimize2,
   SaveIcon,
   Pencil,
+  Blocks,
+  Code,
   X,
 } from "lucide-react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";
+import { OverTypeEditor } from "./OverTypeEditor";
 
 type Size = "collapsed" | "default" | "expanded";
+type EditorMode = "rich" | "markdown";
 
 export type MarkdownEditorProps = {
   sessionId: string;
   path: string;
   /** Seed content (used when the agent just wrote this file). */
   initialContent?: string;
+  /** Text to scroll to and highlight once the editor renders (search result). */
+  scrollToText?: string;
   /** Key that changes whenever the "open file" should force a remount. */
   instanceKey?: number;
   /** Prevent edits while the agent is mid-action. */
@@ -47,6 +53,7 @@ export function MarkdownEditor({
   sessionId,
   path,
   initialContent,
+  scrollToText,
   readOnly,
   onClose,
   onSaved,
@@ -57,6 +64,7 @@ export function MarkdownEditor({
   const [content, setContent] = useState<string>(initialContent ?? "");
   const [original, setOriginal] = useState<string>(initialContent ?? "");
   const [size, setSize] = useState<Size>("default");
+  const [mode, setMode] = useState<EditorMode>("rich");
   const [loading, setLoading] = useState<boolean>(initialContent === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +174,33 @@ export function MarkdownEditor({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {/* Editor mode: Rich (BlockNote blocks) ↔ Markdown (OverType raw). */}
+          <div className="flex items-center rounded-md border p-0.5">
+            <button
+              type="button"
+              onClick={() => setMode("rich")}
+              className={cn(
+                "rounded p-1 text-muted-foreground hover:bg-muted",
+                mode === "rich" && "bg-muted text-foreground"
+              )}
+              title="Rich editor"
+              aria-pressed={mode === "rich"}
+            >
+              <Blocks className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("markdown")}
+              className={cn(
+                "rounded p-1 text-muted-foreground hover:bg-muted",
+                mode === "markdown" && "bg-muted text-foreground"
+              )}
+              title="Markdown editor"
+              aria-pressed={mode === "markdown"}
+            >
+              <Code className="size-3.5" />
+            </button>
+          </div>
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (
             <button
@@ -227,12 +262,23 @@ export function MarkdownEditor({
           fillHeight ? "min-h-0 flex-1" : heightClass
         )}
       >
-        {loading ? (
+        {loading && (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
             <Shimmer as="span">Loading file…</Shimmer>
           </div>
-        ) : (
+        )}
+        {!loading && mode === "rich" && (
           <BlockEditor
+            value={content}
+            onChange={setContent}
+            readOnly={readOnly || saving}
+            theme={isDark ? "dark" : "light"}
+            scrollToText={scrollToText}
+            onSaveShortcut={() => void saveRef.current()}
+          />
+        )}
+        {!loading && mode === "markdown" && (
+          <OverTypeEditor
             value={content}
             onChange={setContent}
             readOnly={readOnly || saving}

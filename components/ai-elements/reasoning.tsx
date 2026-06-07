@@ -75,10 +75,10 @@ export const Reasoning = memo(
       onChange: onOpenChange,
       prop: open,
     });
-    const [duration, setDuration] = useControllableState<number | undefined>({
-      defaultProp: undefined,
-      prop: durationProp,
-    });
+    const [computedDuration, setComputedDuration] = useState<
+      number | undefined
+    >(undefined);
+    const duration = durationProp ?? computedDuration;
 
     const hasEverStreamedRef = useRef(isStreaming);
     const [hasAutoClosed, setHasAutoClosed] = useState(false);
@@ -92,10 +92,12 @@ export const Reasoning = memo(
           startTimeRef.current = Date.now();
         }
       } else if (startTimeRef.current !== null) {
-        setDuration(Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S));
+        setComputedDuration(
+          Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S)
+        );
         startTimeRef.current = null;
       }
-    }, [isStreaming, setDuration]);
+    }, [isStreaming]);
 
     // Auto-open when streaming starts (unless explicitly closed)
     useEffect(() => {
