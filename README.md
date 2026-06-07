@@ -1,75 +1,97 @@
 # Testeiya App
 
-An AI-powered QA testing agent. Chat with Testeiya to analyze test suites, find coverage gaps, review test quality, and create/improve test cases across your Testomat.io projects or any local folder.
+**Testeiya** is an AI assistant for QA. Chat with it to analyze your test suites, find coverage gaps, review test quality, and create or improve test cases — across your Testomat.io projects or any local folder.
 
-Testeiya runs as a **cross-platform desktop app** (built with [Electrobun](https://github.com/blackboardsh/electrobun)) and as a **web app** from the same codebase.
+It runs as a **desktop app** (Windows, macOS, Linux) and as a **web app** from the same codebase.
 
-> **This repo is the Testeiya App** — the chat UI and the desktop/web shell. The **terminal agent backend lives in a separate repo** ([`testomatio/testclaw`](https://github.com/testomatio/testclaw)) and is included here as the **`testeiya/` git submodule**. You must initialize the submodule before building (see [Install](#install)).
+![Testeiya](docs/screenshot.png)
 
-## How it works
+## Two repos: the App and the Agent
 
-One Bun server (`testeiya/src/app-server.ts`, from the submodule) is the whole backend — it serves the UI, the HTTP API, and the agent WebSocket on a single origin:
+Testeiya is split into two repositories:
 
-```
-┌─────────────────────────── Bun app-server (one origin) ───────────────────────────┐
-│  static UI (out/)   ·   HTTP API (/api/*)   ·   agent WebSocket (chat streaming)    │
-│                                   │                                                 │
-│              pi-coding-agent  +  MCP servers  +  QA skills                          │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+| | Repo | What it is |
+|---|---|---|
+| **Testeiya App** | this repo (`testomatio/testeiya-app`) | The chat UI and the desktop/web shell — what you see and click. |
+| **Testeiya Agent** | [`testomatio/testclaw`](https://github.com/testomatio/testclaw) | The agent brain (LLM, MCP servers, QA skills). Lives here as the `testeiya/` **git submodule**. |
 
-- **Desktop:** an Electrobun window points at the server running on a local port.
-- **Web:** the same UI in a browser (or embedded as an iframe in Testomat.io).
+> **Internal note:** **TestClaw** is the Agent's working codename — for internal use only. **Never use "TestClaw" in anything public.** Publicly the product is **Testeiya** (App + Agent).
 
-## Prerequisites
+The App can't run without the Agent, so the steps below pull both for you.
 
-- [Bun](https://bun.sh) ≥ 1.3.5 and Node.js ≥ 22
-- An OpenRouter API key (or another provider configured in `testeiya/testeiya.config.json` / `~/.testeiya/config.json`)
-- Desktop builds: macOS 14+, Windows 11+, or Linux (Ubuntu 22.04+ / `webkit2gtk-4.1`)
+## Quick start
 
-## Install
+Five steps to a running app. No deep technical knowledge needed — just copy each command.
 
-Clone with the `testeiya/` submodule (the agent backend, repo [`testomatio/testclaw`](https://github.com/testomatio/testclaw)):
+### 1. Install the tools
+
+- [Node.js](https://nodejs.org) 22 or newer
+- [Bun](https://bun.sh) 1.3.5 or newer
+- [Git](https://git-scm.com)
+
+### 2. Get the code
+
+Clone with `--recursive` so the Agent comes along:
 
 ```bash
 git clone --recursive git@github.com:testomatio/testeiya-app.git
 cd testeiya-app
 ```
 
-Already cloned without `--recursive`? Pull the submodule in:
+*(Forgot `--recursive`? Just run `npm install` in step 3 — it pulls the Agent for you.)*
+
+### 3. Install
 
 ```bash
-git submodule update --init --recursive
-```
-
-Then install dependencies for both the app and the submodule:
-
-```bash
-npm install
+npm install                       # also fetches the Agent (submodule) automatically
 cd testeiya && bun install && cd ..
 ```
 
-> Updating the agent backend later: `git submodule update --remote testeiya` pulls the latest commit from `testomatio/testclaw`; commit the bumped submodule pointer here to record it.
+### 4. Add your AI provider key
+
+Testeiya works with **many LLM providers** — OpenAI, Anthropic, OpenRouter, and more. Pick yours in **Settings** inside the app and paste the key (stored in `~/.testeiya/auth.json`). You can also set it as an environment variable before starting — see [Set your API key](#set-your-api-key).
+
+If no key is set, the chat shows a clear message with an **Open Settings** button.
+
+### 5. Start the app
+
+```bash
+npm run desktop:dev      # opens the native desktop window
+```
+
+Prefer the browser with instant hot-reload while developing?
+
+```bash
+npm run dev              # open http://localhost:3050
+```
+
+That's it — start chatting with Testeiya about your tests.
+
+## Using the app
+
+- **Chat** with the agent — it streams responses, shows its reasoning, and runs tools.
+- **Questions:** when the agent asks something, click an option or type a reply to continue.
+- **⚙️ Settings:** set your provider API key, toggle **MCP servers** on/off for the session, and **open a local folder** as the workspace.
+- **Workspace:** the folder button in the header opens any directory (native picker on desktop) so the agent works from it; the tree icon toggles the file sidebar, where you can open and edit files.
+- **Theme:** the sun/moon button switches light/dark (synced across the whole UI, including the editor); the choice is remembered.
 
 ## Set your API key
 
-Any one of these works (checked in this order):
+Any one of these works (checked in this order). The env var name matches your provider — e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`:
 
-1. **Environment:** `export OPENROUTER_API_KEY=sk-or-...`
-2. **`.env` file:** put `OPENROUTER_API_KEY=sk-or-...` in `.env` or `testeiya/.env` (auto-loaded in dev; for a packaged app use `~/.testeiya/.env`).
-3. **In-app Settings:** launch the app, click the ⚙️ gear, paste your key. It's stored in `~/.testeiya/auth.json`.
+1. **Environment:** `export OPENROUTER_API_KEY=...`
+2. **`.env` file:** put `OPENROUTER_API_KEY=...` in `.env` or `testeiya/.env` (auto-loaded in dev; for a packaged app use `~/.testeiya/.env`).
+3. **In-app Settings:** launch the app, click the ⚙️ gear, paste your key.
 
-If no key is set, the chat shows a clear error with an **Open Settings** button.
+## Run modes
 
-## Run
-
-### Fast web dev loop (recommended for development)
+### Fast web dev loop (recommended while developing)
 
 ```bash
 npm run dev
 ```
 
-Starts `next dev` (UI with hot reload at **http://localhost:3050**) plus the Bun agent server (`:3210`). Edit the UI and the browser refreshes instantly — no rebuild, no desktop bundling. `/api/*` is proxied to the agent server and the chat WebSocket connects to it directly.
+Starts `next dev` (UI with hot reload at **http://localhost:3050**) plus the Agent server (`:3210`). Edit the UI and the browser refreshes instantly — no rebuild. `/api/*` is proxied to the Agent server and the chat WebSocket connects to it directly.
 
 ### Desktop app
 
@@ -90,13 +112,29 @@ npm run build                       # static export → out/
 cd testeiya && npm run serve:app    # serve out/ + API + WS on one port
 ```
 
-## Using the app
+## How it works
 
-- **Chat** with the agent — it streams responses, shows reasoning, and runs tools.
-- **Questions:** when the agent asks, click an option or type a reply to continue.
-- **⚙️ Settings:** set your provider API key, toggle **MCP servers** on/off for the session, and **open a local folder** as the workspace.
-- **Workspace:** the folder button in the header opens any directory (native picker on desktop) so the agent works from it; the tree icon toggles the file sidebar, where you can open and edit files.
-- **Theme:** the sun/moon button switches light/dark (synced across the whole UI, including the editor); the choice is remembered.
+One Bun server (`testeiya/src/app-server.ts`, from the Agent submodule) is the whole backend — it serves the UI, the HTTP API, and the agent WebSocket on a single origin:
+
+```
+┌─────────────────────────── Bun app-server (one origin) ───────────────────────────┐
+│  static UI (out/)   ·   HTTP API (/api/*)   ·   agent WebSocket (chat streaming)    │
+│                                   │                                                 │
+│              pi-coding-agent  +  MCP servers  +  QA skills                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Desktop:** an Electrobun window points at the server running on a local port.
+- **Web:** the same UI in a browser (or embedded as an iframe in Testomat.io).
+
+### Updating the Agent
+
+The Agent is pinned to a specific commit. To move it forward:
+
+```bash
+git submodule update --remote testeiya   # pull the latest Agent from testomatio/testclaw
+git add testeiya && git commit -m "chore: bump Testeiya Agent"
+```
 
 ## Workspaces and projects
 
@@ -139,7 +177,7 @@ curl http://localhost:3050/api/agent/<sessionId>
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENROUTER_API_KEY` | LLM provider API key (env var name derives from the provider) | — (or set via Settings) |
+| `<PROVIDER>_API_KEY` | Your LLM provider key — name matches the provider (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) | — (or set via Settings) |
 | `TESTOMATIO_URL` | Testomat.io backend for pulling tests | `https://app.testomat.io` |
 | `TESTEIYA_WORKSPACE` | Web mode: folder opened automatically as the workspace on cold load | — |
 | `PORT` | Port for the Bun app-server (desktop uses a random free port) | `3050` |
@@ -148,7 +186,7 @@ curl http://localhost:3050/api/agent/<sessionId>
 
 ### LLM provider
 
-Set in `testeiya/testeiya.config.json` (or `~/.testeiya/config.json`):
+Choose your provider and model in the app's **Settings**, or set defaults in `testeiya/testeiya.config.json` (or `~/.testeiya/config.json`):
 
 ```json
 {
@@ -177,7 +215,7 @@ Set in `testeiya/testeiya.config.json` (or `~/.testeiya/config.json`):
 - **Next.js 16** (App Router, static export) + **Tailwind CSS v4** + **shadcn/ui / AI Elements**
 - **Bun** server (`Bun.serve` for UI + API + WebSocket)
 - **Electrobun** for the cross-platform desktop shell
-- **pi-coding-agent** SDK (the agent), **@testomatio/mcp** (MCP), **@testomatio/skills** (QA skills), **check-tests** (Testomat.io sync)
+- **pi-coding-agent** SDK (the Agent), **@testomatio/mcp** (MCP), **@testomatio/skills** (QA skills), **check-tests** (Testomat.io sync)
 
 ## Ports
 
