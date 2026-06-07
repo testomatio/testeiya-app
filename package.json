@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "git submodule update --init --recursive",
-    "dev": "concurrently -n web,agent -c cyan,magenta \"next dev -p 3050\" \"PORT=3210 npm --prefix testeiya run serve:app\"",
+    "dev": "concurrently -n web,agent -c cyan,magenta \"next dev -p 3050\" \"cd testeiya && PORT=3210 bun run serve:app\"",
     "build": "NEXT_EXPORT=1 next build",
     "desktop:dev": "NEXT_EXPORT=1 next build && GLIBC_TUNABLES=glibc.rtld.optional_static_tls=20480 electrobun dev",
     "desktop:build": "NEXT_EXPORT=1 next build && electrobun build",

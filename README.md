@@ -21,13 +21,14 @@ The App can't run without the Agent, so the steps below pull both for you.
 
 ## Quick start
 
-Five steps to a running app. No deep technical knowledge needed — just copy each command.
+Four steps to a running app. No deep technical knowledge needed — just copy each command.
 
 ### 1. Install the tools
 
-- [Node.js](https://nodejs.org) 22 or newer
 - [Bun](https://bun.sh) 1.3.5 or newer
 - [Git](https://git-scm.com)
+
+That's all — Bun is the only runtime you need.
 
 ### 2. Get the code
 
@@ -38,79 +39,95 @@ git clone --recursive git@github.com:testomatio/testeiya-app.git
 cd testeiya-app
 ```
 
-*(Forgot `--recursive`? Just run `npm install` in step 3 — it pulls the Agent for you.)*
+*(Forgot `--recursive`? `bun install` in the next step pulls the Agent for you.)*
 
 ### 3. Install
 
 ```bash
-npm install                       # also fetches the Agent (submodule) automatically
+bun install                       # also fetches the Agent (submodule) automatically
 cd testeiya && bun install && cd ..
 ```
 
-### 4. Add your AI provider key
+### 4. Start the app
 
-Testeiya works with **many LLM providers** — OpenAI, Anthropic, OpenRouter, and more. Pick yours in **Settings** inside the app and paste the key (stored in `~/.testeiya/auth.json`). You can also set it as an environment variable before starting — see [Set your API key](#set-your-api-key).
-
-If no key is set, the chat shows a clear message with an **Open Settings** button.
-
-### 5. Start the app
+Start with the **web app** — fastest to launch and it hot-reloads as you edit:
 
 ```bash
-npm run desktop:dev      # opens the native desktop window
+bun run dev              # open http://localhost:3050
 ```
 
-Prefer the browser with instant hot-reload while developing?
+Or run the **desktop app** (a native window):
 
 ```bash
-npm run dev              # open http://localhost:3050
+bun run desktop:dev
 ```
 
-That's it — start chatting with Testeiya about your tests.
+On first launch, open **Settings (⚙️)** and paste your AI provider key — Testeiya works with OpenAI, Anthropic, OpenRouter, and more. Then start chatting about your tests.
+
+## Web app vs desktop app
+
+Same UI either way — the difference is how Testeiya reaches your files:
+
+- **Desktop app** — has **native filesystem access**. Use the in-app **Open folder** dialog to point Testeiya at any directory; it reads and writes files directly. Best for working against a local repo.
+- **Web app** — runs in a browser, so there's **no native folder picker**. Give it a folder up front via the `TESTEIYA_WORKSPACE` setting (see below), or connect a Testomat.io project from the UI (which creates its own workspace).
+
+## Run modes
+
+### Web app — fast dev loop (start here)
+
+```bash
+bun run dev
+```
+
+Starts the UI with hot reload at **http://localhost:3050** plus the Agent server (`:3210`). Edit the UI and the browser refreshes instantly. `/api/*` is proxied to the Agent server and the chat WebSocket connects to it directly.
+
+### Desktop app
+
+```bash
+bun run desktop:dev      # build the static UI + launch the native window
+```
+
+Build distributable installers (DMG / Setup.exe / AppImage etc.):
+
+```bash
+bun run desktop:build    # artifacts land in build/
+```
+
+### Serve the built web app (no Electrobun)
+
+```bash
+bun run build                       # static export → out/
+cd testeiya && bun run serve:app    # serve out/ + API + WS on one port
+```
+
+## Configure with `.env`
+
+Everything can be set in the app's **Settings**, but you can also preconfigure via a `.env` file in the project root (or `~/.testeiya/.env` for a packaged app). All keys are optional — set only what you need:
+
+```bash
+# Testomat.io API key — lets Testeiya pull/push your tests
+TESTOMATIO=your-testomatio-api-key
+
+# Testomat.io backend URL (defaults to https://app.testomat.io)
+TESTOMATIO_URL=https://app.testomat.io
+
+# AI provider key — OPTIONAL, you can set this in Settings instead.
+# The variable name matches your provider: OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, ...
+OPENROUTER_API_KEY=sk-or-...
+
+# Web app only: the folder Testeiya opens as the workspace on startup
+TESTEIYA_WORKSPACE=/path/to/your/tests
+```
+
+See [All environment variables](#all-environment-variables) for the full list.
 
 ## Using the app
 
 - **Chat** with the agent — it streams responses, shows its reasoning, and runs tools.
 - **Questions:** when the agent asks something, click an option or type a reply to continue.
 - **⚙️ Settings:** set your provider API key, toggle **MCP servers** on/off for the session, and **open a local folder** as the workspace.
-- **Workspace:** the folder button in the header opens any directory (native picker on desktop) so the agent works from it; the tree icon toggles the file sidebar, where you can open and edit files.
+- **Workspace:** on desktop, the folder button in the header opens any directory (native picker) so the agent works from it; the tree icon toggles the file sidebar, where you can open and edit files.
 - **Theme:** the sun/moon button switches light/dark (synced across the whole UI, including the editor); the choice is remembered.
-
-## Set your API key
-
-Any one of these works (checked in this order). The env var name matches your provider — e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`:
-
-1. **Environment:** `export OPENROUTER_API_KEY=...`
-2. **`.env` file:** put `OPENROUTER_API_KEY=...` in `.env` or `testeiya/.env` (auto-loaded in dev; for a packaged app use `~/.testeiya/.env`).
-3. **In-app Settings:** launch the app, click the ⚙️ gear, paste your key.
-
-## Run modes
-
-### Fast web dev loop (recommended while developing)
-
-```bash
-npm run dev
-```
-
-Starts `next dev` (UI with hot reload at **http://localhost:3050**) plus the Agent server (`:3210`). Edit the UI and the browser refreshes instantly — no rebuild. `/api/*` is proxied to the Agent server and the chat WebSocket connects to it directly.
-
-### Desktop app
-
-```bash
-npm run desktop:dev      # build the static UI + launch the native window
-```
-
-To produce distributable installers (DMG / Setup.exe / AppImage etc.):
-
-```bash
-npm run desktop:build    # artifacts land in build/
-```
-
-### Serve the built web app (no Electrobun)
-
-```bash
-npm run build                       # static export → out/
-cd testeiya && npm run serve:app    # serve out/ + API + WS on one port
-```
 
 ## How it works
 
@@ -143,9 +160,7 @@ A **workspace** is a folder on disk; a **project** is a Testomat.io project. A w
 - **Open a project** — connect Testomat.io, pick a project, and Testeiya creates a dedicated folder for it (`~/.testeiya/workspaces/<project>/`), pulls the manual tests into it, and switches there. Switching projects switches folders.
 - **Open a folder** — point Testeiya at any directory. If ~all of its files are `*.test.md` it's treated as a manual-tests project (tests at the root). Otherwise Testeiya keeps a gitignored cache at `.testeiya/manual-tests/` and shows it in the sidebar; the rest of the repo shows as folders with only `*.test.md` files visible.
 
-The **Workspace** panel has **Pull** and **Push** buttons that run [`check-tests`](https://github.com/testomatio/check-tests) for the workspace's manual tests — pull to refresh from Testomat.io, push to upload local edits. The project token comes from your connected account (or the folder's own `.env` `TESTOMATIO=`).
-
-In **web mode** (no native folder picker), set `TESTEIYA_WORKSPACE=/path/to/folder` before starting the server and Testeiya opens it automatically.
+The **Workspace** panel has **Pull** and **Push** buttons that run [`check-tests`](https://github.com/testomatio/check-tests) for the workspace's manual tests — pull to refresh from Testomat.io, push to upload local edits. The project token comes from your connected account (or the `TESTOMATIO` key from your `.env`).
 
 ## Starting a session from Testomat.io projects
 
@@ -173,12 +188,13 @@ curl http://localhost:3050/api/agent/<sessionId>
 
 ## Configuration
 
-### Environment variables
+### All environment variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `<PROVIDER>_API_KEY` | Your LLM provider key — name matches the provider (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) | — (or set via Settings) |
+| `TESTOMATIO` | Testomat.io API key (pull/push tests) | — (or set via Settings) |
 | `TESTOMATIO_URL` | Testomat.io backend for pulling tests | `https://app.testomat.io` |
+| `<PROVIDER>_API_KEY` | Your LLM provider key — name matches the provider (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) | — (or set via Settings) |
 | `TESTEIYA_WORKSPACE` | Web mode: folder opened automatically as the workspace on cold load | — |
 | `PORT` | Port for the Bun app-server (desktop uses a random free port) | `3050` |
 | `AGENT_SERVER_URL` | Where `next dev` proxies `/api/*` (web mode) | `http://localhost:3210` |
