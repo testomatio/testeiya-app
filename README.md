@@ -39,8 +39,6 @@ git clone --recursive git@github.com:testomatio/testeiya-app.git
 cd testeiya-app
 ```
 
-*(Forgot `--recursive`? `bun install` in the next step pulls the Agent for you.)*
-
 ### 3. Install
 
 ```bash
