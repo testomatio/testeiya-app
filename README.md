@@ -109,7 +109,9 @@ Everything can be set in the app's **Settings**, but you can also preconfigure v
 # instead. Lets Testeiya pull/push your tests.
 TESTOMATIO=your-testomatio-api-key
 
-# Testomat.io backend URL (defaults to https://app.testomat.io)
+# Testomat.io backend URL (defaults to https://app.testomat.io).
+# For our staging environment, point it at beta:
+#   TESTOMATIO_URL=https://beta.testomat.io
 TESTOMATIO_URL=https://app.testomat.io
 
 # AI provider key — OPTIONAL, you can set this in Settings instead.
@@ -194,7 +196,7 @@ curl http://localhost:3050/api/agent/<sessionId>
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TESTOMATIO` | Testomat.io API key (pull/push tests) | — (or connect Testomat.io in the app) |
-| `TESTOMATIO_URL` | Testomat.io backend for pulling tests | `https://app.testomat.io` |
+| `TESTOMATIO_URL` | Testomat.io backend for pulling tests (staging: `https://beta.testomat.io`) | `https://app.testomat.io` |
 | `<PROVIDER>_API_KEY` | Your LLM provider key — name matches the provider (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) | — (or set via Settings) |
 | `TESTEIYA_WORKSPACE` | Web mode: folder opened automatically as the workspace on cold load | — |
 | `PORT` | Port for the Bun app-server (desktop uses a random free port) | `3050` |
