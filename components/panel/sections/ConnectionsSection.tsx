@@ -76,7 +76,7 @@ export const ConnectionsSection = observer(function ConnectionsSection({
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-2">
         <ConnectionsBody conn={conn} onManage={() => setMcpOpen(true)} />
       </div>
 

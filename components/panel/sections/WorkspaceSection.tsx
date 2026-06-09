@@ -139,9 +139,9 @@ export const WorkspaceSection = observer(function WorkspaceSection({
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col p-2">
+      <div className="flex min-h-0 flex-1 flex-col">
         {search.searchOpen && (
-          <div className="mb-2 flex flex-col gap-1.5">
+          <div className="mb-2 flex flex-col gap-1.5 px-4">
             <Input
               autoFocus
               value={search.searchQuery}
@@ -166,20 +166,20 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             </label>
           </div>
         )}
-        {ws.treeError && <div className="text-xs text-red-500">{ws.treeError}</div>}
+        {ws.treeError && <div className="px-4 text-xs text-red-500">{ws.treeError}</div>}
         {!ws.sessionId && !ws.treeError && (
-          <div className="text-xs text-muted-foreground">
+          <div className="px-4 text-xs text-muted-foreground">
             No active session yet.
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 px-4 text-xs text-muted-foreground">
             <MdiIcon path={mdiRefresh} className="size-3.5 animate-spin" />
             Loading project tests…
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && !ws.awaitingTests && !ws.treeLoading && (
-          <div className="text-xs text-muted-foreground">(empty)</div>
+          <div className="px-4 text-xs text-muted-foreground">(empty)</div>
         )}
         {ws.tree.length > 0 && (
           <FileTree

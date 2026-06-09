@@ -14,7 +14,7 @@ export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
       active={active}
       onToggle={onToggle}
     >
-      <div className="p-3">
+      <div className="px-4 py-3">
         <p className="text-xs text-muted-foreground">
           Pipelines are coming soon.
         </p>

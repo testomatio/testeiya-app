@@ -38,7 +38,7 @@ export const ProjectSection = observer(function ProjectSection({
       onToggle={onToggle}
     >
       {current && links ? (
-        <div className="space-y-3 p-3">
+        <div className="space-y-3 px-4 py-3">
           <button
             type="button"
             onClick={() => project.openExternal(links.project)}
@@ -91,7 +91,7 @@ export const ProjectSection = observer(function ProjectSection({
           </Button>
         </div>
       ) : (
-        <div className="space-y-3 p-3">
+        <div className="space-y-3 px-4 py-3">
           <p className="text-xs text-muted-foreground">
             {project.connected
               ? "Select a Testomat.io project to load its tests into the workspace."

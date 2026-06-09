@@ -37,7 +37,7 @@ import {
 import { ToolGroup } from "@/components/ai-elements/tool-group";
 import { RenderFrame } from "@/components/ai-elements/render-frame";
 import { FolderGlyph, MdiIcon, ProjectGlyph } from "@/components/icons";
-import { mdiDockLeft } from "@mdi/js";
+import { mdiDockLeft, mdiPageLayoutSidebarLeft } from "@mdi/js";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
@@ -444,18 +444,20 @@ const ChatPage = observer(function ChatPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex items-center justify-between border-b pr-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 shrink-0"
-            onClick={panel.togglePanel}
-            title={panel.open ? "Hide panel" : "Show panel"}
-            aria-label="Toggle panel"
-          >
-            <MdiIcon path={mdiDockLeft} className="size-4" />
-          </Button>
+          <div className="flex w-12 shrink-0 items-center justify-center">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              onClick={panel.togglePanel}
+              title={panel.open ? "Hide panel" : "Show panel"}
+              aria-label="Toggle panel"
+            >
+              <MdiIcon path={panel.open ? mdiDockLeft : mdiPageLayoutSidebarLeft} className="size-4" />
+            </Button>
+          </div>
           <h1 className="font-semibold text-lg shrink-0">Testeiya</h1>
           {project.currentProject && (
             <div className="flex min-w-0 items-center text-xs">

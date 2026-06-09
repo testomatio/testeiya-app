@@ -9,6 +9,7 @@ const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 700;
+const ICON_STRIP_W = 48;
 
 function loadWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
@@ -25,26 +26,16 @@ function saveWidth(w: number): void {
   } catch {}
 }
 
-/**
- * The left sidebar panel: a single-open accordion of "services" (Workspace,
- * Project, Connections, Pipelines) from the registry. The expanded section
- * fills the remaining height; collapsed sections show only their header row.
- * Width is drag-resizable and persisted. Hidden entirely when the panel is
- * closed.
- */
 export function SidebarPanel({ className }: { className?: string }) {
   const { open, activeSection, setActiveSection } = usePanel();
 
-  // Resize handle — drag to change panel width, persisted in localStorage.
-  // Start at the deterministic default so the first client render matches the
-  // server (reading localStorage in the initializer causes a hydration
-  // mismatch); apply the stored width after mount.
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     setWidth(loadWidth());
     setHydrated(true);
   }, []);
+
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -61,7 +52,6 @@ export function SidebarPanel({ className }: { className?: string }) {
       };
       const onUp = () => {
         if (dragRef.current) {
-          saveWidth(width);
           dragRef.current = null;
         }
         document.body.style.userSelect = "";
@@ -76,9 +66,7 @@ export function SidebarPanel({ className }: { className?: string }) {
     },
     [width]
   );
-  // Persist final width after each state settle (belt-and-suspenders). Gated on
-  // `hydrated` so the initial default doesn't overwrite the stored value before
-  // it's been read back in.
+
   useEffect(() => {
     if (!hydrated) return;
     saveWidth(width);
@@ -89,12 +77,42 @@ export function SidebarPanel({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "relative flex shrink-0 flex-col border-r bg-muted/20",
+        "relative flex shrink-0 border-r bg-muted/20",
         className
       )}
       style={{ width }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* Icon strip */}
+      <nav
+        className="flex shrink-0 flex-col items-center gap-1 border-r py-1"
+        style={{ width: ICON_STRIP_W }}
+        aria-label="Panel sections"
+      >
+        {PANEL_SECTIONS.map((def) => {
+          const isActive = activeSection === def.id;
+          return (
+            <button
+              key={def.id}
+              type="button"
+              onClick={() => setActiveSection(isActive ? null : def.id)}
+              title={def.title}
+              aria-label={def.title}
+              aria-pressed={isActive}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md transition-colors",
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-foreground hover:bg-muted"
+              )}
+            >
+              {def.icon}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Section content */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {PANEL_SECTIONS.map((def) => {
           const isActive = activeSection === def.id;
           return (
@@ -107,7 +125,7 @@ export function SidebarPanel({ className }: { className?: string }) {
         })}
       </div>
 
-      {/* Drag handle on the right edge — visible stripe on hover. */}
+      {/* Drag handle */}
       <div
         onMouseDown={onResizeMouseDown}
         className={cn(
