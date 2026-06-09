@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { SuiteGlyph, SuiteKindIcon } from "@/components/icons";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "@/lib/icons";
 import type { HTMLAttributes, ReactNode } from "react";
 import {
   createContext,

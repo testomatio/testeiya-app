@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { ClipboardCheckIcon, ExternalLinkIcon } from "lucide-react";
+import { ClipboardCheckIcon, ExternalLinkIcon } from "@/lib/icons";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { extractList } from "./extract-list";
 import {

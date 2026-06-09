@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDownIcon, WrenchIcon } from "lucide-react";
+import { ChevronDownIcon, WrenchIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 export type ToolGroupProps = {

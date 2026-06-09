@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { UploadIcon, XIcon } from "lucide-react";
+import { UploadIcon, XIcon } from "@/lib/icons";
 import { useCallback, useEffect, useRef, type ChangeEvent } from "react";
 
 export interface AttachmentDialogProps {

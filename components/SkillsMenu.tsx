@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSkillsService } from "@/lib/services/StoreProvider";
 import { observer } from "mobx-react-lite";
-import { ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { ChevronDownIcon, SparklesIcon } from "@/lib/icons";
 
 export const SkillsMenu = observer(function SkillsMenu({
   onInsert,

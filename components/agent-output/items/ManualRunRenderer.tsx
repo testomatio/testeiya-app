@@ -15,7 +15,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { mdiOpenInNew } from "@mdi/js";
-import { ArrowLeftIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, SearchIcon } from "@/lib/icons";
 import { MdiIcon } from "@/components/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";

@@ -12,7 +12,7 @@ import {
   Blocks,
   Code,
   X,
-} from "lucide-react";
+} from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";

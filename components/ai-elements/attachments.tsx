@@ -16,7 +16,7 @@ import {
   PaperclipIcon,
   VideoIcon,
   XIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { createContext, useCallback, useContext, useMemo } from "react";
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { ListChecksIcon } from "lucide-react";
+import { ListChecksIcon } from "@/lib/icons";
 import RunItemRenderer from "./items/RunItemRenderer";
 import ManualRunRenderer from "./items/ManualRunRenderer";
 import { extractList } from "./extract-list";

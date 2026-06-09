@@ -48,7 +48,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon } from "lucide-react";
+import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";

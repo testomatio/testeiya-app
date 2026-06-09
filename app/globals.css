@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -324,6 +325,30 @@
     @apply text-indigo-400;
   }
 }
+
+/* ─── Material Symbols Rounded ─────────────────────────────────────────────── */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  font-style: normal;
+  font-size: 1em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Map Tailwind size-* to font-size for icon spans */
+.material-symbols-rounded.size-3   { font-size: 0.75rem; }
+.material-symbols-rounded.size-3\.5 { font-size: 0.875rem; }
+.material-symbols-rounded.size-4   { font-size: 1rem; }
+.material-symbols-rounded.size-5   { font-size: 1.25rem; }
+.material-symbols-rounded.size-6   { font-size: 1.5rem; }
+.material-symbols-rounded.size-8   { font-size: 2rem; }
+.material-symbols-rounded.size-10  { font-size: 2.5rem; }
 
 @layer components {
   /*

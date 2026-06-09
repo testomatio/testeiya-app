@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { ClipboardListIcon } from "lucide-react";
+import { ClipboardListIcon } from "@/lib/icons";
 import PlanItemRenderer from "./items/PlanItemRenderer";
 import { extractList } from "./extract-list";
 import {

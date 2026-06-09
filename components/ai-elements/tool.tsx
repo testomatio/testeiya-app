@@ -21,7 +21,7 @@ import {
   ClockIcon,
   WrenchIcon,
   XCircleIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement, useState } from "react";
 import dynamic from "next/dynamic";

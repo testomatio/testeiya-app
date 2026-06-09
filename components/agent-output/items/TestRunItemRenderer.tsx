@@ -17,7 +17,7 @@ import {
   TestSuiteStats,
 } from "@/components/ai-elements/test-results";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDownIcon, PaperclipIcon } from "lucide-react";
+import { ChevronDownIcon, PaperclipIcon } from "@/lib/icons";
 import { formatDuration, MetaPill, RunStatusDot, statusKind } from "../status-pill";
 import { resolveType, TypeIcon } from "../type-icons";
 

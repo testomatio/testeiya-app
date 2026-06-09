@@ -34,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { Trash2Icon, PlusIcon, InfoIcon, KeyRoundIcon } from "lucide-react";
+import { Trash2Icon, PlusIcon, InfoIcon, KeyRoundIcon } from "@/lib/icons";
 import { toast } from "sonner";
 import { observer } from "mobx-react-lite";
 import { mcpServiceDisplay } from "@/lib/mcp-services";

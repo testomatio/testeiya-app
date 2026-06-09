@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { PlayIcon } from "lucide-react";
+import { PlayIcon } from "@/lib/icons";
 import TestRunItemRenderer from "./items/TestRunItemRenderer";
 import { extractList } from "./extract-list";
 import {

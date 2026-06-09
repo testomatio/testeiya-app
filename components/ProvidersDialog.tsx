@@ -27,7 +27,7 @@ import {
   LogInIcon,
   LogOutIcon,
   SearchIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import { toast } from "sonner";
 import { observer } from "mobx-react-lite";
 import { providerLogo } from "@/lib/provider-logos";

@@ -19,7 +19,7 @@ import {
   ChevronLeftIcon,
   KeyRoundIcon,
   SearchIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import { useProjectService } from "@/lib/services/StoreProvider";
 
 type Phase = "loading" | "signin" | "projects";

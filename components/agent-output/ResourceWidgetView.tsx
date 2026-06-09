@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { mdiOpenInNew } from "@mdi/js";
-import { SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "@/lib/icons";
 import { useTestomatio } from "@/lib/agent-output/use-testomatio";
 import type { ProjectResource } from "@/lib/services/project-service";
 import { MdiIcon } from "@/components/icons";

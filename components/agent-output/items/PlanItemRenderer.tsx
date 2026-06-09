@@ -5,7 +5,7 @@ import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import { ClipboardListIcon } from "lucide-react";
+import { ClipboardListIcon } from "@/lib/icons";
 import { LabelsRow, MetaPill } from "../status-pill";
 import SuitesListRenderer from "../SuitesListRenderer";
 import TestsListRenderer from "../TestsListRenderer";
