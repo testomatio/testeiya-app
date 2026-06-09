@@ -50,6 +50,7 @@ import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiy
 import { useHost } from "@/lib/host-bridge";
 import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon } from "lucide-react";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { BrowserControls } from "@/components/BrowserControls";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
@@ -549,6 +550,9 @@ const ChatPage = observer(function ChatPage() {
               )}
             </span>
           )}
+          {/* Playwright CLI session controls (record / stop / screenshot).
+              Self-contained — relocate anywhere as needed. */}
+          <BrowserControls />
           {!themeLocked && (
             <Button
               onClick={toggleTheme}
@@ -727,7 +731,7 @@ const ChatPage = observer(function ChatPage() {
           )}
           {messages.map((message) => (
             <Message
-              className="max-w-[85%]"
+              className={message.role === "user" ? "max-w-[85%]" : "max-w-full"}
               from={message.role}
               key={message.id}
             >

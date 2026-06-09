@@ -54,3 +54,4 @@ export const useProjectService = () => useRootStore().project;
 export const useConnectionsService = () => useRootStore().connections;
 export const useProvidersService = () => useRootStore().providers;
 export const useSkillsService = () => useRootStore().skills;
+export const useBrowserService = () => useRootStore().browser;

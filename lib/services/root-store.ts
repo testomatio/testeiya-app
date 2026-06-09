@@ -5,6 +5,7 @@ import { ProjectService } from "./project-service";
 import { ConnectionsService } from "./connections-service";
 import { ProvidersService } from "./providers-service";
 import { SkillsService } from "./skills-service";
+import { BrowserService } from "./browser-service";
 
 /**
  * Composition root for the client service layer. Owns the shared, observable
@@ -23,6 +24,7 @@ export class RootStore {
   connections: ConnectionsService;
   providers: ProvidersService;
   skills: SkillsService;
+  browser: BrowserService;
 
   constructor() {
     // Only `sessionId` is observable here; service instances are assigned after
@@ -34,6 +36,7 @@ export class RootStore {
     this.connections = new ConnectionsService(this);
     this.providers = new ProvidersService(this);
     this.skills = new SkillsService(this);
+    this.browser = new BrowserService(this);
   }
 
   setSessionId(id: string | null) {
