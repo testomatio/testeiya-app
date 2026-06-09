@@ -8,7 +8,8 @@
     "build": "NEXT_EXPORT=1 next build",
     "desktop:dev": "NEXT_EXPORT=1 next build && GLIBC_TUNABLES=glibc.rtld.optional_static_tls=20480 electrobun dev",
     "desktop:build": "NEXT_EXPORT=1 next build && electrobun build",
-    "lint": "eslint"
+    "lint": "eslint",
+    "update:agent": "git submodule update --remote testeiya && git add testeiya && git commit -m \"chore: bump Testeiya Agent\""
   },
   "engines": {
     "node": ">=22",
