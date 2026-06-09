@@ -6,7 +6,19 @@ import {
   UserIcon, ZapIcon, StarIcon, SearchIcon, MailIcon, LockIcon, PhoneIcon,
   ChevronDownIcon, MoreHorizontalIcon, EditIcon, TrashIcon, CopyIcon,
   SettingsIcon, LogOutIcon, PlusIcon, ExternalLinkIcon,
-} from "lucide-react"
+  ArrowLeftIcon, ArrowRightIcon, ArrowDownIcon, ArrowUpRightIcon,
+  ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronsUpDownIcon,
+  CornerDownLeftIcon, CheckCircleIcon, XCircleIcon as CancelIcon, AlertCircle,
+  CircleIcon, CircleDotIcon, ClockIcon, Loader2Icon, SparklesIcon,
+  FileIcon, FolderOpenIcon, PaperclipIcon, ImageIcon, Code, TerminalIcon,
+  ClipboardListIcon, ClipboardCheckIcon, ListChecksIcon, GitCommitIcon,
+  BookmarkIcon, BookIcon, KeyRoundIcon, EyeIcon, EyeOffIcon, LogInIcon,
+  Minimize2, Blocks, MicIcon, PlayIcon, PauseIcon,
+  SquareIcon, VideoIcon, Music2Icon, MessageCircleIcon, GlobeIcon, BotIcon,
+  BrainIcon, PackageIcon, WrenchIcon, Monitor, DownloadIcon, UploadIcon,
+  SaveIcon, MinusIcon,
+} from "@/lib/icons"
+import type { LucideIcon } from "@/lib/icons"
 
 import { useTheme } from "@/lib/theme"
 import { Button } from "@/components/ui/button"
@@ -137,6 +149,7 @@ const NAV = [
   ["separator", "Separator"],
   ["links", "Links & Text"],
   ["radius", "Radius"],
+  ["icons", "Icons"],
 ] as const
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -1088,6 +1101,92 @@ export function UIKit() {
                   </div>
                 ))}
               </Row>
+            </Section>
+
+            <Separator />
+
+            {/* ── Icons ───────────────────────────────────────────────────── */}
+            <Section title="Icons — lucide-react" id="icons">
+              <div className="space-y-6">
+                <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Package: lucide-react</p>
+                  <p className="mt-1 font-mono text-xs">
+                    {'import { PlusIcon } from "@/lib/icons"'}
+                  </p>
+                </div>
+
+                {([
+                  ["Navigation", [
+                    [ArrowLeftIcon, "ArrowLeft"], [ArrowRightIcon, "ArrowRight"],
+                    [ArrowDownIcon, "ArrowDown"], [ArrowUpRightIcon, "ArrowUpRight"],
+                    [ChevronLeftIcon, "ChevronLeft"], [ChevronRightIcon, "ChevronRight"],
+                    [ChevronUpIcon, "ChevronUp"], [ChevronDownIcon, "ChevronDown"],
+                    [ChevronsUpDownIcon, "ChevronsUpDown"], [ExternalLinkIcon, "ExternalLink"],
+                    [CornerDownLeftIcon, "CornerDownLeft"],
+                  ]],
+                  ["Actions", [
+                    [PlusIcon, "Plus"], [MinusIcon, "Minus"], [XCircleIcon, "XCircle"],
+                    [CheckIcon, "Check"], [EditIcon, "Edit"], [TrashIcon, "Trash"],
+                    [CopyIcon, "Copy"], [SaveIcon, "Save"],
+                    [UploadIcon, "Upload"], [DownloadIcon, "Download"],
+                    [SearchIcon, "Search"], [MoreHorizontalIcon, "MoreHorizontal"],
+                  ]],
+                  ["Status & Feedback", [
+                    [CheckCircleIcon, "CheckCircle"], [CancelIcon, "XCircle"],
+                    [AlertCircle, "AlertCircle"], [AlertTriangleIcon, "AlertTriangle"],
+                    [InfoIcon, "Info"], [CircleIcon, "Circle"],
+                    [CircleDotIcon, "CircleDot"],
+                    [ClockIcon, "Clock"], [Loader2Icon, "Loader2"],
+                    [SparklesIcon, "Sparkles"], [ZapIcon, "Zap"],
+                  ]],
+                  ["Files & Content", [
+                    [FileIcon, "File"], [FolderOpenIcon, "FolderOpen"],
+                    [PaperclipIcon, "Paperclip"], [ImageIcon, "Image"],
+                    [Code, "Code"], [TerminalIcon, "Terminal"],
+                    [ClipboardListIcon, "ClipboardList"], [ClipboardCheckIcon, "ClipboardCheck"],
+                    [ListChecksIcon, "ListChecks"], [GitCommitIcon, "GitCommit"],
+                    [BookmarkIcon, "Bookmark"], [BookIcon, "Book"],
+                  ]],
+                  ["UI & Layout", [
+                    [SettingsIcon, "Settings"], [KeyRoundIcon, "KeyRound"],
+                    [LockIcon, "Lock"], [EyeIcon, "Eye"],
+                    [EyeOffIcon, "EyeOff"], [LogInIcon, "LogIn"],
+                    [LogOutIcon, "LogOut"], [UserIcon, "User"],
+                    [StarIcon, "Star"], [Minimize2, "Minimize2"],
+                    [Blocks, "Blocks"],
+                  ]],
+                  ["Media & Communication", [
+                    [MicIcon, "Mic"], [PlayIcon, "Play"],
+                    [PauseIcon, "Pause"], [SquareIcon, "Square"],
+                    [VideoIcon, "Video"], [Music2Icon, "Music"],
+                    [MessageCircleIcon, "MessageCircle"], [MailIcon, "Mail"],
+                    [PhoneIcon, "Phone"], [GlobeIcon, "Globe"],
+                    [BotIcon, "Bot"], [BrainIcon, "Brain"],
+                  ]],
+                  ["Objects", [
+                    [PackageIcon, "Package"], [WrenchIcon, "Wrench"],
+                    [Monitor, "Monitor"], [MoonIcon, "Moon"],
+                    [SunIcon, "Sun"],
+                  ]],
+                ] as [string, [LucideIcon, string][]][]).map(([group, icons]) => (
+                  <div key={group}>
+                    <p className="mb-3 text-xs text-muted-foreground">{group}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {icons.map(([IconComponent, label]) => (
+                        <Tooltip key={label}>
+                          <TooltipTrigger render={<div className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-card p-3 w-20 cursor-default hover:bg-accent transition-colors" />}>
+                            <IconComponent className="size-6 text-foreground" />
+                            <span className="text-[9px] font-mono text-muted-foreground text-center leading-tight truncate w-full text-center">{label}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <code className="text-xs">{label}</code>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </Section>
 
             <div className="h-10" />
