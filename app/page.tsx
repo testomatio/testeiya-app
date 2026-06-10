@@ -48,7 +48,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon } from "@/lib/icons";
+import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
@@ -226,10 +226,12 @@ function ChatWithWorkspace() {
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick },
+  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled },
   ref
 ) {
   const [text, setText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<VoiceRecognition | null>(null);
 
   useImperativeHandle(
     ref,
@@ -245,6 +247,39 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     []
   );
 
+  const toggleVoice = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const w = window as VoiceWindow;
+    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+
+    if (!Ctor) {
+      toast.error("Voice input is not supported in this browser");
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.lang = "ru-RU";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event: VoiceRecognitionEvent) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      if (transcript) {
+        setText((prev) => (prev.trimEnd() ? `${prev.trimEnd()} ${transcript}` : transcript));
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [isListening]);
+
   return (
     <PromptInput onSubmit={onSubmit}>
       <PromptInputBody>
@@ -256,14 +291,41 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
         />
       </PromptInputBody>
       <PromptInputFooter>
-        <PromptInputButton
-          onClick={onAttachClick}
-          tooltip="Attach files"
-          aria-label="Attach files"
-        >
-          <PaperclipIcon className="size-4" />
-        </PromptInputButton>
-        <PromptInputSubmit status={status} onStop={onStop} />
+        <div className="flex items-center gap-1">
+          <SkillsMenu onInsert={onInsertSkill} disabled={skillsDisabled} />
+          <PromptInputButton
+            onClick={onAttachClick}
+            tooltip="Attach files"
+            aria-label="Attach files"
+          >
+            <PaperclipIcon className="size-4" />
+          </PromptInputButton>
+        </div>
+        <div className="flex items-center gap-1">
+          {isListening && (
+            <span className="flex items-center gap-1.5 text-xs text-destructive animate-pulse select-none">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-destructive" />
+              </span>
+              Listening...
+            </span>
+          )}
+          <div className="relative">
+            {isListening && (
+              <span className="absolute inset-0 rounded-md animate-ping bg-destructive/20" />
+            )}
+            <PromptInputButton
+              onClick={toggleVoice}
+              tooltip={isListening ? "Stop recording" : "Voice input"}
+              aria-label={isListening ? "Stop recording" : "Voice input"}
+              className={isListening ? "relative text-destructive bg-destructive/10 hover:bg-destructive/20" : undefined}
+            >
+              <MicIcon className="size-4" />
+            </PromptInputButton>
+          </div>
+          <PromptInputSubmit status={status} onStop={onStop} />
+        </div>
       </PromptInputFooter>
     </PromptInput>
   );
@@ -699,7 +761,8 @@ const ChatPage = observer(function ChatPage() {
             <span className="hidden sm:inline">Clear</span>
           </Button>
         )}
-        <ConversationContent>
+        <ConversationContent className="items-center">
+          <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
           {messages.length === 0 && canConnectTestomatio && !sessionId && (
             project.restoring ? (
               <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
@@ -735,16 +798,14 @@ const ChatPage = observer(function ChatPage() {
             >
               {/* `/<skill>` command banner — shows which skill drove this reply. */}
               {message.skill && (
-                <div className="mb-2 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs">
-                  <SparklesIcon className="size-3.5 shrink-0 text-primary" />
-                  <span className="font-medium text-primary">
-                    Using skill: {message.skill.name}
-                  </span>
-                  {message.skill.description && (
-                    <span className="truncate text-muted-foreground">
-                      — {message.skill.description}
-                    </span>
-                  )}
+                <div className="mb-2 inline-flex max-w-full items-center gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                  <SparklesIcon className="size-4 shrink-0 text-primary" />
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="font-semibold leading-none text-primary">Using skill: {message.skill.name}</span>
+                    {message.skill.description && (
+                      <span className="truncate leading-none text-muted-foreground">{message.skill.description}</span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -904,32 +965,26 @@ const ChatPage = observer(function ChatPage() {
                 <Shimmer as="span">Thinking...</Shimmer>
               </div>
             )}
+          </div>
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
       {/* Input area */}
-      <div className={`grid shrink-0 gap-3 border-t p-4${hideChat ? " hidden" : ""}`}>
+      <div className={hideChat ? "hidden shrink-0" : "shrink-0 flex justify-center"}>
+        <div className="grid w-full max-w-[960px] gap-3 px-[60px] py-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
         {messages.length === 0 && (
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <Suggestions>
-                {suggestions.map((s) => (
-                  <Suggestion
-                    key={s}
-                    onClick={handleSuggestionClick}
-                    suggestion={s}
-                  />
-                ))}
-              </Suggestions>
-            </div>
-            <SkillsMenu
-              onInsert={handleInsertSkill}
-              disabled={status === "streaming" || status === "submitted"}
-            />
-          </div>
+          <Suggestions>
+            {suggestions.map((s) => (
+              <Suggestion
+                key={s}
+                onClick={handleSuggestionClick}
+                suggestion={s}
+              />
+            ))}
+          </Suggestions>
         )}
 
         {attachments.length > 0 && (
@@ -972,7 +1027,10 @@ const ChatPage = observer(function ChatPage() {
           onSubmit={handleSubmit}
           onPaste={handlePaste}
           onAttachClick={() => setAttachOpen(true)}
+          onInsertSkill={handleInsertSkill}
+          skillsDisabled={status === "streaming" || status === "submitted"}
         />
+        </div>
       </div>
         </div>
       </div>
@@ -1009,4 +1067,27 @@ interface ChatInputProps {
   ) => void | Promise<void>;
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   onAttachClick: () => void;
+  onInsertSkill: (name: string) => void;
+  skillsDisabled: boolean;
+}
+
+interface VoiceRecognitionEvent {
+  results: { [index: number]: { [index: number]: { transcript: string } } };
+}
+
+interface VoiceRecognition {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: VoiceRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface VoiceWindow {
+  SpeechRecognition?: new () => VoiceRecognition;
+  webkitSpeechRecognition?: new () => VoiceRecognition;
 }

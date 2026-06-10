@@ -7,6 +7,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   ArrowUpRight,
   Book,
   Bookmark,
@@ -64,6 +65,7 @@ import {
   Save,
   Search,
   Settings,
+  Slash,
   Sparkles,
   Square,
   Star,
@@ -105,6 +107,7 @@ export const AlertTriangleIcon = AlertTriangle
 export const ArrowDownIcon = ArrowDown
 export const ArrowLeftIcon = ArrowLeft
 export const ArrowRightIcon = ArrowRight
+export const ArrowUpIcon = ArrowUp
 export const ArrowUpRightIcon = ArrowUpRight
 export const BookIcon = Book
 export const BookmarkIcon = Bookmark
@@ -163,6 +166,7 @@ export const PlusIcon = Plus
 export const SaveIcon = Save
 export const SearchIcon = Search
 export const SettingsIcon = Settings
+export const SlashIcon = Slash
 export const SparklesIcon = Sparkles
 export const SquareIcon = Square
 export const StarIcon = Star
