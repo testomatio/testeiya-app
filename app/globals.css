@@ -400,3 +400,26 @@
     }
   }
 }
+
+.dark .testeiya-overtype-editor {
+  background: var(--color-neutral-900);
+}
+
+.light .testeiya-overtype-editor {
+  background: var(--color-neutral-50);
+}
+
+.testeiya-overtype-editor .overtype-container,
+.testeiya-overtype-editor .overtype-wrapper {
+  max-width: 960px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  background: transparent !important;
+}
+
+.testeiya-overtype-editor .overtype-input,
+.testeiya-overtype-editor .overtype-preview {
+  padding-left: 60px !important;
+  padding-right: 60px !important;
+}
+

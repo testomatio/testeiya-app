@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SuiteGlyph } from "@/components/icons";
 import {
   ChevronDownIcon,
   Expand,
   Minimize2,
   SaveIcon,
-  Pencil,
   Blocks,
   Code,
   X,
@@ -148,15 +148,26 @@ export function MarkdownEditor({
   return (
     <div
       className={cn(
-        "rounded-md border bg-background text-sm",
+        "rounded-md border bg-background text-sm overflow-hidden",
         fillHeight && "flex h-full min-h-0 flex-col",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+      <div className="relative z-10 flex items-center justify-between gap-2 border-b bg-background px-2 py-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <Pencil className="size-4 shrink-0 text-muted-foreground" />
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-foreground/60 hover:text-foreground hover:bg-muted shrink-0"
+              title="Close editor"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+          <div className="w-2 shrink-0" />
+          <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
           <span className="font-medium truncate">{basename(path)}</span>
           <span
             className="text-[11px] text-muted-foreground truncate hidden sm:inline"
@@ -242,21 +253,12 @@ export function MarkdownEditor({
             <SaveIcon className="size-3" />
             {saving ? "Saving…" : "Save"}
           </Button>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title="Close editor"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
       {/* Body */}
       <div
+        style={{ contain: "paint" }}
         className={cn(
           "flex transition-[height]",
           fillHeight ? "min-h-0 flex-1" : heightClass
