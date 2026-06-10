@@ -77,7 +77,7 @@ export function SidebarPanel({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "relative flex shrink-0 border-r bg-muted/20",
+        "relative flex shrink-0 border-r bg-background",
         className
       )}
       style={{ width }}

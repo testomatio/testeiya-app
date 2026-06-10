@@ -690,7 +690,7 @@ const ChatPage = observer(function ChatPage() {
       {/* Below-header region: the multi-section sidebar panel + chat column. */}
       <div className="flex flex-1 min-h-0">
         <SidebarPanel />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
           {/* Project resource widget (tests/runs/plans) — fills the main area,
               fed live from the Testomat.io v2 proxy, using the same widgets the
               agent renders in chat. */}
@@ -972,7 +972,7 @@ const ChatPage = observer(function ChatPage() {
 
       {/* Input area */}
       <div className={hideChat ? "hidden shrink-0" : "shrink-0 flex justify-center"}>
-        <div className="grid w-full max-w-[960px] gap-3 px-[60px] py-4">
+        <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
         {messages.length === 0 && (
