@@ -7,13 +7,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { MdiIcon, RenderKindIcon } from "@/components/icons";
+import { RenderKindIcon } from "@/components/icons";
+import { Icon } from "@/lib/icons";
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
-import {
-  mdiFileDocumentEditOutline,
-  mdiFileTreeOutline,
-  mdiPencilOutline,
-} from "@mdi/js";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -293,9 +289,7 @@ function deriveHeader(
     const file = payload.path ? payload.path.split("/").pop() ?? payload.path : "file";
     return {
       icon: (
-        <MdiIcon
-          path={toolName === "edit" ? mdiFileDocumentEditOutline : mdiPencilOutline}
-        />
+        <Icon name={toolName === "edit" ? "edit_document" : "edit"} />
       ),
       title: `${toolName === "edit" ? "Edited" : "Wrote"}: ${file}`,
       tag: toolName,
@@ -303,7 +297,7 @@ function deriveHeader(
   }
   if (toolName === "render_tree") {
     return {
-      icon: <MdiIcon path={mdiFileTreeOutline} />,
+      icon: <Icon name="account_tree" />,
       title: payload.title ?? "Tree",
     };
   }

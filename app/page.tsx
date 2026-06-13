@@ -36,8 +36,7 @@ import {
 } from "@/components/ai-elements/tool";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
 import { RenderFrame } from "@/components/ai-elements/render-frame";
-import { FolderGlyph, MdiIcon, ProjectGlyph } from "@/components/icons";
-import { mdiDockLeft, mdiPageLayoutSidebarLeft } from "@mdi/js";
+import { FolderGlyph, ProjectGlyph } from "@/components/icons";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
@@ -49,7 +48,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
+import { Icon, Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
@@ -519,7 +518,7 @@ const ChatPage = observer(function ChatPage() {
                   onClick={panel.togglePanel}
                   aria-label="Toggle panel"
                 >
-                  <MdiIcon path={panel.open ? mdiDockLeft : mdiPageLayoutSidebarLeft} className="size-4" />
+                  <Icon name={panel.open ? "dock_to_left" : "side_navigation"} className="size-4" />
                 </Button>
               } />
               <TooltipContent><p>{panel.open ? "Hide panel" : "Show panel"}</p></TooltipContent>

@@ -2,13 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  mdiCheckCircle,
-  mdiCircle,
-  mdiMinusCircle,
-  mdiRecordCircle,
-  mdiTimerOffOutline,
-} from "@mdi/js";
 import type { ReactNode } from "react";
 
 export type TestStatus = "passed" | "failed" | "skipped" | "running";
@@ -172,18 +165,13 @@ export function StatusTriplet({
 
 // 1:1 with frontend/app/components/run-status.js — pick the MDI glyph
 // that matches a Testomat.io run status.
-function mdiPathFor(status: string): string {
+function symbolFor(status: string): string {
   switch (status) {
-    case "passed":
-      return mdiCheckCircle;
-    case "failed":
-      return mdiMinusCircle;
-    case "skipped":
-      return mdiRecordCircle;
-    case "terminated":
-      return mdiTimerOffOutline;
-    default:
-      return mdiCircle;
+    case "passed": return "check_circle";
+    case "failed": return "cancel";
+    case "skipped": return "radio_button_checked";
+    case "terminated": return "timer_off";
+    default: return "circle";
   }
 }
 
@@ -234,15 +222,9 @@ export function RunStatusDot({
   const colorClass = RUN_STATUS_COLOR[s] ?? "text-run-pending";
   return (
     <span className={cn(slot, colorClass)} aria-label={tooltip} title={tooltip}>
-      <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="currentColor"
-        aria-hidden
-      >
-        <path d={mdiPathFor(s)} />
-      </svg>
+      <span className="material-symbols-rounded" style={{ fontSize: 16 }} aria-hidden>
+        {symbolFor(s)}
+      </span>
     </span>
   );
 }

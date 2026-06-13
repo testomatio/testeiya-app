@@ -138,6 +138,17 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - `os.tmpdir()/testeiya-<uuid>/` — ephemeral multi-project `/api/agent/start` workspace (per-`<slug>/` subdirs). Deleted when the session expires.
 - The project config dir name (`.testeiya`) and `manual-tests`/`testeiya.json` are centralized in `testeiya/src/project-dir.ts` — the SDK reads MCP/skills/rules from `.testeiya` (see the monkey-patch in `session-factory.ts`), so anything that *writes* MCP config must use the same dir.
 
+## Icons
+
+All icons use **Material Symbols Rounded** (weight 300, fill 0 — outline style). The font is loaded globally in `app/globals.css`.
+
+**Rules:**
+- **Never import from `lucide-react` directly** — import everything from `@/lib/icons`.
+- For system/UI icons (chevrons, close, search, add, settings, delete, etc.) use the pre-exported wrappers from `@/lib/icons` (e.g. `ChevronDownIcon`, `XIcon`, `PlusIcon`). These render Material Symbols automatically.
+- For one-off Material icons not yet in `@/lib/icons`, use the `Icon` primitive: `import { Icon } from "@/lib/icons"` → `<Icon name="arrow_upward" className="size-4" />`.
+- Semantic/status icons (tool states, test tree, AI reasoning, etc.) are kept as Lucide SVGs in `@/lib/icons` — do not replace them with Material.
+- Size via Tailwind: `size-3`, `size-3.5`, `size-4`, `size-5`, `size-6` — the CSS in `globals.css` maps these to `font-size` for Material Symbols.
+
 ## Branding / design system
 
 The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark themes. It's wired through the theme variables so it propagates to all shadcn components — don't hardcode colors.

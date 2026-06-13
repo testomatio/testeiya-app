@@ -6,15 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { MdiIcon } from "@/components/icons";
+import { Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import {
-  mdiConnection,
-  mdiRefresh,
-  mdiPlus,
-  mdiTrashCanOutline,
-  mdiKeyOutline,
-} from "@mdi/js";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import { McpServersDialog } from "@/components/McpServersDialog";
@@ -43,7 +36,7 @@ export const ConnectionsSection = observer(function ConnectionsSection({
 
   return (
     <SectionShell
-      icon={<MdiIcon path={mdiConnection} className="size-4" />}
+      icon={<Icon name="linked_services" className="size-4" />}
       title="Connections"
       active={active}
       onToggle={onToggle}
@@ -59,7 +52,7 @@ export const ConnectionsSection = observer(function ConnectionsSection({
                 onClick={() => setMcpOpen(true)}
                 aria-label="Add connection"
               >
-                <MdiIcon path={mdiPlus} className="size-4" />
+                <Icon name="add" className="size-4" />
               </Button>
             } />
             <TooltipContent><p>Add a service or custom MCP server</p></TooltipContent>
@@ -74,8 +67,8 @@ export const ConnectionsSection = observer(function ConnectionsSection({
                 onClick={() => void conn.load()}
                 aria-label="Refresh connections"
               >
-                <MdiIcon
-                  path={mdiRefresh}
+                <Icon
+                  name="refresh"
                   className={conn.loading ? "size-4 animate-spin" : "size-4"}
                 />
               </Button>
@@ -122,7 +115,7 @@ const ConnectionsBody = observer(function ConnectionsBody({
           No connections yet. Add a service or a custom MCP server.
         </p>
         <Button size="sm" variant="outline" className="w-full" onClick={onManage}>
-          <MdiIcon path={mdiPlus} className="size-3.5" /> Add connection
+          <Icon name="add" className="size-3.5" /> Add connection
         </Button>
       </>
     );
@@ -209,7 +202,7 @@ function ConnectionRow({
               {authBusy ? (
                 <Spinner className="size-3" />
               ) : (
-                <MdiIcon path={mdiKeyOutline} className="size-3.5" />
+                <Icon name="key" className="size-3.5" />
               )}
             </Button>
           } />
@@ -230,7 +223,7 @@ function ConnectionRow({
               {busy ? (
                 <Spinner className="size-3" />
               ) : (
-                <MdiIcon path={mdiTrashCanOutline} className="size-3.5" />
+                <Icon name="delete" className="size-3.5" />
               )}
             </Button>
           } />

@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { mdiOpenInNew } from "@mdi/js";
-import { SearchIcon, XIcon } from "@/lib/icons";
+import { SearchIcon, XIcon, Icon } from "@/lib/icons";
 import { useTestomatio } from "@/lib/agent-output/use-testomatio";
 import type { ProjectResource } from "@/lib/services/project-service";
-import { MdiIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -198,7 +196,7 @@ export function ResourceWidgetView({
               onClick={onOpenExternal}
               title="Open in Testomat.io"
             >
-              <MdiIcon path={mdiOpenInNew} className="size-3.5" />
+              <Icon name="open_in_new" className="size-3.5" />
               <span className="hidden sm:inline">Open in Testomat.io</span>
             </Button>
           )}

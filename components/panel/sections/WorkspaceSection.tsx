@@ -11,15 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { MdiIcon, SuiteGlyph } from "@/components/icons";
-import {
-  mdiFileTreeOutline,
-  mdiFolderOpenOutline,
-  mdiMagnify,
-  mdiRefresh,
-  mdiCloudDownloadOutline,
-  mdiCloudUploadOutline,
-} from "@mdi/js";
+import { SuiteGlyph } from "@/components/icons";
+import { Icon } from "@/lib/icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import {
@@ -69,7 +62,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
 
   return (
     <SectionShell
-      icon={<MdiIcon path={mdiFileTreeOutline} className="size-4" />}
+      icon={<Icon name="folder_open" className="size-4" />}
       title="Workspace"
       active={active}
       onToggle={onToggle}
@@ -85,7 +78,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 aria-pressed={search.searchOpen}
                 aria-label="Search workspace"
               >
-                <MdiIcon path={mdiMagnify} className="size-4" />
+                <Icon name="search" className="size-4" />
               </Button>
             } />
             <TooltipContent><p>Search workspace</p></TooltipContent>
@@ -99,7 +92,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 onClick={() => void ws.openFolder()}
                 aria-label="Open folder as workspace"
               >
-                <MdiIcon path={mdiFolderOpenOutline} className="size-4" />
+                <Icon name="folder_open" className="size-4" />
               </Button>
             } />
             <TooltipContent><p>Open folder as workspace</p></TooltipContent>
@@ -114,8 +107,8 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 onClick={() => void ws.sync("pull")}
                 aria-label="Pull manual tests from Testomat.io"
               >
-                <MdiIcon
-                  path={mdiCloudDownloadOutline}
+                <Icon
+                  name="cloud_download"
                   className={cn("size-4", ws.syncing === "pull" && "animate-pulse")}
                 />
               </Button>
@@ -132,8 +125,8 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 onClick={() => void ws.sync("push")}
                 aria-label="Push manual tests to Testomat.io"
               >
-                <MdiIcon
-                  path={mdiCloudUploadOutline}
+                <Icon
+                  name="cloud_upload"
                   className={cn("size-4", ws.syncing === "push" && "animate-pulse")}
                 />
               </Button>
@@ -149,8 +142,8 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 onClick={() => void ws.loadTree()}
                 aria-label="Refresh tree"
               >
-                <MdiIcon
-                  path={mdiRefresh}
+                <Icon
+                  name="refresh"
                   className={cn("size-4", ws.treeLoading && "animate-spin")}
                 />
               </Button>
@@ -195,7 +188,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
           <div className="flex items-center gap-2 px-4 text-xs text-muted-foreground">
-            <MdiIcon path={mdiRefresh} className="size-3.5 animate-spin" />
+            <Icon name="refresh" className="size-3.5 animate-spin" />
             Loading project tests…
           </div>
         )}

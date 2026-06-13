@@ -2,192 +2,152 @@
 
 import { cn } from "@/lib/utils"
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowUpRight,
-  Book,
-  Bookmark,
   Bot,
   Brain,
+  Bookmark,
+  Book,
+  Sparkles,
   CheckCircle,
   CheckCircle2,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronsUpDown,
-  CircleDot,
+  XCircle,
   Circle,
+  CircleDot,
   Dot,
+  Clock,
   ClipboardCheck,
   ClipboardList,
-  Clock,
   Code,
-  Copy,
-  CornerDownLeft,
-  Download,
-  Edit,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  File,
-  FileText,
-  FolderOpen,
   GitCommit,
-  Globe,
-  Image,
-  Info,
-  KeyRound,
   ListChecks,
-  Loader2,
-  Lock,
-  LogIn,
-  LogOut,
-  Mail,
   Mars,
   MessageCircle,
-  Mic,
-  Minus,
-  Moon,
-  MoreHorizontal,
+  Transgender,
+  Blocks,
   Music,
   Package,
-  Paperclip,
-  Pause,
-  Phone,
   Play,
-  Plus,
-  Save,
-  Search,
-  Settings,
-  Slash,
-  Sparkles,
+  Pause,
   Square,
+  Slash,
   Star,
-  Sun,
   Terminal,
-  Trash,
-  Trash2,
-  Upload,
-  User,
   Venus,
   Video,
   Wrench,
-  XCircle,
-  X,
   Zap,
-  Monitor,
-  Expand,
-  Minimize2,
-  Pencil,
-  Blocks,
-  type LucideProps as LucidePropsBase,
 } from "lucide-react"
 
 export type LucideIcon = React.ComponentType<{ className?: string }>
 export type LucideProps = { className?: string }
 
-export { AlertCircle }
+// ─── Semantic / custom icons (kept as Lucide) ────────────────────────────────
 export { Code }
 export { Square }
-export { Trash }
-export { Monitor }
-export { Expand }
-export { Minimize2 }
-export { Pencil }
 export { Blocks }
-export { X }
 
-export const AlertTriangleIcon = AlertTriangle
-export const ArrowDownIcon = ArrowDown
-export const ArrowLeftIcon = ArrowLeft
-export const ArrowRightIcon = ArrowRight
-export const ArrowUpIcon = ArrowUp
-export const ArrowUpRightIcon = ArrowUpRight
-export const BookIcon = Book
-export const BookmarkIcon = Bookmark
 export const BotIcon = Bot
 export const BrainIcon = Brain
-export const CheckCircle2Icon = CheckCircle2
+export const BookmarkIcon = Bookmark
+export const BookIcon = Book
+export const SparklesIcon = Sparkles
 export const CheckCircleIcon = CheckCircle
-export const CheckIcon = Check
-export const ChevronDownIcon = ChevronDown
-export const ChevronLeftIcon = ChevronLeft
-export const ChevronRightIcon = ChevronRight
-export const ChevronUpIcon = ChevronUp
-export const ChevronsUpDownIcon = ChevronsUpDown
-export const CircleDotIcon = CircleDot
+export const CheckCircle2Icon = CheckCircle2
+export const XCircleIcon = XCircle
 export const CircleIcon = Circle
+export const CircleDotIcon = CircleDot
 export const CircleSmallIcon = Dot
+export const DotIcon = Dot
+export const ClockIcon = Clock
 export const ClipboardCheckIcon = ClipboardCheck
 export const ClipboardListIcon = ClipboardList
-export const ClockIcon = Clock
-export const CopyIcon = Copy
-export const CornerDownLeftIcon = CornerDownLeft
-export const DotIcon = Dot
-export const DownloadIcon = Download
-export const EditIcon = Edit
-export const ExternalLinkIcon = ExternalLink
-export const EyeIcon = Eye
-export const EyeOffIcon = EyeOff
-export const FileIcon = File
-export const FileTextIcon = FileText
-export const FolderOpenIcon = FolderOpen
 export const GitCommitIcon = GitCommit
-export const GlobeIcon = Globe
-export const ImageIcon = Image
-export const InfoIcon = Info
-export const KeyRoundIcon = KeyRound
 export const ListChecksIcon = ListChecks
-export const LockIcon = Lock
-export const LogInIcon = LogIn
-export const LogOutIcon = LogOut
-export const MailIcon = Mail
 export const MarsIcon = Mars
+export const TransgenderIcon = Transgender
 export const MarsStrokeIcon = Mars
 export const MessageCircleIcon = MessageCircle
-export const MicIcon = Mic
-export const MinusIcon = Minus
-export const MoonIcon = Moon
-export const MoreHorizontalIcon = MoreHorizontal
 export const Music2Icon = Music
 export const NonBinaryIcon = Circle
 export const PackageIcon = Package
-export const PaperclipIcon = Paperclip
 export const PauseIcon = Pause
-export const PhoneIcon = Phone
 export const PlayIcon = Play
-export const PlusIcon = Plus
-export const SaveIcon = Save
-export const SearchIcon = Search
-export const SettingsIcon = Settings
 export const SlashIcon = Slash
-export const SparklesIcon = Sparkles
-export const SquareIcon = Square
 export const StarIcon = Star
-export const SunIcon = Sun
-export const TerminalIcon = Terminal
-export const Trash2Icon = Trash2
-export const TrashIcon = Trash
-export const UploadIcon = Upload
-export const UserIcon = User
 export const VenusAndMarsIcon = Circle
 export const VenusIcon = Venus
 export const VideoIcon = Video
 export const WrenchIcon = Wrench
-export const XCircleIcon = XCircle
-export const XIcon = X
 export const ZapIcon = Zap
 
-export function Loader2Icon({ className }: LucideProps) {
-  return <Loader2 className={cn("animate-spin", className)} />
+// ─── System icons — Material Symbols Rounded, wght 300, outline ──────────────
+function makeIcon(name: string) {
+  return function MaterialIcon({ className }: { className?: string }) {
+    return <Icon name={name} className={className} />
+  }
 }
 
+export const AlertCircle = makeIcon("error")
+export const AlertTriangleIcon = makeIcon("warning")
+export const ArrowDownIcon = makeIcon("arrow_downward")
+export const ArrowLeftIcon = makeIcon("arrow_back")
+export const ArrowRightIcon = makeIcon("arrow_forward")
+export const ArrowUpIcon = makeIcon("arrow_upward")
+export const ArrowUpRightIcon = makeIcon("north_east")
+export const CheckIcon = makeIcon("check")
+export const ChevronDownIcon = makeIcon("keyboard_arrow_down")
+export const ChevronLeftIcon = makeIcon("keyboard_arrow_left")
+export const ChevronRightIcon = makeIcon("keyboard_arrow_right")
+export const ChevronUpIcon = makeIcon("keyboard_arrow_up")
+export const ChevronsUpDownIcon = makeIcon("unfold_more")
+export const CornerDownLeftIcon = makeIcon("keyboard_return")
+export const CopyIcon = makeIcon("content_copy")
+export const DownloadIcon = makeIcon("download")
+export const EditIcon = makeIcon("edit")
+export const Expand = makeIcon("open_in_full")
+export const ExternalLinkIcon = makeIcon("open_in_new")
+export const EyeIcon = makeIcon("visibility")
+export const EyeOffIcon = makeIcon("visibility_off")
+export const FileIcon = makeIcon("draft")
+export const FileTextIcon = makeIcon("description")
+export const FolderOpenIcon = makeIcon("folder_open")
+export const GlobeIcon = makeIcon("language")
+export const ImageIcon = makeIcon("image")
+export const InfoIcon = makeIcon("info")
+export const KeyRoundIcon = makeIcon("key")
+export const LockIcon = makeIcon("lock")
+export const LogInIcon = makeIcon("login")
+export const LogOutIcon = makeIcon("logout")
+export const MailIcon = makeIcon("mail")
+export const MicIcon = makeIcon("mic")
+export const Minimize2 = makeIcon("close_fullscreen")
+export const MinusIcon = makeIcon("remove")
+export const MonitorIcon = makeIcon("computer")
+export const Monitor = makeIcon("computer")
+export const MoonIcon = makeIcon("dark_mode")
+export const MoreHorizontalIcon = makeIcon("more_horiz")
+export const PaperclipIcon = makeIcon("attach_file")
+export const Pencil = makeIcon("edit")
+export const PhoneIcon = makeIcon("phone")
+export const PlusIcon = makeIcon("add")
+export const SaveIcon = makeIcon("save")
+export const SearchIcon = makeIcon("search")
+export const SettingsIcon = makeIcon("settings")
+export const SquareIcon = makeIcon("stop")
+export const SunIcon = makeIcon("light_mode")
+export const TerminalIcon = makeIcon("terminal")
+export const Trash = makeIcon("delete")
+export const Trash2Icon = makeIcon("delete")
+export const TrashIcon = makeIcon("delete")
+export const UploadIcon = makeIcon("upload")
+export const UserIcon = makeIcon("person")
+export const X = makeIcon("close")
+export const XIcon = makeIcon("close")
+
+export function Loader2Icon({ className }: LucideProps) {
+  return <Icon name="autorenew" className={cn("animate-spin", className)} />
+}
+
+// ─── Icon primitive ──────────────────────────────────────────────────────────
 export function Icon({ name, className }: { name: string; className?: string }) {
   return (
     <span

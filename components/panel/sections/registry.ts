@@ -1,12 +1,7 @@
 "use client";
 
 import { createElement } from "react";
-import { MdiIcon, ProjectGlyph } from "@/components/icons";
-import {
-  mdiFileTreeOutline,
-  mdiConnection,
-  mdiSourceBranch,
-} from "@mdi/js";
+import { Icon } from "@/lib/icons";
 import type { PanelSectionDef } from "@/lib/panel/types";
 import { WorkspaceSection } from "./WorkspaceSection";
 import { ProjectSection } from "./ProjectSection";
@@ -17,25 +12,25 @@ export const PANEL_SECTIONS: PanelSectionDef[] = [
   {
     id: "workspace",
     title: "Workspace",
-    icon: createElement(MdiIcon, { path: mdiFileTreeOutline, className: "size-4" }),
+    icon: createElement(Icon, { name: "folder_open", className: "size-4" }),
     Section: WorkspaceSection,
   },
   {
     id: "project",
     title: "Project",
-    icon: createElement(ProjectGlyph, { className: "size-4" }),
+    icon: createElement(Icon, { name: "folder_managed", className: "size-4" }),
     Section: ProjectSection,
   },
   {
     id: "connections",
     title: "Connections",
-    icon: createElement(MdiIcon, { path: mdiConnection, className: "size-4" }),
+    icon: createElement(Icon, { name: "linked_services", className: "size-4" }),
     Section: ConnectionsSection,
   },
   {
     id: "pipelines",
     title: "Pipelines",
-    icon: createElement(MdiIcon, { path: mdiSourceBranch, className: "size-4" }),
+    icon: createElement(Icon, { name: "account_tree", className: "size-4" }),
     Section: PipelinesSection,
   },
 ];

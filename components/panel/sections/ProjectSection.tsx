@@ -3,14 +3,7 @@
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
-import { MdiIcon, ProjectGlyph } from "@/components/icons";
-import {
-  mdiOpenInNew,
-  mdiFlaskOutline,
-  mdiPlayCircleOutline,
-  mdiClipboardTextOutline,
-  mdiTextBoxCheckOutline,
-} from "@mdi/js";
+import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { useProjectService } from "@/lib/services/StoreProvider";
@@ -32,7 +25,7 @@ export const ProjectSection = observer(function ProjectSection({
 
   return (
     <SectionShell
-      icon={<ProjectGlyph className="size-4" />}
+      icon={<Icon name="folder_managed" className="size-4" />}
       title="Project"
       active={active}
       onToggle={onToggle}
@@ -45,23 +38,23 @@ export const ProjectSection = observer(function ProjectSection({
             title="Open project in Testomat.io"
             className="group flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:text-primary"
           >
-            <ProjectGlyph className="size-4 shrink-0 text-primary" />
+            <Icon name="folder_managed" className="size-4 shrink-0 text-primary" />
             <span className="truncate text-sm font-medium">{current.title}</span>
-            <MdiIcon
-              path={mdiOpenInNew}
+            <Icon
+              name="open_in_new"
               className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
             />
           </button>
 
           <div className="grid grid-cols-2 gap-2">
             <StatTile
-              icon={mdiFlaskOutline}
+              icon="science"
               label="Tests"
               count={current.testsCount}
               onClick={() => project.showResource("tests")}
             />
             <StatTile
-              icon={mdiPlayCircleOutline}
+              icon="play_circle"
               label="Runs"
               count={current.runsCount}
               onClick={() => project.showResource("runs")}
@@ -70,12 +63,12 @@ export const ProjectSection = observer(function ProjectSection({
 
           <div className="grid grid-cols-2 gap-2">
             <LinkTile
-              icon={mdiClipboardTextOutline}
+              icon="assignment"
               label="Plans"
               onClick={() => project.showResource("plans")}
             />
             <LinkTile
-              icon={mdiTextBoxCheckOutline}
+              icon="rule"
               label="Requirements"
               onClick={() => project.showResource("requirements")}
             />
@@ -132,10 +125,10 @@ function StatTile({
       className="group flex flex-col gap-1 rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
     >
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <MdiIcon path={icon} className="size-3.5" />
+        <Icon name={icon} className="size-3.5" />
         {label}
-        <MdiIcon
-          path={mdiOpenInNew}
+        <Icon
+          name="open_in_new"
           className="ml-auto size-3 opacity-0 transition-opacity group-hover:opacity-100"
         />
       </span>
@@ -162,10 +155,10 @@ function LinkTile({
       title={`Open ${label.toLowerCase()} in Testomat.io`}
       className="group flex items-center gap-1.5 rounded-md border bg-muted/20 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 hover:text-foreground"
     >
-      <MdiIcon path={icon} className="size-3.5 shrink-0" />
+      <Icon name={icon} className="size-3.5 shrink-0" />
       <span className="truncate">{label}</span>
-      <MdiIcon
-        path={mdiOpenInNew}
+      <Icon
+        name="open_in_new"
         className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
       />
     </button>

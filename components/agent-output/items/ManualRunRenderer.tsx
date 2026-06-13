@@ -14,9 +14,7 @@ import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import { mdiOpenInNew } from "@mdi/js";
-import { ArrowLeftIcon, SearchIcon } from "@/lib/icons";
-import { MdiIcon } from "@/components/icons";
+import { ArrowLeftIcon, SearchIcon, Icon } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -245,7 +243,7 @@ export default function ManualRunRenderer({
               onClick={() => openExternalUrl(externalUrl)}
               title="Open in Testomat.io"
             >
-              <MdiIcon path={mdiOpenInNew} className="size-3.5" />
+              <Icon name="open_in_new" className="size-3.5" />
               <span className="hidden sm:inline">Open in Testomat.io</span>
             </Button>
           )}

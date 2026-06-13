@@ -38,7 +38,7 @@ export type AttachmentMediaCategory =
 
 export type AttachmentVariant = "grid" | "inline" | "list";
 
-const mediaCategoryIcons: Record<AttachmentMediaCategory, typeof ImageIcon> = {
+const mediaCategoryIcons: Record<AttachmentMediaCategory, React.ComponentType<{ className?: string }>> = {
   audio: Music2Icon,
   document: FileTextIcon,
   image: ImageIcon,
@@ -242,7 +242,7 @@ export const AttachmentPreview = ({
 
   const iconSize = variant === "inline" ? "size-3" : "size-4";
 
-  const renderIcon = (Icon: typeof ImageIcon) => (
+  const renderIcon = (Icon: React.ComponentType<{ className?: string }>) => (
     <Icon className={cn(iconSize, "text-muted-foreground")} />
   );
 

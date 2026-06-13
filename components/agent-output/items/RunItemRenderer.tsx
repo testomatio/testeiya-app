@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { mdiOpenInNew, mdiPlay } from "@mdi/js";
-import { MdiIcon } from "@/components/icons";
+import { Icon } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { useTestomatio } from "@/lib/agent-output/use-testomatio";
@@ -113,7 +112,7 @@ export default function RunItemRenderer({
                 className="h-7 gap-1 px-2 text-xs"
                 onClick={onStartManualRun ?? (() => setExecuting(true))}
               >
-                <MdiIcon path={mdiPlay} className="size-3.5" />
+                <Icon name="play_arrow" className="size-3.5" />
                 Start manual run
               </Button>
             )}
@@ -125,7 +124,7 @@ export default function RunItemRenderer({
                 onClick={() => openExternalUrl(externalUrl)}
                 title="Open in Testomat.io"
               >
-                <MdiIcon path={mdiOpenInNew} className="size-3.5" />
+                <Icon name="open_in_new" className="size-3.5" />
                 <span className="hidden sm:inline">Open in Testomat.io</span>
               </Button>
             )}

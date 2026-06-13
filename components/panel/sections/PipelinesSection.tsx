@@ -1,7 +1,6 @@
 "use client";
 
-import { MdiIcon } from "@/components/icons";
-import { mdiSourceBranch } from "@mdi/js";
+import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
@@ -9,7 +8,7 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
   return (
     <SectionShell
-      icon={<MdiIcon path={mdiSourceBranch} className="size-4" />}
+      icon={<Icon name="account_tree" className="size-4" />}
       title="Pipelines"
       active={active}
       onToggle={onToggle}

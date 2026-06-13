@@ -21,7 +21,6 @@
     "@blocknote/mantine": "^0.31.3",
     "@blocknote/react": "^0.31.3",
     "@floating-ui/react": "^0.27.19",
-    "@mdi/js": "^7.4.47",
     "@oh-my-pi/pi-natives": "^15.8.2",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.27.3",
