@@ -180,16 +180,42 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             </label>
           </div>
         )}
-        {ws.treeError && <div className="px-4 text-xs text-red-500">{ws.treeError}</div>}
+        {ws.syncing && (
+          <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary/90">
+            <Icon name={ws.syncing === "pull" ? "cloud_download" : "cloud_upload"} className="size-3.5 shrink-0 animate-pulse" />
+            <span className="flex-1">{ws.syncing === "pull" ? "Pulling tests from Testomat.io…" : "Pushing tests to Testomat.io…"}</span>
+            <Icon name="refresh" className="size-3 shrink-0 animate-spin opacity-60" />
+          </div>
+        )}
+        {ws.treeError && (
+          <div className="mx-3 my-2 flex flex-col gap-1.5 rounded-md border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive dark:border-destructive/40 dark:bg-destructive/15 dark:text-destructive/90">
+            <div className="flex items-center gap-2">
+              <Icon name="error" className="size-3.5 shrink-0" />
+              <span className="flex-1">{ws.treeError}</span>
+            </div>
+            <span className="pl-5 text-destructive/70">
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-destructive"
+                onClick={() => void ws.loadTree()}
+              >
+                Refresh the tree
+              </button>
+              {" "}to try again.
+            </span>
+          </div>
+        )}
         {!ws.sessionId && !ws.treeError && (
-          <div className="px-4 text-xs text-muted-foreground">
-            No active session yet.
+          <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <Icon name="info" className="size-3.5 shrink-0" />
+            <span>No active session yet.</span>
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
-          <div className="flex items-center gap-2 px-4 text-xs text-muted-foreground">
-            <Icon name="refresh" className="size-3.5 animate-spin" />
-            Loading project tests…
+          <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary/90">
+            <Icon name="folder_open" className="size-3.5 shrink-0 animate-pulse" />
+            <span className="flex-1">Loading project tests…</span>
+            <Icon name="refresh" className="size-3 shrink-0 animate-spin opacity-60" />
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && !ws.awaitingTests && !ws.treeLoading && (
