@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { useWorkspaceService } from "@/lib/services/StoreProvider";
@@ -53,13 +52,6 @@ function FileEditRenderer({ json }: Props) {
   const path = parsed?.path;
   const content = parsed?.content;
 
-  useEffect(() => {
-    if (!path) return;
-    open(path, content);
-    triggerRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
-
   if (!path || !sessionId) {
     return (
       <div className="text-xs text-muted-foreground">
@@ -75,6 +67,10 @@ function FileEditRenderer({ json }: Props) {
         path={path}
         initialContent={content}
         onSaved={() => triggerRefresh()}
+        onToggleFullScreen={() => {
+          open(path, content, { fullHeight: true });
+          triggerRefresh();
+        }}
       />
     </div>
   );
