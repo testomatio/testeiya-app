@@ -149,7 +149,7 @@ export function MarkdownEditor({
   return (
     <div
       className={cn(
-        "rounded-md border bg-white dark:bg-neutral-900 text-sm overflow-hidden",
+        "rounded-md border bg-background text-sm overflow-hidden",
         fillHeight && "flex h-full min-h-0 flex-col",
         className
       )}
