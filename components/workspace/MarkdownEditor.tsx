@@ -158,19 +158,16 @@ export function MarkdownEditor({
       <div className="relative z-10 flex items-center justify-between gap-2 border-b bg-background px-2 py-1.5">
         <div className="flex items-center gap-2 min-w-0">
           {onClose && (
-            <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded p-1 text-foreground/60 hover:text-foreground hover:bg-muted shrink-0"
-                  aria-label="Close editor"
-                >
-                  <X className="size-4" />
-                </button>
-              } />
-              <TooltipContent><p>Close editor</p></TooltipContent>
-            </Tooltip>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="size-7 shrink-0 text-foreground/60"
+              aria-label="Close editor"
+            >
+              <X className="size-4" />
+            </Button>
           )}
           <div className="w-2 shrink-0" />
           <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
@@ -230,43 +227,37 @@ export function MarkdownEditor({
           </div>
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (
-            <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  onClick={onToggleFullScreen}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted"
-                  aria-label={fillHeight ? "Exit full screen" : "Full screen"}
-                >
-                  {fillHeight ? (
-                    <Minimize2 className="size-3.5" />
-                  ) : (
-                    <Expand className="size-3.5" />
-                  )}
-                </button>
-              } />
-              <TooltipContent><p>{fillHeight ? "Exit full screen" : "Full screen"}</p></TooltipContent>
-            </Tooltip>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onToggleFullScreen}
+              className="size-7"
+              aria-label={fillHeight ? "Exit full screen" : "Full screen"}
+            >
+              {fillHeight ? (
+                <Minimize2 className="size-3.5" />
+              ) : (
+                <Expand className="size-3.5" />
+              )}
+            </Button>
           )}
           {/* Collapse to header — only meaningful in the strip layout. */}
           {!fillHeight && (
-            <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
-                  }
-                  className="rounded p-1 text-muted-foreground hover:bg-muted"
-                  aria-label={size === "collapsed" ? "Show editor" : "Collapse to header"}
-                >
-                  <ChevronDownIcon
-                    className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
-                  />
-                </button>
-              } />
-              <TooltipContent><p>{size === "collapsed" ? "Show editor" : "Collapse to header"}</p></TooltipContent>
-            </Tooltip>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
+              }
+              className="size-7"
+              aria-label={size === "collapsed" ? "Show editor" : "Collapse to header"}
+            >
+              <ChevronDownIcon
+                className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
+              />
+            </Button>
           )}
           <Button
             type="button"
