@@ -62,14 +62,16 @@ export const ProjectSection = observer(function ProjectSection({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <LinkTile
+            <StatTile
               icon="assignment"
               label="Plans"
+              count={current.plansCount}
               onClick={() => project.showResource("plans")}
             />
-            <LinkTile
+            <StatTile
               icon="rule"
               label="Requirements"
+              count={current.requirementsCount}
               onClick={() => project.showResource("requirements")}
             />
           </div>

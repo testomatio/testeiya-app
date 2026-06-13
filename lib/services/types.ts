@@ -92,6 +92,8 @@ export interface CurrentProject {
   baseUrl: string;
   testsCount: number | null;
   runsCount: number | null;
+  plansCount: number | null;
+  requirementsCount: number | null;
 }
 
 export interface TestomatioAuthState {
