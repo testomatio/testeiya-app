@@ -54,12 +54,12 @@ export const ConnectionsSection = observer(function ConnectionsSection({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0"
+                className="h-7 w-7 p-0"
                 disabled={!conn.sessionId}
                 onClick={() => setMcpOpen(true)}
                 aria-label="Add connection"
               >
-                <MdiIcon path={mdiPlus} className="size-3.5" />
+                <MdiIcon path={mdiPlus} className="size-4" />
               </Button>
             } />
             <TooltipContent><p>Add a service or custom MCP server</p></TooltipContent>
@@ -69,14 +69,14 @@ export const ConnectionsSection = observer(function ConnectionsSection({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0"
+                className="h-7 w-7 p-0"
                 disabled={!conn.sessionId}
                 onClick={() => void conn.load()}
                 aria-label="Refresh connections"
               >
                 <MdiIcon
                   path={mdiRefresh}
-                  className={conn.loading ? "size-3.5 animate-spin" : "size-3.5"}
+                  className={conn.loading ? "size-4 animate-spin" : "size-4"}
                 />
               </Button>
             } />
