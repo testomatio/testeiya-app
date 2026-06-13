@@ -109,8 +109,8 @@ function overtypeTheme(theme: "light" | "dark") {
     return {
       name: "cave",
       colors: {
-        bgPrimary:    "var(--background)",
-        bgSecondary:  "var(--background)",
+        bgPrimary:    tw.n900,
+        bgSecondary:  tw.n900,
         text:         tw.n200,
         textPrimary:  tw.n200,
         textSecondary:tw.n400,
@@ -134,7 +134,7 @@ function overtypeTheme(theme: "light" | "dark") {
         border:       tw.n800,
         hoverBg:      tw.n800,
         primary:      tw.i400,
-        toolbarBg:    "var(--background)",
+        toolbarBg:    tw.n900,
         toolbarIcon:  tw.n400,
         toolbarHover: tw.n800,
         toolbarActive:tw.n700,
@@ -145,8 +145,8 @@ function overtypeTheme(theme: "light" | "dark") {
   return {
     name: "solar",
     colors: {
-      bgPrimary:    "var(--background)",
-      bgSecondary:  "var(--background)",
+      bgPrimary:    tw.n50,
+      bgSecondary:  tw.n50,
       text:         tw.n900,
       textPrimary:  tw.n900,
       textSecondary:tw.n600,
@@ -170,7 +170,7 @@ function overtypeTheme(theme: "light" | "dark") {
       border:       tw.n200,
       hoverBg:      tw.n100,
       primary:      tw.i500,
-      toolbarBg:    "var(--background)",
+      toolbarBg:    tw.n50,
       toolbarIcon:  tw.n600,
       toolbarHover: tw.n100,
       toolbarActive:tw.n200,
