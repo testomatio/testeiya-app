@@ -17,6 +17,7 @@ import {
   formatDuration,
   LabelsRow,
   MetaPill,
+  OverflowBadgeList,
   RunProgress,
   RunStatusDot,
   StatusTriplet,
@@ -47,7 +48,7 @@ interface McpRun {
   labels?: unknown;
 }
 
-const RUNS_GRID = "minmax(0,8fr) minmax(0,2fr) minmax(0,3fr)";
+const RUNS_GRID = "minmax(0,7fr) minmax(0,2fr) minmax(0,3fr) minmax(0,2fr)";
 
 export default function RunsListRenderer({
   json,
@@ -105,6 +106,7 @@ export default function RunsListRenderer({
           <div className="min-w-0 truncate">Run</div>
           <div className="min-w-0 truncate">Status</div>
           <div className="min-w-0 truncate">Finished</div>
+          <div className="min-w-0 truncate">Environment</div>
         </ListRowHeader>
         {items.map((r, idx) => {
           const total =
@@ -160,15 +162,11 @@ export default function RunsListRenderer({
                   <RunProgress percent={percent} automated={r.automated} />
                 )}
               </div>
-              <div className="flex min-w-0 flex-col justify-center gap-0.5 text-xs text-muted-foreground overflow-hidden">
-                <span className="truncate">
-                  {r.assigned_to ?? "—"}
-                </span>
-                {env && (
-                  <span className="truncate" title={env}>
-                    {env}
-                  </span>
-                )}
+              <div className="flex min-w-0 items-center text-xs text-muted-foreground overflow-hidden">
+                <span className="truncate">{r.assigned_to ?? "—"}</span>
+              </div>
+              <div className="min-w-0">
+                {env && <OverflowBadgeList items={env.split(/[,;]+/).map(s => s.trim()).filter(Boolean)} />}
               </div>
             </ListRow>
           );

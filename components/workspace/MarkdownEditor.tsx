@@ -165,7 +165,7 @@ export function MarkdownEditor({
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
-                  className="size-7 shrink-0 text-foreground/60"
+                  className="size-7 shrink-0"
                   aria-label="Close editor"
                 >
                   <X className="size-4" />
@@ -174,7 +174,6 @@ export function MarkdownEditor({
               <TooltipContent><p>Close editor</p></TooltipContent>
             </Tooltip>
           )}
-          <div className="w-2 shrink-0" />
           <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
           <span className="font-medium truncate">{basename(path)}</span>
           <span

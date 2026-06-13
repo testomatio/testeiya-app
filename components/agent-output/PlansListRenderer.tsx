@@ -29,7 +29,7 @@ interface McpPlan {
   labels?: unknown;
 }
 
-const PLANS_GRID = "minmax(0,8fr) 2fr 2fr";
+const PLANS_GRID = "minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
 
 export default function PlansListRenderer({
   json,
@@ -69,8 +69,8 @@ export default function PlansListRenderer({
       <ListRowGroup>
         <ListRowHeader gridCols={PLANS_GRID}>
           <div className="min-w-0 truncate">Plan</div>
-          <div className="min-w-0 truncate">Counts</div>
           <div className="min-w-0 truncate">Labels</div>
+          <div className="min-w-0 truncate">Counts</div>
         </ListRowHeader>
         {items.map((p, idx) => {
           const title = p.title ?? p.id ?? "(untitled)";
@@ -112,34 +112,25 @@ export default function PlansListRenderer({
                   </span>
                 )}
               </div>
+              <div className="min-w-0">
+                <LabelsRow labels={p.labels} />
+              </div>
               <div className="flex items-center gap-x-3 text-xs tabular-nums text-muted-foreground">
                 {testsCount != null && (
                   <span title="tests">
-                    <span className="font-medium text-foreground">
-                      {testsCount}
-                    </span>{" "}
-                    tests
+                    <span className="font-medium text-foreground">{testsCount}</span> tests
                   </span>
                 )}
                 {suitesCount != null && (
                   <span title="suites">
-                    <span className="font-medium text-foreground">
-                      {suitesCount}
-                    </span>{" "}
-                    suites
+                    <span className="font-medium text-foreground">{suitesCount}</span> suites
                   </span>
                 )}
                 {p.runs_count != null && (
                   <span title="runs">
-                    <span className="font-medium text-foreground">
-                      {p.runs_count}
-                    </span>{" "}
-                    runs
+                    <span className="font-medium text-foreground">{p.runs_count}</span> runs
                   </span>
                 )}
-              </div>
-              <div className="min-w-0">
-                <LabelsRow labels={p.labels} />
               </div>
             </ListRow>
           );

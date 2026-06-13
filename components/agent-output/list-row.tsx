@@ -42,7 +42,7 @@ export function ListRowGroup({
   return (
     <div
       className={cn(
-        "list-row-group overflow-hidden rounded-md border bg-card/40",
+        "list-row-group overflow-hidden",
         className
       )}
       {...props}
@@ -153,7 +153,7 @@ export function ListRowHeader({
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex h-9 items-center border-b bg-muted/30 px-1.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+        "sticky top-0 z-10 flex h-9 items-center border-b px-1.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
         gridCols && "grid",
         gapClass,
         className

@@ -11,9 +11,8 @@ import {
   ListRowHeader,
 } from "./list-row";
 import { PreviewPane } from "./preview-pane";
-import { LabelsRow, MetaPill } from "./status-pill";
+import { MetaPill, OverflowBadgeList } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface McpTest {
   id?: string;
@@ -33,7 +32,6 @@ interface McpTest {
 }
 
 const TESTS_GRID = "minmax(0,3fr) minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
-const VISIBLE_TAGS = 3;
 
 export default function TestsListRenderer({
   json,
@@ -86,10 +84,9 @@ export default function TestsListRenderer({
               gridCols={TESTS_GRID}
               onOpen={() => setSelected(t)}
             >
-              <div className="min-w-0 truncate text-xs text-muted-foreground">
-                <span className="truncate" title={suite}>
-                  {suite ?? "—"}
-                </span>
+              <div className="flex min-w-0 items-center gap-x-1.5 text-xs text-muted-foreground">
+                <SuiteGlyph className="size-4 shrink-0" />
+                <span className="truncate" title={suite}>{suite ?? "—"}</span>
               </div>
               <div className="flex min-w-0 items-center gap-x-2 overflow-hidden">
                 {(() => {
@@ -118,9 +115,8 @@ export default function TestsListRenderer({
                   </span>
                 )}
               </div>
-              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
-                <LabelsRow labels={t.labels} className="min-w-0 overflow-hidden" />
-                <OverflowTags tags={t.tags} />
+              <div className="min-w-0">
+                <TagsCell labels={t.labels} tags={t.tags} />
               </div>
               <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 {t.priority && t.priority !== "normal" && (
@@ -152,30 +148,24 @@ function resolveTagTitle(tag: unknown): string {
   );
 }
 
-function OverflowTags({ tags }: { tags?: unknown }) {
-  if (!Array.isArray(tags) || tags.length === 0) return null;
-  const all = (tags as unknown[]).map(resolveTagTitle).filter(Boolean);
-  const visible = all.slice(0, VISIBLE_TAGS);
-  const hidden = all.slice(VISIBLE_TAGS);
-  return (
-    <>
-      {visible.map((tag, i) => (
-        <MetaPill key={`tag-${i}`}>#{tag}</MetaPill>
-      ))}
-      {hidden.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger render={
-            <MetaPill className="cursor-default">+{hidden.length}</MetaPill>
-          } />
-          <TooltipContent>
-            <div className="flex flex-col gap-0.5">
-              {hidden.map((tag, i) => (
-                <span key={i}>#{tag}</span>
-              ))}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </>
-  );
+function TagsCell({ labels, tags }: { labels?: unknown; tags?: unknown }) {
+  const labelTitles = (Array.isArray(labels) ? (labels as unknown[]) : [])
+    .map((l) =>
+      typeof l === "string"
+        ? l
+        : String(
+            (l as { title?: string; name?: string })?.title ??
+              (l as { name?: string })?.name ??
+              ""
+          )
+    )
+    .filter(Boolean);
+
+  const tagTitles = (Array.isArray(tags) ? (tags as unknown[]) : [])
+    .map((t) => `#${resolveTagTitle(t)}`)
+    .filter((t) => t !== "#");
+
+  const all = [...labelTitles, ...tagTitles];
+  if (all.length === 0) return null;
+  return <OverflowBadgeList items={all} />;
 }

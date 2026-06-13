@@ -78,7 +78,7 @@ export default function SuitesListRenderer({
       <ListRowGroup>
         <ListRowHeader gridCols={SUITES_GRID}>
           <div className="min-w-0 truncate">Suite</div>
-          <div className="min-w-0 truncate text-right pr-3">Tests</div>
+          <div className="min-w-0 truncate">Tests</div>
           <div className="min-w-0 truncate">Updated</div>
         </ListRowHeader>
         {items.map((s, idx) => {
@@ -110,7 +110,7 @@ export default function SuitesListRenderer({
                 </span>
                 <LabelsRow labels={s.labels} className="min-w-0" />
               </div>
-              <div className="text-right pr-3 text-xs tabular-nums text-muted-foreground">
+              <div className="text-xs tabular-nums text-muted-foreground">
                 {count ?? "—"}
               </div>
               <div className="min-w-0 truncate text-xs text-muted-foreground">

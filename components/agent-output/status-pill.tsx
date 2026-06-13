@@ -1,7 +1,9 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 export type TestStatus = "passed" | "failed" | "skipped" | "running";
@@ -46,6 +48,89 @@ export function MetaPill({
   );
 }
 
+const BADGE_GAP = 4;
+const OVERFLOW_BADGE_W = 32;
+
+export function OverflowBadgeList({
+  items,
+  className,
+}: {
+  items: string[];
+  className?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(items.length);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+    if (!container || !measure) return;
+
+    function recalc() {
+      const available = container!.offsetWidth;
+      const badges = Array.from(measure!.children) as HTMLElement[];
+      let used = 0;
+      let count = 0;
+      for (let i = 0; i < badges.length; i++) {
+        const w = badges[i].offsetWidth + (i > 0 ? BADGE_GAP : 0);
+        const remainingNeedOverflow = i + 1 < badges.length;
+        const overflowReserve = remainingNeedOverflow ? OVERFLOW_BADGE_W + BADGE_GAP : 0;
+        if (used + w + overflowReserve > available) break;
+        used += w;
+        count++;
+      }
+      setVisibleCount(count);
+    }
+
+    const observer = new ResizeObserver(recalc);
+    observer.observe(container);
+    recalc();
+    return () => observer.disconnect();
+  }, [items]);
+
+  const visible = items.slice(0, visibleCount);
+  const hidden = items.slice(visibleCount);
+
+  return (
+    <div ref={containerRef} className={cn("relative flex min-w-0 items-center gap-1 overflow-hidden", className)}>
+      <div ref={measureRef} className="pointer-events-none invisible absolute flex gap-1" aria-hidden>
+        {items.map((item, i) => (
+          <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+            {item}
+          </Badge>
+        ))}
+      </div>
+      {visible.map((item, i) => (
+        <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+          {item}
+        </Badge>
+      ))}
+      {hidden.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger render={
+            <Badge variant="secondary" className="h-5 shrink-0 cursor-default rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+              +{hidden.length}
+            </Badge>
+          } />
+          <TooltipContent
+            align="start"
+            side="bottom"
+            hideArrow
+            className="flex flex-col gap-1 bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+          >
+            {hidden.map((item, i) => (
+              <Badge key={i} variant="outline" className="h-5 w-fit rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+                {item}
+              </Badge>
+            ))}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
 export function LabelsRow({
   labels,
   className,
@@ -55,30 +140,18 @@ export function LabelsRow({
 }) {
   const list = Array.isArray(labels) ? (labels as unknown[]) : [];
   if (list.length === 0) return null;
-  return (
-    <div className={cn("flex flex-nowrap gap-1 overflow-hidden", className)}>
-      {list.map((l, i) => {
-        const title =
-          typeof l === "string"
-            ? l
-            : String(
-                (l as { title?: string; name?: string })?.title ??
-                  (l as { name?: string })?.name ??
-                  ""
-              );
-        if (!title) return null;
-        return (
-          <Badge
-            key={`${title}-${i}`}
-            variant="outline"
-            className="h-5 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none"
-          >
-            {title}
-          </Badge>
-        );
-      })}
-    </div>
-  );
+  const titles = list
+    .map((l) =>
+      typeof l === "string"
+        ? l
+        : String(
+            (l as { title?: string; name?: string })?.title ??
+              (l as { name?: string })?.name ??
+              ""
+          )
+    )
+    .filter(Boolean);
+  return <OverflowBadgeList items={titles} className={className} />;
 }
 
 export function formatDuration(v?: number | string | null): string | null {
