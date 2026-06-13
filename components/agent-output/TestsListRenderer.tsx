@@ -72,8 +72,8 @@ export default function TestsListRenderer({
         <ListRowHeader gridCols={TESTS_GRID}>
           <div className="min-w-0 truncate">Suite</div>
           <div className="min-w-0 truncate">Test</div>
-          <div className="min-w-0 truncate">State</div>
           <div className="min-w-0 truncate">Tags</div>
+          <div className="min-w-0 truncate">State</div>
         </ListRowHeader>
         {items.map((t, idx) => {
           const title = t.title ?? t.clean_title ?? t.id ?? "(untitled)";
@@ -89,7 +89,7 @@ export default function TestsListRenderer({
                   {suite ?? "—"}
                 </span>
               </div>
-              <div className="flex min-w-0 items-center gap-x-2">
+              <div className="flex min-w-0 items-center gap-x-2 overflow-hidden">
                 {(() => {
                   const kind = resolveType({ state: t.state });
                   if (t.emoji) {
@@ -115,17 +115,9 @@ export default function TestsListRenderer({
                     {t.steps_count} step{t.steps_count === 1 ? "" : "s"}
                   </span>
                 )}
-                <LabelsRow labels={t.labels} className="min-w-0" />
               </div>
               <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
-                {t.priority && t.priority !== "normal" && (
-                  <MetaPill>{t.priority}</MetaPill>
-                )}
-                {t.state &&
-                  t.state !== "manual" &&
-                  t.state !== "automated" && <MetaPill>{t.state}</MetaPill>}
-              </div>
-              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
+                <LabelsRow labels={t.labels} className="min-w-0 overflow-hidden" />
                 {Array.isArray(t.tags) &&
                   (t.tags as unknown[]).slice(0, 2).map((tag, i) => (
                     <MetaPill key={`tag-${i}`}>
@@ -139,6 +131,14 @@ export default function TestsListRenderer({
                           )}
                     </MetaPill>
                   ))}
+              </div>
+              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
+                {t.priority && t.priority !== "normal" && (
+                  <MetaPill>{t.priority}</MetaPill>
+                )}
+                {t.state &&
+                  t.state !== "manual" &&
+                  t.state !== "automated" && <MetaPill>{t.state}</MetaPill>}
               </div>
             </ListRow>
           );
