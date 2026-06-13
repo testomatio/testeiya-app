@@ -13,6 +13,7 @@ import {
 import { PreviewPane } from "./preview-pane";
 import { LabelsRow, MetaPill } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface McpTest {
   id?: string;
@@ -31,7 +32,8 @@ interface McpTest {
   updated_at?: string | null;
 }
 
-const TESTS_GRID = "minmax(0,3fr) minmax(0,7fr) minmax(0,2fr) minmax(0,2fr)";
+const TESTS_GRID = "minmax(0,3fr) minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
+const VISIBLE_TAGS = 3;
 
 export default function TestsListRenderer({
   json,
@@ -118,19 +120,7 @@ export default function TestsListRenderer({
               </div>
               <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 <LabelsRow labels={t.labels} className="min-w-0 overflow-hidden" />
-                {Array.isArray(t.tags) &&
-                  (t.tags as unknown[]).slice(0, 2).map((tag, i) => (
-                    <MetaPill key={`tag-${i}`}>
-                      #
-                      {typeof tag === "string"
-                        ? tag
-                        : String(
-                            (tag as { name?: string; title?: string })?.name ??
-                              (tag as { title?: string })?.title ??
-                              ""
-                          )}
-                    </MetaPill>
-                  ))}
+                <OverflowTags tags={t.tags} />
               </div>
               <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 {t.priority && t.priority !== "normal" && (
@@ -150,5 +140,42 @@ export default function TestsListRenderer({
         )}
       </ListRowGroup>
     </div>
+  );
+}
+
+function resolveTagTitle(tag: unknown): string {
+  if (typeof tag === "string") return tag;
+  return String(
+    (tag as { name?: string; title?: string })?.name ??
+      (tag as { title?: string })?.title ??
+      ""
+  );
+}
+
+function OverflowTags({ tags }: { tags?: unknown }) {
+  if (!Array.isArray(tags) || tags.length === 0) return null;
+  const all = (tags as unknown[]).map(resolveTagTitle).filter(Boolean);
+  const visible = all.slice(0, VISIBLE_TAGS);
+  const hidden = all.slice(VISIBLE_TAGS);
+  return (
+    <>
+      {visible.map((tag, i) => (
+        <MetaPill key={`tag-${i}`}>#{tag}</MetaPill>
+      ))}
+      {hidden.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger render={
+            <MetaPill className="cursor-default">+{hidden.length}</MetaPill>
+          } />
+          <TooltipContent>
+            <div className="flex flex-col gap-0.5">
+              {hidden.map((tag, i) => (
+                <span key={i}>#{tag}</span>
+              ))}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </>
   );
 }
