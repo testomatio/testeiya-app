@@ -12,11 +12,11 @@
  */
 
 .dark .testeiya-block-editor {
-  background: var(--color-neutral-900);
+  background: var(--background);
 }
 
 .light .testeiya-block-editor {
-  background: var(--color-neutral-50);
+  background: var(--background);
 }
 
 .testeiya-block-editor .bn-editor {
