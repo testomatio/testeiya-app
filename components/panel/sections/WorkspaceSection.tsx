@@ -20,6 +20,7 @@ import {
   mdiCloudDownloadOutline,
   mdiCloudUploadOutline,
 } from "@mdi/js";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import {
   useWorkspaceService,
@@ -74,68 +75,88 @@ export const WorkspaceSection = observer(function WorkspaceSection({
       onToggle={onToggle}
       actions={
         <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className={cn("h-6 w-6 p-0", search.searchOpen && "text-primary")}
-            onClick={() => search.toggleSearch()}
-            aria-pressed={search.searchOpen}
-            title="Search workspace"
-            aria-label="Search workspace"
-          >
-            <MdiIcon path={mdiMagnify} className="size-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => void ws.openFolder()}
-            title="Open folder as workspace"
-            aria-label="Open folder as workspace"
-          >
-            <MdiIcon path={mdiFolderOpenOutline} className="size-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!ws.sessionId || !!ws.syncing}
-            onClick={() => void ws.sync("pull")}
-            title="Pull manual tests from Testomat.io"
-            aria-label="Pull manual tests from Testomat.io"
-          >
-            <MdiIcon
-              path={mdiCloudDownloadOutline}
-              className={cn("size-3.5", ws.syncing === "pull" && "animate-pulse")}
-            />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!ws.sessionId || !!ws.syncing || ws.manualTestsDir === null}
-            onClick={() => void ws.sync("push")}
-            title="Push manual tests to Testomat.io"
-            aria-label="Push manual tests to Testomat.io"
-          >
-            <MdiIcon
-              path={mdiCloudUploadOutline}
-              className={cn("size-3.5", ws.syncing === "push" && "animate-pulse")}
-            />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => void ws.loadTree()}
-            title="Refresh tree"
-            aria-label="Refresh tree"
-          >
-            <MdiIcon
-              path={mdiRefresh}
-              className={cn("size-3.5", ws.treeLoading && "animate-spin")}
-            />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className={cn("h-6 w-6 p-0", search.searchOpen && "text-primary")}
+                onClick={() => search.toggleSearch()}
+                aria-pressed={search.searchOpen}
+                aria-label="Search workspace"
+              >
+                <MdiIcon path={mdiMagnify} className="size-3.5" />
+              </Button>
+            } />
+            <TooltipContent><p>Search workspace</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => void ws.openFolder()}
+                aria-label="Open folder as workspace"
+              >
+                <MdiIcon path={mdiFolderOpenOutline} className="size-3.5" />
+              </Button>
+            } />
+            <TooltipContent><p>Open folder as workspace</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                disabled={!ws.sessionId || !!ws.syncing}
+                onClick={() => void ws.sync("pull")}
+                aria-label="Pull manual tests from Testomat.io"
+              >
+                <MdiIcon
+                  path={mdiCloudDownloadOutline}
+                  className={cn("size-3.5", ws.syncing === "pull" && "animate-pulse")}
+                />
+              </Button>
+            } />
+            <TooltipContent><p>Pull manual tests from Testomat.io</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                disabled={!ws.sessionId || !!ws.syncing || ws.manualTestsDir === null}
+                onClick={() => void ws.sync("push")}
+                aria-label="Push manual tests to Testomat.io"
+              >
+                <MdiIcon
+                  path={mdiCloudUploadOutline}
+                  className={cn("size-3.5", ws.syncing === "push" && "animate-pulse")}
+                />
+              </Button>
+            } />
+            <TooltipContent><p>Push manual tests to Testomat.io</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => void ws.loadTree()}
+                aria-label="Refresh tree"
+              >
+                <MdiIcon
+                  path={mdiRefresh}
+                  className={cn("size-3.5", ws.treeLoading && "animate-spin")}
+                />
+              </Button>
+            } />
+            <TooltipContent><p>Refresh tree</p></TooltipContent>
+          </Tooltip>
         </>
       }
     >

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PANEL_SECTIONS } from "./sections/registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
@@ -91,22 +92,25 @@ export function SidebarPanel({ className }: { className?: string }) {
         {PANEL_SECTIONS.map((def) => {
           const isActive = activeSection === def.id;
           return (
-            <button
-              key={def.id}
-              type="button"
-              onClick={() => setActiveSection(isActive ? null : def.id)}
-              title={def.title}
-              aria-label={def.title}
-              aria-pressed={isActive}
-              className={cn(
-                "flex size-8 items-center justify-center rounded-md transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground hover:bg-muted"
-              )}
-            >
-              {def.icon}
-            </button>
+            <Tooltip key={def.id}>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => setActiveSection(isActive ? null : def.id)}
+                  aria-label={def.title}
+                  aria-pressed={isActive}
+                  className={cn(
+                    "flex size-8 items-center justify-center rounded-md transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-foreground hover:bg-muted"
+                  )}
+                >
+                  {def.icon}
+                </button>
+              } />
+              <TooltipContent side="right"><p>{def.title}</p></TooltipContent>
+            </Tooltip>
           );
         })}
       </nav>

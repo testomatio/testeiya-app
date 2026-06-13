@@ -15,6 +15,7 @@ import {
   mdiTrashCanOutline,
   mdiKeyOutline,
 } from "@mdi/js";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import { McpServersDialog } from "@/components/McpServersDialog";
 import { mcpServiceDisplay } from "@/lib/mcp-services";
@@ -48,31 +49,39 @@ export const ConnectionsSection = observer(function ConnectionsSection({
       onToggle={onToggle}
       actions={
         <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!conn.sessionId}
-            onClick={() => setMcpOpen(true)}
-            title="Add a service or custom MCP server"
-            aria-label="Add connection"
-          >
-            <MdiIcon path={mdiPlus} className="size-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!conn.sessionId}
-            onClick={() => void conn.load()}
-            title="Refresh connections"
-            aria-label="Refresh connections"
-          >
-            <MdiIcon
-              path={mdiRefresh}
-              className={conn.loading ? "size-3.5 animate-spin" : "size-3.5"}
-            />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                disabled={!conn.sessionId}
+                onClick={() => setMcpOpen(true)}
+                aria-label="Add connection"
+              >
+                <MdiIcon path={mdiPlus} className="size-3.5" />
+              </Button>
+            } />
+            <TooltipContent><p>Add a service or custom MCP server</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                disabled={!conn.sessionId}
+                onClick={() => void conn.load()}
+                aria-label="Refresh connections"
+              >
+                <MdiIcon
+                  path={mdiRefresh}
+                  className={conn.loading ? "size-3.5 animate-spin" : "size-3.5"}
+                />
+              </Button>
+            } />
+            <TooltipContent><p>Refresh connections</p></TooltipContent>
+          </Tooltip>
         </>
       }
     >
@@ -187,38 +196,46 @@ function ConnectionRow({
         </div>
       </div>
       {isOauth && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="size-6 p-0 text-muted-foreground hover:text-foreground"
-          disabled={authBusy}
-          onClick={onAuthenticate}
-          title={server.authenticated ? "Re-authenticate" : "Authenticate in browser"}
-          aria-label="Authenticate connection"
-        >
-          {authBusy ? (
-            <Spinner className="size-3" />
-          ) : (
-            <MdiIcon path={mdiKeyOutline} className="size-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-6 p-0 text-muted-foreground hover:text-foreground"
+              disabled={authBusy}
+              onClick={onAuthenticate}
+              aria-label="Authenticate connection"
+            >
+              {authBusy ? (
+                <Spinner className="size-3" />
+              ) : (
+                <MdiIcon path={mdiKeyOutline} className="size-3.5" />
+              )}
+            </Button>
+          } />
+          <TooltipContent><p>{server.authenticated ? "Re-authenticate" : "Authenticate in browser"}</p></TooltipContent>
+        </Tooltip>
       )}
       {server.removable && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="size-6 p-0 text-muted-foreground hover:text-destructive"
-          disabled={busy}
-          onClick={onRemove}
-          title="Remove connection"
-          aria-label="Remove connection"
-        >
-          {busy ? (
-            <Spinner className="size-3" />
-          ) : (
-            <MdiIcon path={mdiTrashCanOutline} className="size-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-6 p-0 text-muted-foreground hover:text-destructive"
+              disabled={busy}
+              onClick={onRemove}
+              aria-label="Remove connection"
+            >
+              {busy ? (
+                <Spinner className="size-3" />
+              ) : (
+                <MdiIcon path={mdiTrashCanOutline} className="size-3.5" />
+              )}
+            </Button>
+          } />
+          <TooltipContent><p>Remove connection</p></TooltipContent>
+        </Tooltip>
       )}
       <Switch
         checked={server.enabled}

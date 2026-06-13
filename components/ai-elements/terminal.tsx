@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import Ansi from "ansi-to-react";
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from "@/lib/icons";
@@ -141,18 +142,24 @@ export const TerminalCopyButton = ({
   const Icon = isCopied ? CheckIcon : CopyIcon;
 
   return (
-    <Button
-      className={cn(
-        "size-7 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
-        className
-      )}
-      onClick={copyToClipboard}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {children ?? <Icon size={14} />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          className={cn(
+            "size-7 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
+            className
+          )}
+          onClick={copyToClipboard}
+          size="icon"
+          variant="ghost"
+          aria-label={isCopied ? "Copied" : "Copy output"}
+          {...props}
+        >
+          {children ?? <Icon size={14} />}
+        </Button>
+      } />
+      <TooltipContent><p>{isCopied ? "Copied!" : "Copy output"}</p></TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -170,18 +177,24 @@ export const TerminalClearButton = ({
   }
 
   return (
-    <Button
-      className={cn(
-        "size-7 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
-        className
-      )}
-      onClick={onClear}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {children ?? <Trash2Icon size={14} />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          className={cn(
+            "size-7 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
+            className
+          )}
+          onClick={onClear}
+          size="icon"
+          variant="ghost"
+          aria-label="Clear terminal"
+          {...props}
+        >
+          {children ?? <Trash2Icon size={14} />}
+        </Button>
+      } />
+      <TooltipContent><p>Clear terminal</p></TooltipContent>
+    </Tooltip>
   );
 };
 

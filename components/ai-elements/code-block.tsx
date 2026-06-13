@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -498,15 +499,21 @@ export const CodeBlockCopyButton = ({
   const Icon = isCopied ? CheckIcon : CopyIcon;
 
   return (
-    <Button
-      className={cn("shrink-0", className)}
-      onClick={copyToClipboard}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {children ?? <Icon className="size-3.5" />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          className={cn("shrink-0", className)}
+          onClick={copyToClipboard}
+          size="icon"
+          variant="ghost"
+          aria-label={isCopied ? "Copied" : "Copy code"}
+          {...props}
+        >
+          {children ?? <Icon className="size-3.5" />}
+        </Button>
+      } />
+      <TooltipContent><p>{isCopied ? "Copied!" : "Copy code"}</p></TooltipContent>
+    </Tooltip>
   );
 };
 

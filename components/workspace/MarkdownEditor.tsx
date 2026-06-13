@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { SuiteGlyph } from "@/components/icons";
 import {
@@ -157,14 +158,19 @@ export function MarkdownEditor({
       <div className="relative z-10 flex items-center justify-between gap-2 border-b bg-background px-2 py-1.5">
         <div className="flex items-center gap-2 min-w-0">
           {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-1 text-foreground/60 hover:text-foreground hover:bg-muted shrink-0"
-              title="Close editor"
-            >
-              <X className="size-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded p-1 text-foreground/60 hover:text-foreground hover:bg-muted shrink-0"
+                  aria-label="Close editor"
+                >
+                  <X className="size-4" />
+                </button>
+              } />
+              <TooltipContent><p>Close editor</p></TooltipContent>
+            </Tooltip>
           )}
           <div className="w-2 shrink-0" />
           <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
@@ -187,60 +193,80 @@ export function MarkdownEditor({
         <div className="flex items-center gap-1 shrink-0">
           {/* Editor mode: Rich (BlockNote blocks) ↔ Markdown (OverType raw). */}
           <div className="flex items-center rounded-md border p-0.5">
-            <button
-              type="button"
-              onClick={() => setMode("rich")}
-              className={cn(
-                "rounded p-1 text-muted-foreground hover:bg-muted",
-                mode === "rich" && "bg-muted text-foreground"
-              )}
-              title="Rich editor"
-              aria-pressed={mode === "rich"}
-            >
-              <Blocks className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("markdown")}
-              className={cn(
-                "rounded p-1 text-muted-foreground hover:bg-muted",
-                mode === "markdown" && "bg-muted text-foreground"
-              )}
-              title="Markdown editor"
-              aria-pressed={mode === "markdown"}
-            >
-              <Code className="size-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => setMode("rich")}
+                  className={cn(
+                    "rounded p-1 text-muted-foreground hover:bg-muted",
+                    mode === "rich" && "bg-muted text-foreground"
+                  )}
+                  aria-pressed={mode === "rich"}
+                  aria-label="Rich editor"
+                >
+                  <Blocks className="size-3.5" />
+                </button>
+              } />
+              <TooltipContent><p>Rich editor</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => setMode("markdown")}
+                  className={cn(
+                    "rounded p-1 text-muted-foreground hover:bg-muted",
+                    mode === "markdown" && "bg-muted text-foreground"
+                  )}
+                  aria-pressed={mode === "markdown"}
+                  aria-label="Markdown editor"
+                >
+                  <Code className="size-3.5" />
+                </button>
+              } />
+              <TooltipContent><p>Markdown editor</p></TooltipContent>
+            </Tooltip>
           </div>
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (
-            <button
-              type="button"
-              onClick={onToggleFullScreen}
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title={fillHeight ? "Exit full screen" : "Full screen"}
-            >
-              {fillHeight ? (
-                <Minimize2 className="size-3.5" />
-              ) : (
-                <Expand className="size-3.5" />
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={onToggleFullScreen}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted"
+                  aria-label={fillHeight ? "Exit full screen" : "Full screen"}
+                >
+                  {fillHeight ? (
+                    <Minimize2 className="size-3.5" />
+                  ) : (
+                    <Expand className="size-3.5" />
+                  )}
+                </button>
+              } />
+              <TooltipContent><p>{fillHeight ? "Exit full screen" : "Full screen"}</p></TooltipContent>
+            </Tooltip>
           )}
           {/* Collapse to header — only meaningful in the strip layout. */}
           {!fillHeight && (
-            <button
-              type="button"
-              onClick={() =>
-                setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
-              }
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title={size === "collapsed" ? "Show editor" : "Collapse to header"}
-            >
-              <ChevronDownIcon
-                className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
-              />
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
+                  }
+                  className="rounded p-1 text-muted-foreground hover:bg-muted"
+                  aria-label={size === "collapsed" ? "Show editor" : "Collapse to header"}
+                >
+                  <ChevronDownIcon
+                    className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
+                  />
+                </button>
+              } />
+              <TooltipContent><p>{size === "collapsed" ? "Show editor" : "Collapse to header"}</p></TooltipContent>
+            </Tooltip>
           )}
           <Button
             type="button"

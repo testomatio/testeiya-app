@@ -45,6 +45,7 @@ import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
@@ -509,16 +510,20 @@ const ChatPage = observer(function ChatPage() {
       <div className="flex items-center justify-between border-b pr-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex w-12 shrink-0 items-center justify-center">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={panel.togglePanel}
-              title={panel.open ? "Hide panel" : "Show panel"}
-              aria-label="Toggle panel"
-            >
-              <MdiIcon path={panel.open ? mdiDockLeft : mdiPageLayoutSidebarLeft} className="size-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={panel.togglePanel}
+                  aria-label="Toggle panel"
+                >
+                  <MdiIcon path={panel.open ? mdiDockLeft : mdiPageLayoutSidebarLeft} className="size-4" />
+                </Button>
+              } />
+              <TooltipContent><p>{panel.open ? "Hide panel" : "Show panel"}</p></TooltipContent>
+            </Tooltip>
           </div>
           <h1 className="font-semibold text-lg shrink-0">Testeiya</h1>
           {project.currentProject && (
@@ -614,31 +619,39 @@ const ChatPage = observer(function ChatPage() {
             </span>
           )}
           {!themeLocked && (
-            <Button
-              onClick={toggleTheme}
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              aria-label="Toggle theme"
-            >
-              {theme === "dark" ? (
-                <SunIcon className="size-4" />
-              ) : (
-                <MoonIcon className="size-4" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  onClick={toggleTheme}
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  aria-label="Toggle theme"
+                >
+                  {theme === "dark" ? (
+                    <SunIcon className="size-4" />
+                  ) : (
+                    <MoonIcon className="size-4" />
+                  )}
+                </Button>
+              } />
+              <TooltipContent><p>{theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}</p></TooltipContent>
+            </Tooltip>
           )}
-          <Button
-            onClick={() => setSettingsOpen(true)}
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            title="Settings"
-            aria-label="Settings"
-          >
-            <SettingsIcon className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                onClick={() => setSettingsOpen(true)}
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                aria-label="Settings"
+              >
+                <SettingsIcon className="size-4" />
+              </Button>
+            } />
+            <TooltipContent><p>Settings</p></TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -749,17 +762,21 @@ const ChatPage = observer(function ChatPage() {
           (kept mounted so state is preserved when the overlay is closed). */}
       <Conversation className={hideChat ? "hidden" : "flex-1"}>
         {messages.length > 0 && (
-          <Button
-            onClick={handleClear}
-            size="sm"
-            variant="ghost"
-            className="absolute top-3 right-3 z-10 gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
-            title="Clear chat"
-            aria-label="Clear chat"
-          >
-            <Trash className="size-3.5" />
-            <span className="hidden sm:inline">Clear</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                onClick={handleClear}
+                size="sm"
+                variant="ghost"
+                className="absolute top-3 right-3 z-10 gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+                aria-label="Clear chat"
+              >
+                <Trash className="size-3.5" />
+                <span className="hidden sm:inline">Clear</span>
+              </Button>
+            } />
+            <TooltipContent><p>Clear chat history</p></TooltipContent>
+          </Tooltip>
         )}
         <ConversationContent className="items-center">
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">

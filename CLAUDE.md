@@ -147,6 +147,31 @@ The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark the
 - **Headings:** compact scale in `@layer base` — H1 `text-2xl` (24px) → H6 `text-sm` (14px, the indigo uppercase "eyebrow"). Element defaults only; explicit `text-*` utilities still win.
 - To restyle, edit the variables/`@layer base` in `globals.css` — components inherit automatically.
 
+## Tooltips
+
+`TooltipProvider` is mounted globally in `app/layout.tsx` — no need to add it per-component.
+
+**Always wrap with `<Tooltip>` when adding:**
+- Icon-only buttons (no visible text label) — toolbars, section headers, inline row actions.
+- Buttons whose label is hidden at small viewports (e.g. `hidden sm:inline` text).
+- Status indicators or badges that need extra context on hover.
+
+**Pattern** (Base UI via `@/components/ui/tooltip`):
+```tsx
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+<Tooltip>
+  <TooltipTrigger render={<Button aria-label="Refresh" ...><RefreshIcon /></Button>} />
+  <TooltipContent><p>Refresh</p></TooltipContent>
+</Tooltip>
+```
+
+- Use `render=` prop on `TooltipTrigger` — do **not** nest a `<TooltipTrigger>` wrapper around an existing element.
+- Keep tooltip text short: action verb + object ("Refresh connections", "Copy code", "Push to Testomat.io").
+- For dynamic labels (e.g. toggle state), mirror the same logic in `aria-label` and tooltip text.
+- Use `side="right"` for buttons in the left icon strip; default (`"top"`) everywhere else.
+- Never use the HTML `title=` attribute as a substitute — it renders an unstyled browser tooltip and is not keyboard-accessible.
+
 ## Conventions
 
 - **Ports:** 3050 (web UI dev), 3210 (agent server dev — `app-server.ts`); desktop uses a random free port. Never 3000.
