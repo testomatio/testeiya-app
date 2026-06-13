@@ -155,7 +155,7 @@ export function MarkdownEditor({
       )}
     >
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between gap-2 border-b bg-background px-2 py-1.5">
+      <div className="relative z-10 flex items-center justify-between gap-2 px-2 py-1.5">
         <div className="flex items-center gap-2 min-w-0">
           {onClose && (
             <Tooltip>
