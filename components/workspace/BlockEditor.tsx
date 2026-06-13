@@ -36,6 +36,19 @@ import "./block-editor.css";
 
 type Schema = typeof customSchema;
 
+const STEP_VIEW_MODE_KEY = "bn-step-view-mode";
+
+// The testStep block reads its layout from this localStorage key on mount and
+// live-updates on the "bn-step-view-mode" event. Seed it to "compact" before the
+// editor mounts so steps default to the compact (reading) view; the in-editor
+// view toggle still overrides and persists a different choice.
+if (
+  typeof window !== "undefined" &&
+  !window.localStorage.getItem(STEP_VIEW_MODE_KEY)
+) {
+  window.localStorage.setItem(STEP_VIEW_MODE_KEY, "compact");
+}
+
 export type BlockEditorProps = {
   /** Markdown source. Consumed once on mount; remount (via key) to reseed. */
   value: string;

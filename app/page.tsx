@@ -722,7 +722,7 @@ const ChatPage = observer(function ChatPage() {
                     tests — or just start chatting below.
                   </p>
                 </div>
-                <Button onClick={() => panel.openSection("project")}>
+                <Button onClick={() => setSwitchProjectOpen(true)}>
                   <KeyRoundIcon className="size-4" />
                   Connect Testomat.io
                 </Button>

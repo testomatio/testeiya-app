@@ -43,7 +43,7 @@ cd testeiya-app
 
 ```bash
 bun install                       # also fetches the Agent (submodule) automatically
-cd testeiya && bun install && cd ..
+bun run update                    # install everything
 ```
 
 ### 4. Start the app
@@ -150,7 +150,7 @@ One Bun server (`testeiya/src/app-server.ts`, from the Agent submodule) is the w
 The Agent (`testeiya/` submodule) ships fixes, new skills, and model updates on its own schedule. **Run this regularly to keep your Agent current:**
 
 ```bash
-bun run update:agent
+bun run update
 ```
 
 It pulls the latest Agent from [`testomatio/testclaw`](https://github.com/testomatio/testclaw) (`master`) and refreshes its dependencies. Make a habit of running it — at least whenever you `git pull` the App.
