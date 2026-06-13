@@ -31,8 +31,7 @@ interface McpTest {
   updated_at?: string | null;
 }
 
-// Suite 3fr, title 7fr, meta 2fr — suite leads, then the title-heavy test.
-const TESTS_GRID = "minmax(0,3fr) minmax(0,7fr) minmax(0,2fr)";
+const TESTS_GRID = "minmax(0,3fr) minmax(0,7fr) minmax(0,2fr) minmax(0,2fr)";
 
 export default function TestsListRenderer({
   json,
@@ -74,6 +73,7 @@ export default function TestsListRenderer({
           <div className="min-w-0 truncate">Suite</div>
           <div className="min-w-0 truncate">Test</div>
           <div className="min-w-0 truncate">State</div>
+          <div className="min-w-0 truncate">Tags</div>
         </ListRowHeader>
         {items.map((t, idx) => {
           const title = t.title ?? t.clean_title ?? t.id ?? "(untitled)";
@@ -117,13 +117,15 @@ export default function TestsListRenderer({
                 )}
                 <LabelsRow labels={t.labels} className="min-w-0" />
               </div>
-              <div className="flex min-w-0 items-center gap-x-1">
+              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 {t.priority && t.priority !== "normal" && (
                   <MetaPill>{t.priority}</MetaPill>
                 )}
                 {t.state &&
                   t.state !== "manual" &&
                   t.state !== "automated" && <MetaPill>{t.state}</MetaPill>}
+              </div>
+              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 {Array.isArray(t.tags) &&
                   (t.tags as unknown[]).slice(0, 2).map((tag, i) => (
                     <MetaPill key={`tag-${i}`}>

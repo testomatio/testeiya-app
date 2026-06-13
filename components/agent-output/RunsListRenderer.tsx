@@ -47,9 +47,7 @@ interface McpRun {
   labels?: unknown;
 }
 
-// Frontend's grid: `minmax(0, 8fr) 2fr 2fr` — title column takes 8/12,
-// statuses 2/12, meta 2/12. Column gap 0.5rem matches list-runs.scss.
-const RUNS_GRID = "minmax(0,8fr) 2fr 2fr";
+const RUNS_GRID = "minmax(0,8fr) minmax(0,2fr) minmax(0,3fr)";
 
 export default function RunsListRenderer({
   json,
@@ -162,18 +160,13 @@ export default function RunsListRenderer({
                   <RunProgress percent={percent} automated={r.automated} />
                 )}
               </div>
-              <div className="flex min-w-0 items-center justify-between gap-x-2 text-xs text-muted-foreground">
+              <div className="flex min-w-0 flex-col justify-center gap-0.5 text-xs text-muted-foreground overflow-hidden">
                 <span className="truncate">
-                  {formatDuration(r.duration) ?? "—"}
+                  {r.assigned_to ?? "—"}
                 </span>
                 {env && (
                   <span className="truncate" title={env}>
                     {env}
-                  </span>
-                )}
-                {r.assigned_to && (
-                  <span className="truncate" title={r.assigned_to}>
-                    {r.assigned_to}
                   </span>
                 )}
               </div>
