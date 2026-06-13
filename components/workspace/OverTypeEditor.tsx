@@ -145,7 +145,7 @@ function overtypeTheme(theme: "light" | "dark") {
   return {
     name: "solar",
     colors: {
-      bgPrimary:    tw.n50,
+      bgPrimary:    "#ffffff",
       bgSecondary:  "#ffffff",
       text:         tw.n900,
       textPrimary:  tw.n900,
