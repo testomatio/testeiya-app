@@ -129,11 +129,13 @@ const FileTreeFolderContext = createContext<FileTreeFolderContextType>({
 export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   path: string;
   name: string;
+  icon?: ReactNode;
 };
 
 export const FileTreeFolder = ({
   path,
   name,
+  icon,
   className,
   children,
   ...props
@@ -183,7 +185,7 @@ export const FileTreeFolder = ({
               type="button"
             >
               <FileTreeIcon>
-                <SuiteKindIcon fileType="folder" className="size-4" />
+                {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
               </FileTreeIcon>
               <FileTreeName>{name}</FileTreeName>
             </button>

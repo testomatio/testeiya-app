@@ -312,7 +312,7 @@ export function BlockEditor({
         if (attempts++ < SCROLL_MAX_FRAMES) frame = requestAnimationFrame(tryScroll);
         return;
       }
-      target.scrollIntoView({ block: "center" });
+      target.scrollIntoView({ block: "start" });
       target.classList.add("testeiya-search-hit");
       cleanup = setTimeout(
         () => target.classList.remove("testeiya-search-hit"),

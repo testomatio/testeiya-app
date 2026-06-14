@@ -4,7 +4,6 @@ import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-/** Pipelines service (shell) — placeholder for an upcoming CI/CD integration. */
 export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
   return (
     <SectionShell
@@ -13,9 +12,13 @@ export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
       active={active}
       onToggle={onToggle}
     >
-      <div className="px-4 py-3">
-        <p className="text-xs text-muted-foreground">
-          Pipelines are coming soon.
+      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="account_tree" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">Pipelines coming soon</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          CI/CD pipeline integration will appear here once it's available.
         </p>
       </div>
     </SectionShell>

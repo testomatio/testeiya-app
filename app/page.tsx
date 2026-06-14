@@ -36,7 +36,6 @@ import {
 } from "@/components/ai-elements/tool";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
 import { RenderFrame } from "@/components/ai-elements/render-frame";
-import { FolderGlyph, ProjectGlyph } from "@/components/icons";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
@@ -48,12 +47,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Icon, Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
-import { SettingsDialog } from "@/components/SettingsDialog";
+import { Icon, Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
-import { useTheme } from "@/lib/theme";
 import { observer } from "mobx-react-lite";
 import {
   ServicesProvider,
@@ -226,7 +223,7 @@ function ChatWithWorkspace() {
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled },
+  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick },
   ref
 ) {
   const [text, setText] = useState("");
@@ -311,6 +308,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               Listening...
             </span>
           )}
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 px-2 text-muted-foreground text-xs shrink-0"
+                onClick={onModelClick}
+                aria-label="Change provider / model"
+              >
+                {modelLabel}
+                <ChevronDownIcon className="size-3" />
+              </Button>
+            } />
+            <TooltipContent side="top"><p>Change provider / model</p></TooltipContent>
+          </Tooltip>
           <div className="relative">
             {isListening && (
               <span className="absolute inset-0 rounded-md animate-ping bg-destructive/20" />
@@ -351,10 +363,8 @@ const ChatPage = observer(function ChatPage() {
   const chatInputRef = useRef<ChatInputHandle>(null);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
-  const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
   const panel = usePanel();
   const workspace = useWorkspaceService();
   const search = useSearchService();
@@ -505,155 +515,6 @@ const ChatPage = observer(function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b pr-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex w-12 shrink-0 items-center justify-center">
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0"
-                  onClick={panel.togglePanel}
-                  aria-label="Toggle panel"
-                >
-                  <Icon name={panel.open ? "dock_to_left" : "side_navigation"} className="size-4" />
-                </Button>
-              } />
-              <TooltipContent><p>{panel.open ? "Hide panel" : "Show panel"}</p></TooltipContent>
-            </Tooltip>
-          </div>
-          <h1 className="font-semibold text-lg shrink-0">Testeiya</h1>
-          {project.currentProject && (
-            <div className="flex min-w-0 items-center text-xs">
-              <button
-                type="button"
-                onClick={() => panel.openSection("project")}
-                title={`Project: ${project.currentProject.title}\nClick to view in sidebar`}
-                className="flex min-w-0 max-w-[260px] items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-muted/50"
-              >
-                <ProjectGlyph className="size-3.5 shrink-0 text-primary" />
-                <span className="truncate font-medium text-foreground">
-                  {project.currentProject.title}
-                </span>
-                {project.currentProject.testsCount !== null && (
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    · {project.currentProject.testsCount.toLocaleString()} tests
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSwitchProjectOpen(true)}
-                title="Change project"
-                aria-label="Change project"
-                className="ml-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              >
-                <ChevronsUpDownIcon className="size-3.5" />
-              </button>
-            </div>
-          )}
-          {isDev && cwd && (
-            <span className="flex min-w-0 max-w-[360px] items-center text-[11px] font-mono">
-              {/* Clicking the path opens a folder picker to switch workspace.
-                  The path is truncated from the START so the tail (the actual
-                  folder) stays visible. */}
-              <button
-                type="button"
-                onClick={() => void workspace.openFolder()}
-                title={`${cwd}\nClick to open another folder`}
-                className="flex min-w-0 items-center text-muted-foreground/80 transition-colors hover:text-foreground"
-              >
-                <FolderGlyph className="inline size-3 mr-1 shrink-0 align-[-1px]" />
-                <span className="truncate text-left [direction:rtl]">{cwd}</span>
-              </button>
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 px-2 text-muted-foreground text-xs shrink-0"
-            onClick={() => setProvidersOpen(true)}
-            title="Change provider / model"
-            aria-label="Providers and models"
-          >
-            {model || providers.label || "Select model"}
-            <ChevronDownIcon className="size-3" />
-          </Button>
-          {status === "connecting" && (
-            <span className="flex items-center gap-1.5 text-muted-foreground text-xs shrink-0">
-              <Spinner className="size-3" /> Connecting...
-            </span>
-          )}
-          {status === "ready" && model && (
-            <CircleDotIcon className="size-3 text-green-500 shrink-0" />
-          )}
-          {isDev && cwd && (
-            <span className="flex items-center text-[11px] font-mono shrink-0">
-              {mcpLoaded && mcpTools.length > 0 && (
-                <span
-                  className="text-emerald-500"
-                  title={`MCP tools: ${mcpTools.length}\n${mcpTools.join(", ")}`}
-                >
-                  MCP:{mcpTools.length}
-                </span>
-              )}
-              {mcpLoaded && mcpTools.length === 0 && (
-                <span className="text-red-500">MCP:failed</span>
-              )}
-              {!mcpLoaded && expectedMcpServers.length > 0 && (
-                <span
-                  className="text-amber-500"
-                  title={`MCP servers pending (connect on first prompt): ${expectedMcpServers.join(", ")}`}
-                >
-                  MCP:pending ({expectedMcpServers.length})
-                </span>
-              )}
-              {!mcpLoaded && expectedMcpServers.length === 0 && (
-                <span className="text-muted-foreground">MCP:—</span>
-              )}
-            </span>
-          )}
-          {!themeLocked && (
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  onClick={toggleTheme}
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0"
-                  aria-label="Toggle theme"
-                >
-                  {theme === "dark" ? (
-                    <SunIcon className="size-4" />
-                  ) : (
-                    <MoonIcon className="size-4" />
-                  )}
-                </Button>
-              } />
-              <TooltipContent><p>{theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}</p></TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                onClick={() => setSettingsOpen(true)}
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                aria-label="Settings"
-              >
-                <SettingsIcon className="size-4" />
-              </Button>
-            } />
-            <TooltipContent><p>Settings</p></TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       {error && (
         <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
           <div className="min-w-0">
@@ -680,12 +541,6 @@ const ChatPage = observer(function ChatPage() {
         </div>
       )}
 
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        cwd={cwd}
-      />
-
       <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
 
       <TestomatioLogin
@@ -701,7 +556,7 @@ const ChatPage = observer(function ChatPage() {
 
       {/* Below-header region: the multi-section sidebar panel + chat column. */}
       <div className="flex flex-1 min-h-0">
-        <SidebarPanel />
+        <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
         <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
           {/* Project resource widget (tests/runs/plans) — fills the main area,
               fed live from the Testomat.io v2 proxy, using the same widgets the
@@ -760,23 +615,51 @@ const ChatPage = observer(function ChatPage() {
       {/* Chat area — hidden while a file or resource widget is open full-height
           (kept mounted so state is preserved when the overlay is closed). */}
       <Conversation className={hideChat ? "hidden" : "flex-1"}>
-        {messages.length > 0 && (
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                onClick={handleClear}
-                size="sm"
-                variant="ghost"
-                className="absolute top-3 right-3 z-10 gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
-                aria-label="Clear chat"
-              >
-                <Trash className="size-3.5" />
-                <span className="hidden sm:inline">Clear</span>
-              </Button>
-            } />
-            <TooltipContent><p>Clear chat history</p></TooltipContent>
-          </Tooltip>
-        )}
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+          {isDev && cwd && (
+            <span className="flex items-center text-[11px] font-mono">
+              {mcpLoaded && mcpTools.length > 0 && (
+                <span
+                  className="text-emerald-500"
+                  title={`MCP tools: ${mcpTools.length}\n${mcpTools.join(", ")}`}
+                >
+                  MCP:{mcpTools.length}
+                </span>
+              )}
+              {mcpLoaded && mcpTools.length === 0 && (
+                <span className="text-red-500">MCP:failed</span>
+              )}
+              {!mcpLoaded && expectedMcpServers.length > 0 && (
+                <span
+                  className="text-amber-500"
+                  title={`MCP servers pending (connect on first prompt): ${expectedMcpServers.join(", ")}`}
+                >
+                  MCP:pending ({expectedMcpServers.length})
+                </span>
+              )}
+              {!mcpLoaded && expectedMcpServers.length === 0 && (
+                <span className="text-muted-foreground">MCP:—</span>
+              )}
+            </span>
+          )}
+          {messages.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  onClick={handleClear}
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+                  aria-label="Clear chat"
+                >
+                  <Trash className="size-3.5" />
+                  <span className="hidden sm:inline">Clear</span>
+                </Button>
+              } />
+              <TooltipContent><p>Clear chat history</p></TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         <ConversationContent className="items-center">
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
           {messages.length === 0 && canConnectTestomatio && !sessionId && (
@@ -1045,6 +928,8 @@ const ChatPage = observer(function ChatPage() {
           onAttachClick={() => setAttachOpen(true)}
           onInsertSkill={handleInsertSkill}
           skillsDisabled={status === "streaming" || status === "submitted"}
+          modelLabel={(model || providers.label || "Select model").split("/").pop() ?? "Select model"}
+          onModelClick={() => setProvidersOpen(true)}
         />
         </div>
       </div>
@@ -1085,6 +970,8 @@ interface ChatInputProps {
   onAttachClick: () => void;
   onInsertSkill: (name: string) => void;
   skillsDisabled: boolean;
+  modelLabel: string;
+  onModelClick: () => void;
 }
 
 interface VoiceRecognitionEvent {

@@ -7,6 +7,7 @@ import { WorkspaceSection } from "./WorkspaceSection";
 import { ProjectSection } from "./ProjectSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { PipelinesSection } from "./PipelinesSection";
+import { SettingsSection } from "./SettingsSection";
 
 export const PANEL_SECTIONS: PanelSectionDef[] = [
   {
@@ -32,5 +33,11 @@ export const PANEL_SECTIONS: PanelSectionDef[] = [
     title: "Pipelines",
     icon: createElement(Icon, { name: "account_tree", className: "size-4" }),
     Section: PipelinesSection,
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    icon: createElement(Icon, { name: "settings", className: "size-4" }),
+    Section: SettingsSection,
   },
 ];

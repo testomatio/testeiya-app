@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { observer } from "mobx-react-lite";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
+import { useProjectService } from "@/lib/services/StoreProvider";
+import { useTheme } from "@/lib/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { Icon, SunIcon, MoonIcon, ChevronsUpDownIcon, ExternalLinkIcon } from "@/lib/icons";
+import { ProjectGlyph, FolderGlyph } from "@/components/icons";
 import { PANEL_SECTIONS } from "./sections/registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
-const DEFAULT_WIDTH = 280;
+const DEFAULT_WIDTH = 400;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 700;
 const ICON_STRIP_W = 48;
@@ -27,8 +33,18 @@ function saveWidth(w: number): void {
   } catch {}
 }
 
-export function SidebarPanel({ className }: { className?: string }) {
-  const { open, activeSection, setActiveSection } = usePanel();
+export const SidebarPanel = observer(function SidebarPanel({
+  cwd,
+  onSwitchProject,
+  className,
+}: {
+  cwd?: string | null;
+  onSwitchProject?: () => void;
+  className?: string;
+}) {
+  const { open, activeSection, setActiveSection, togglePanel } = usePanel();
+  const project = useProjectService();
+  const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
 
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const [hydrated, setHydrated] = useState(false);
@@ -52,9 +68,7 @@ export function SidebarPanel({ className }: { className?: string }) {
         setWidth(next);
       };
       const onUp = () => {
-        if (dragRef.current) {
-          dragRef.current = null;
-        }
+        if (dragRef.current) dragRef.current = null;
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         window.removeEventListener("mousemove", onMove);
@@ -73,75 +87,192 @@ export function SidebarPanel({ className }: { className?: string }) {
     saveWidth(width);
   }, [width, hydrated]);
 
-  if (!open) return null;
-
   return (
     <aside
       className={cn(
         "relative flex shrink-0 border-r bg-background",
         className
       )}
-      style={{ width }}
+      style={open ? { width } : { width: ICON_STRIP_W }}
     >
-      {/* Icon strip */}
+      {/* Icon strip — always visible */}
       <nav
-        className="flex shrink-0 flex-col items-center gap-1 border-r py-1"
+        className="flex shrink-0 flex-col items-center border-r"
         style={{ width: ICON_STRIP_W }}
         aria-label="Panel sections"
       >
-        {PANEL_SECTIONS.map((def) => {
-          const isActive = activeSection === def.id;
-          return (
-            <Tooltip key={def.id}>
+        {/* Panel toggle */}
+        <div className="flex h-12 shrink-0 flex-col items-center justify-center w-full px-1 border-b">
+          <Tooltip>
+            <TooltipTrigger render={
+              <button
+                type="button"
+                onClick={togglePanel}
+                aria-label={open ? "Hide panel" : "Show panel"}
+                className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
+              >
+                <Icon name={open ? "dock_to_left" : "side_navigation"} className="size-4" />
+              </button>
+            } />
+            <TooltipContent side="right"><p>{open ? "Hide panel" : "Show panel"}</p></TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Section icons */}
+        <div className="flex flex-1 flex-col items-center gap-1 w-full px-1 pt-1">
+          {PANEL_SECTIONS.map((def) => {
+            const isActive = open && activeSection === def.id;
+            return (
+              <Tooltip key={def.id}>
+                <TooltipTrigger render={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!open) {
+                        togglePanel();
+                        setActiveSection(def.id);
+                      } else {
+                        setActiveSection(isActive ? null : def.id);
+                      }
+                    }}
+                    aria-label={def.title}
+                    aria-pressed={isActive}
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-md transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    {def.icon}
+                  </button>
+                } />
+                <TooltipContent side="right"><p>{def.title}</p></TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+
+        {/* Bottom: theme toggle */}
+        <div className="flex flex-col items-center gap-1 w-full px-1 pb-1">
+          {!themeLocked && (
+            <Tooltip>
               <TooltipTrigger render={
                 <button
                   type="button"
-                  onClick={() => setActiveSection(isActive ? null : def.id)}
-                  aria-label={def.title}
-                  aria-pressed={isActive}
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-md transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-foreground hover:bg-muted"
-                  )}
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                  className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
                 >
-                  {def.icon}
+                  {theme === "dark" ? (
+                    <SunIcon className="size-4" />
+                  ) : (
+                    <MoonIcon className="size-4" />
+                  )}
                 </button>
               } />
-              <TooltipContent side="right"><p>{def.title}</p></TooltipContent>
+              <TooltipContent side="right">
+                <p>{theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}</p>
+              </TooltipContent>
             </Tooltip>
-          );
-        })}
+          )}
+        </div>
       </nav>
 
-      {/* Section content */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {PANEL_SECTIONS.map((def) => {
-          const isActive = activeSection === def.id;
-          return (
-            <def.Section
-              key={def.id}
-              active={isActive}
-              onToggle={() => setActiveSection(isActive ? null : def.id)}
-            />
-          );
-        })}
-      </div>
+      {/* Content panel — only when open */}
+      {open && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Sidebar header: project info */}
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+            <span className="font-semibold text-sm shrink-0">Testeiya</span>
+            <div className="flex-1" />
+            {project.currentProject && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <button
+                      type="button"
+                      onClick={onSwitchProject}
+                      aria-label="Switch project"
+                      className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/50"
+                    >
+                      <ProjectGlyph className="size-3 shrink-0 text-primary" />
+                      <span className="truncate font-medium text-foreground">
+                        {project.currentProject.title}
+                      </span>
+                      {project.currentProject.testsCount !== null && (
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          · {project.currentProject.testsCount.toLocaleString()} tests
+                        </span>
+                      )}
+                      <ChevronsUpDownIcon className="size-3 shrink-0 text-muted-foreground" />
+                    </button>
+                  } />
+                  <TooltipContent side="bottom"><p>Switch project</p></TooltipContent>
+                </Tooltip>
+                {project.currentLinks?.project && (
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <button
+                        type="button"
+                        onClick={() => project.openExternal(project.currentLinks!.project)}
+                        aria-label="Open project in Testomat.io"
+                        className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                      >
+                        <ExternalLinkIcon className="size-4" />
+                      </button>
+                    } />
+                    <TooltipContent side="bottom"><p>Open project in Testomat.io</p></TooltipContent>
+                  </Tooltip>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Section content */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {PANEL_SECTIONS.map((def) => {
+              const isActive = activeSection === def.id;
+              return (
+                <def.Section
+                  key={def.id}
+                  active={isActive}
+                  onToggle={() => setActiveSection(isActive ? null : def.id)}
+                />
+              );
+            })}
+          </div>
+
+          {/* Bottom: cwd path → opens settings section */}
+          {cwd && (
+            <button
+              type="button"
+              onClick={() => setActiveSection("settings")}
+              title={`${cwd}\nClick to open workspace settings`}
+              className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground truncate"
+            >
+              <FolderGlyph className="size-3 shrink-0" />
+              <span className="truncate [direction:rtl]">{cwd}</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Drag handle */}
-      <div
-        onMouseDown={onResizeMouseDown}
-        className={cn(
-          "absolute top-0 right-0 h-full w-1 cursor-col-resize",
-          "bg-transparent hover:bg-primary/30 transition-colors",
-          "after:content-[''] after:absolute after:top-0 after:-right-1 after:h-full after:w-2"
-        )}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        title="Drag to resize"
-      />
+      {open && (
+        <div
+          onMouseDown={onResizeMouseDown}
+          className={cn(
+            "absolute top-0 right-0 h-full w-1 cursor-col-resize",
+            "bg-transparent hover:bg-primary/30 transition-colors",
+            "after:content-[''] after:absolute after:top-0 after:-right-1 after:h-full after:w-2"
+          )}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          title="Drag to resize"
+        />
+      )}
     </aside>
   );
-}
+});

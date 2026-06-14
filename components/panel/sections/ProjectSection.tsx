@@ -32,20 +32,6 @@ export const ProjectSection = observer(function ProjectSection({
     >
       {current && links ? (
         <div className="space-y-3 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => project.openExternal(links.project)}
-            title="Open project in Testomat.io"
-            className="group flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:text-primary"
-          >
-            <Icon name="folder_managed" className="size-4 shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">{current.title}</span>
-            <Icon
-              name="open_in_new"
-              className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-            />
-          </button>
-
           <div className="grid grid-cols-2 gap-2">
             <StatTile
               icon="science"
@@ -86,16 +72,22 @@ export const ProjectSection = observer(function ProjectSection({
           </Button>
         </div>
       ) : (
-        <div className="space-y-3 px-4 py-3">
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+            <Icon name="folder_managed" className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-foreground">
+            {project.connected ? "No project selected" : "Not connected"}
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {project.connected
               ? "Select a Testomat.io project to load its tests into the workspace."
-              : "Connect a Testomat.io project to load its tests into the workspace."}
+              : "Connect your Testomat.io account to load tests into the workspace."}
           </p>
           <Button
             size="sm"
             variant="outline"
-            className="w-full"
+            className="mt-1 w-full"
             onClick={() => setAuthOpen(true)}
           >
             {project.connected ? "Open a project" : "Connect a project"}

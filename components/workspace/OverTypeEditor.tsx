@@ -145,8 +145,8 @@ function overtypeTheme(theme: "light" | "dark") {
   return {
     name: "solar",
     colors: {
-      bgPrimary:    tw.n50,
-      bgSecondary:  tw.n50,
+      bgPrimary:    "#ffffff",
+      bgSecondary:  "#ffffff",
       text:         tw.n900,
       textPrimary:  tw.n900,
       textSecondary:tw.n600,
@@ -170,7 +170,7 @@ function overtypeTheme(theme: "light" | "dark") {
       border:       tw.n200,
       hoverBg:      tw.n100,
       primary:      tw.i500,
-      toolbarBg:    tw.n50,
+      toolbarBg:    "#ffffff",
       toolbarIcon:  tw.n600,
       toolbarHover: tw.n100,
       toolbarActive:tw.n200,

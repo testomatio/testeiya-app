@@ -96,28 +96,38 @@ const ConnectionsBody = observer(function ConnectionsBody({
 }) {
   if (!conn.sessionId) {
     return (
-      <p className="text-[11px] text-muted-foreground">
-        Start a session to manage connections.
-      </p>
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="linked_services" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">No active session</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Send a message to start a session, then manage connections here.
+        </p>
+      </div>
     );
   }
   if (conn.loading && conn.servers.length === 0) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <Spinner className="size-3" /> Loading…
+      <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+        <Spinner className="size-3.5 shrink-0" /> Loading connections…
       </div>
     );
   }
   if (conn.servers.length === 0) {
     return (
-      <>
-        <p className="text-[11px] text-muted-foreground">
-          No connections yet. Add a service or a custom MCP server.
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="add_link" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">No connections yet</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Connect a service or custom MCP server to extend the agent.
         </p>
-        <Button size="sm" variant="outline" className="w-full" onClick={onManage}>
+        <Button size="sm" variant="outline" className="mt-1 w-full" onClick={onManage}>
           <Icon name="add" className="size-3.5" /> Add connection
         </Button>
-      </>
+      </div>
     );
   }
   return (

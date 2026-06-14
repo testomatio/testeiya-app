@@ -22,13 +22,40 @@ import {
 import type { TreeNode } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-function NodeRow({ node }: { node: TreeNode }) {
+function NodeRow({ node, onOpen }: { node: TreeNode; onOpen: (path: string, anchor?: string) => void }) {
   const isMarkdown = /\.md$/i.test(node.name);
   if (node.kind === "folder") {
     return (
       <FileTreeFolder path={node.path} name={node.name}>
         {(node.children ?? []).map((child) => (
-          <NodeRow key={child.path} node={child} />
+          <NodeRow key={child.anchor ?? child.path} node={child} onOpen={onOpen} />
+        ))}
+      </FileTreeFolder>
+    );
+  }
+  if (node.kind === "test") {
+    return (
+      <FileTreeFile
+        path={`${node.path}#${node.anchor}`}
+        name={node.name}
+        onClick={() => onOpen(node.path, node.anchor)}
+        icon={
+          <FileTreeIcon>
+            <Icon name="tag" className="size-4 text-muted-foreground" />
+          </FileTreeIcon>
+        }
+      />
+    );
+  }
+  if (node.children?.length) {
+    return (
+      <FileTreeFolder
+        path={node.path}
+        name={node.name}
+        icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
+      >
+        {node.children.map((child) => (
+          <NodeRow key={child.anchor ?? child.path} node={child} onOpen={onOpen} />
         ))}
       </FileTreeFolder>
     );
@@ -81,7 +108,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 <Icon name="search" className="size-4" />
               </Button>
             } />
-            <TooltipContent><p>Search workspace</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Search workspace</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={
@@ -95,7 +122,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 <Icon name="folder_open" className="size-4" />
               </Button>
             } />
-            <TooltipContent><p>Open folder as workspace</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Open folder as workspace</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={
@@ -113,7 +140,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 />
               </Button>
             } />
-            <TooltipContent><p>Pull manual tests from Testomat.io</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Pull manual tests from Testomat.io</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={
@@ -131,7 +158,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 />
               </Button>
             } />
-            <TooltipContent><p>Push manual tests to Testomat.io</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Push manual tests to Testomat.io</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={
@@ -148,7 +175,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 />
               </Button>
             } />
-            <TooltipContent><p>Refresh tree</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Refresh tree</p></TooltipContent>
           </Tooltip>
         </>
       }
@@ -206,9 +233,14 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </div>
         )}
         {!ws.sessionId && !ws.treeError && (
-          <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <Icon name="info" className="size-3.5 shrink-0" />
-            <span>No active session yet.</span>
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+              <Icon name="folder_open" className="size-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No active session</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Send a message to start a session and load your workspace.
+            </p>
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
@@ -219,7 +251,15 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && !ws.awaitingTests && !ws.treeLoading && (
-          <div className="px-4 text-xs text-muted-foreground">(empty)</div>
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+              <Icon name="folder_open" className="size-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">Workspace is empty</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Pull tests from Testomat.io or open a folder to get started.
+            </p>
+          </div>
         )}
         {ws.tree.length > 0 && (
           <FileTree
@@ -230,7 +270,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             onSelect={(p) => ws.openPath(p)}
           >
             {ws.tree.map((node) => (
-              <NodeRow key={node.path} node={node} />
+              <NodeRow key={node.path} node={node} onOpen={(p, anchor) => ws.openPath(p, anchor)} />
             ))}
           </FileTree>
         )}
