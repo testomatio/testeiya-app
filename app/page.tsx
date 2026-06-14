@@ -512,7 +512,6 @@ const ChatPage = observer(function ChatPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleClear]);
 
-
   // A file opened from the sidebar fills the content area and hides the chat;
   // an agent-opened file stays a strip above the (still-visible) chat.
   const fileFullHeight =
