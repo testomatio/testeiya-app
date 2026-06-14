@@ -5,7 +5,6 @@ import {
   FileTree,
   FileTreeFile,
   FileTreeFolder,
-  FileTreeIcon,
 } from "@/components/ai-elements/file-tree";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +25,9 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 function NodeRow({ node, onOpen }: { node: TreeNode; onOpen: (path: string, anchor?: string) => void }) {
   const isMarkdown = /\.md$/i.test(node.name);
   if (node.kind === "folder") {
+    const count = countTests(node);
     return (
-      <FileTreeFolder path={node.path} name={node.name}>
+      <FileTreeFolder path={node.path} name={node.name} badge={count || undefined}>
         {(node.children ?? []).map((child) => (
           <NodeRow key={child.anchor ?? child.path} node={child} onOpen={onOpen} />
         ))}
@@ -40,20 +40,18 @@ function NodeRow({ node, onOpen }: { node: TreeNode; onOpen: (path: string, anch
         path={`${node.path}#${node.anchor}`}
         name={node.name}
         onClick={() => onOpen(node.path, node.anchor)}
-        icon={
-          <FileTreeIcon>
-            <Icon name="tag" className="size-4 text-muted-foreground" />
-          </FileTreeIcon>
-        }
+        icon={<Icon name="tag" className="size-4 text-muted-foreground" />}
       />
     );
   }
   if (node.children?.length) {
+    const count = node.children.filter((c) => c.kind === "test").length;
     return (
       <FileTreeFolder
         path={node.path}
         name={node.name}
         icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
+        badge={count || undefined}
       >
         {node.children.map((child) => (
           <NodeRow key={child.anchor ?? child.path} node={child} onOpen={onOpen} />
@@ -65,15 +63,14 @@ function NodeRow({ node, onOpen }: { node: TreeNode; onOpen: (path: string, anch
     <FileTreeFile
       path={node.path}
       name={node.name}
-      icon={
-        isMarkdown ? (
-          <FileTreeIcon>
-            <SuiteGlyph className="size-4 text-muted-foreground" />
-          </FileTreeIcon>
-        ) : undefined
-      }
+      icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
     />
   );
+}
+
+function countTests(node: TreeNode): number {
+  if (node.kind === "test") return 1;
+  return (node.children ?? []).reduce((sum, child) => sum + countTests(child), 0);
 }
 
 /**

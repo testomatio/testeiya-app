@@ -97,7 +97,7 @@ export const FileTreeIcon = ({
   children,
   ...props
 }: FileTreeIconProps) => (
-  <span className={cn("shrink-0", className)} {...props}>
+  <span className={cn("shrink-0 flex items-center", className)} {...props}>
     {children}
   </span>
 );
@@ -130,12 +130,14 @@ export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   path: string;
   name: string;
   icon?: ReactNode;
+  badge?: ReactNode;
 };
 
 export const FileTreeFolder = ({
   path,
   name,
   icon,
+  badge,
   className,
   children,
   ...props
@@ -188,6 +190,9 @@ export const FileTreeFolder = ({
                 {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
               </FileTreeIcon>
               <FileTreeName>{name}</FileTreeName>
+              {badge != null && (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+              )}
             </button>
           </div>
           <CollapsibleContent>
@@ -213,12 +218,14 @@ export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
   path: string;
   name: string;
   icon?: ReactNode;
+  badge?: ReactNode;
 };
 
 export const FileTreeFile = ({
   path,
   name,
   icon,
+  badge,
   className,
   children,
   ...props
@@ -263,6 +270,9 @@ export const FileTreeFile = ({
               {icon ?? <SuiteGlyph className="size-4 text-muted-foreground" />}
             </FileTreeIcon>
             <FileTreeName>{name}</FileTreeName>
+            {badge != null && (
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+            )}
           </>
         )}
       </div>
