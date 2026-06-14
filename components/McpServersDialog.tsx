@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -93,7 +94,7 @@ export const McpServersDialog = observer(function McpServersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="sm:max-w-lg max-h-[85vh]">
         <DialogHeader className="min-w-0">
           <DialogTitle>MCP servers</DialogTitle>
           <DialogDescription>
@@ -102,6 +103,7 @@ export const McpServersDialog = observer(function McpServersDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="min-w-0">
         {!sessionId ? (
           <p className="text-muted-foreground text-sm py-4">
             Start a session to manage MCP servers.
@@ -139,6 +141,7 @@ export const McpServersDialog = observer(function McpServersDialog({
             </TabsContent>
           </Tabs>
         )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

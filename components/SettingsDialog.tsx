@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -62,12 +63,13 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Workspace for the agent.</DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {/* Workspace */}
         <section className="space-y-3 py-2">
           <h3 className="text-sm font-semibold">Workspace</h3>
@@ -104,6 +106,7 @@ export function SettingsDialog({
             Opens a local directory as the agent&apos;s workspace (reloads the session).
           </p>
         </section>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

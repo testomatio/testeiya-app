@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -167,7 +168,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRoundIcon className="size-4 text-muted-foreground" />
@@ -180,9 +181,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
           </DialogDescription>
         </DialogHeader>
 
-        {/* min-w-0 so this grid item can shrink — without it long project slugs
-            blow the dialog width out past its right edge. */}
-        <div className="min-w-0 space-y-4">
+        <DialogBody className="min-w-0 space-y-4">
           {phase === "loading" && (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Spinner className="size-4" /> Checking connection…
@@ -307,7 +306,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
               {error}
             </p>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           {phase === "signin" && (

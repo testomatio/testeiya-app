@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -144,7 +145,7 @@ export const ProvidersDialog = observer(function ProvidersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="sm:max-w-lg max-h-[85vh]">
         <DialogHeader className="min-w-0">
           <DialogTitle>Providers &amp; Models</DialogTitle>
           <DialogDescription>
@@ -153,6 +154,7 @@ export const ProvidersDialog = observer(function ProvidersDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-3 min-w-0">
         {applied && (
           <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm min-w-0">
             <span className="min-w-0">
@@ -261,6 +263,7 @@ export const ProvidersDialog = observer(function ProvidersDialog({
             )}
           </div>
         )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
