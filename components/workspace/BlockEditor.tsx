@@ -4,6 +4,8 @@ import {
   Component,
   Fragment,
   useEffect,
+  useInsertionEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -194,6 +196,19 @@ function CustomSlashMenu() {
   );
 }
 
+// TipTap calls flushSync in ReactRenderer when editor.isInitialized is true.
+// Temporarily clearing it before the commit makes TipTap use queueMicrotask instead.
+function BlockNoteViewSafe(props: React.ComponentProps<typeof BlockNoteView>) {
+  const editor = props.editor as unknown as { _tiptapEditor?: { isInitialized: boolean } };
+  useInsertionEffect(() => {
+    if (editor._tiptapEditor) editor._tiptapEditor.isInitialized = false;
+  }, []);
+  useLayoutEffect(() => {
+    if (editor._tiptapEditor) editor._tiptapEditor.isInitialized = true;
+  }, [editor]);
+  return <BlockNoteView {...props} />;
+}
+
 const MAX_EDITOR_RETRIES = 3;
 
 /**
@@ -287,23 +302,9 @@ export function BlockEditor({
     };
   }, [editor]);
 
-  // Defer the view mount past the parent's initial synchronous render so the
-  // editor isn't created mid-commit while the chat is streaming.
-  // The extra frame also lets us suppress TipTap's known flushSync warning
-  // (ReactRenderer calls flushSync during node-view init — third-party bug).
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      const orig = console.error.bind(console);
-      console.error = (...args: unknown[]) => {
-        if (typeof args[0] === "string" && args[0].includes("flushSync")) return;
-        orig(...args);
-      };
-      setMounted(true);
-      requestAnimationFrame(() => {
-        console.error = orig;
-      });
-    });
+    const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
@@ -351,7 +352,7 @@ export function BlockEditor({
     >
       {mounted && (
         <EditorErrorBoundary>
-          <BlockNoteView
+          <BlockNoteViewSafe
             editor={editor}
             editable={!readOnly}
             theme={theme}
@@ -359,7 +360,7 @@ export function BlockEditor({
             className={testomatioEditorClassName}
           >
             <CustomSlashMenu />
-          </BlockNoteView>
+          </BlockNoteViewSafe>
         </EditorErrorBoundary>
       )}
     </div>
