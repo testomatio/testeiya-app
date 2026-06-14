@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SuiteGlyph } from "@/components/icons";
 import { Icon } from "@/lib/icons";
@@ -83,6 +84,7 @@ function NodeRow({ node, onOpen }: { node: TreeNode; onOpen: (path: string, anch
 export const WorkspaceSection = observer(function WorkspaceSection({
   active,
   onToggle,
+  initializing,
 }: PanelSectionProps) {
   const ws = useWorkspaceService();
   const search = useSearchService();
@@ -233,15 +235,19 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </div>
         )}
         {!ws.sessionId && !ws.treeError && (
-          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-            <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-              <Icon name="folder_open" className="size-5 text-muted-foreground" />
+          initializing ? (
+            <WorkspaceSkeleton />
+          ) : (
+            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                <Icon name="folder_open" className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">No active session</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Send a message to start a session and load your workspace.
+              </p>
             </div>
-            <p className="text-sm font-medium text-foreground">No active session</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Send a message to start a session and load your workspace.
-            </p>
-          </div>
+          )
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
           <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary/90">
@@ -251,15 +257,19 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </div>
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && !ws.awaitingTests && !ws.treeLoading && (
-          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-            <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-              <Icon name="folder_open" className="size-5 text-muted-foreground" />
+          initializing ? (
+            <WorkspaceSkeleton />
+          ) : (
+            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                <Icon name="folder_open" className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">Workspace is empty</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Pull tests from Testomat.io or open a folder to get started.
+              </p>
             </div>
-            <p className="text-sm font-medium text-foreground">Workspace is empty</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Pull tests from Testomat.io or open a folder to get started.
-            </p>
-          </div>
+          )
         )}
         {ws.tree.length > 0 && (
           <FileTree
@@ -278,3 +288,46 @@ export const WorkspaceSection = observer(function WorkspaceSection({
     </SectionShell>
   );
 });
+
+function WorkspaceSkeleton() {
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2">
+      <div className="flex items-center gap-2 px-1 py-1">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-1/2" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-3/5" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-3/4" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-2/5" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-1/2" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-1/2" />
+      </div>
+      <div className="flex items-center gap-2 px-1 py-1 pl-6">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-3.5 w-3/5" />
+      </div>
+    </div>
+  );
+}

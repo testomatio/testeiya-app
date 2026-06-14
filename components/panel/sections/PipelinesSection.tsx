@@ -4,7 +4,7 @@ import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
+export function PipelinesSection({ active, onToggle, initializing: _initializing }: PanelSectionProps) {
   return (
     <SectionShell
       icon={<Icon name="account_tree" className="size-4" />}

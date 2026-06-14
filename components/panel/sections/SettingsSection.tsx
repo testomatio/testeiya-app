@@ -13,6 +13,7 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 export const SettingsSection = observer(function SettingsSection({
   active,
   onToggle,
+  initializing: _initializing,
 }: PanelSectionProps) {
   const workspace = useWorkspaceService();
   const [folder, setFolder] = useState("");

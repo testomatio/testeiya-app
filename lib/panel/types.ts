@@ -6,6 +6,7 @@ export type PanelSectionId = "workspace" | "project" | "connections" | "pipeline
 export interface PanelSectionProps {
   active: boolean;
   onToggle: () => void;
+  initializing: boolean;
 }
 
 export interface PanelSectionDef {

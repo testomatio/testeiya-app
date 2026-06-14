@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
@@ -46,46 +46,40 @@ export const SidebarPanel = observer(function SidebarPanel({
   const project = useProjectService();
   const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
 
-  const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [initializing, setInitializing] = useState(true);
+  useLayoutEffect(() => {
     setWidth(loadWidth());
-    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setInitializing(false), 800);
+    return () => clearTimeout(t);
   }, []);
 
+  const widthRef = useRef(width);
+  widthRef.current = width;
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const onResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      dragRef.current = { startX: e.clientX, startW: width };
-      const onMove = (ev: MouseEvent) => {
-        if (!dragRef.current) return;
-        const delta = ev.clientX - dragRef.current.startX;
-        const next = Math.min(
-          MAX_WIDTH,
-          Math.max(MIN_WIDTH, dragRef.current.startW + delta)
-        );
-        setWidth(next);
-      };
-      const onUp = () => {
-        if (dragRef.current) dragRef.current = null;
-        document.body.style.userSelect = "";
-        document.body.style.cursor = "";
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      document.body.style.userSelect = "none";
-      document.body.style.cursor = "col-resize";
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [width]
-  );
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveWidth(width);
-  }, [width, hydrated]);
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startW: widthRef.current };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startW + delta)));
+    };
+    const onUp = () => {
+      saveWidth(widthRef.current);
+      dragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
 
   return (
     <aside
@@ -238,6 +232,7 @@ export const SidebarPanel = observer(function SidebarPanel({
                   key={def.id}
                   active={isActive}
                   onToggle={() => setActiveSection(isActive ? null : def.id)}
+                  initializing={initializing}
                 />
               );
             })}
@@ -263,9 +258,8 @@ export const SidebarPanel = observer(function SidebarPanel({
         <div
           onMouseDown={onResizeMouseDown}
           className={cn(
-            "absolute top-0 right-0 h-full w-1 cursor-col-resize",
+            "absolute top-0 -right-1 h-full w-3 cursor-col-resize z-10",
             "bg-transparent hover:bg-primary/30 transition-colors",
-            "after:content-[''] after:absolute after:top-0 after:-right-1 after:h-full after:w-2"
           )}
           role="separator"
           aria-orientation="vertical"

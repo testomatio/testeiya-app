@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
@@ -17,6 +18,7 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 export const ProjectSection = observer(function ProjectSection({
   active,
   onToggle,
+  initializing,
 }: PanelSectionProps) {
   const project = useProjectService();
   const [authOpen, setAuthOpen] = useState(false);
@@ -30,7 +32,9 @@ export const ProjectSection = observer(function ProjectSection({
       active={active}
       onToggle={onToggle}
     >
-      {current && links ? (
+      {initializing ? (
+        <ProjectSkeleton />
+      ) : current && links ? (
         <div className="space-y-3 px-4 py-3">
           <div className="grid grid-cols-2 gap-2">
             <StatTile
@@ -99,6 +103,34 @@ export const ProjectSection = observer(function ProjectSection({
     </SectionShell>
   );
 });
+
+function ProjectSkeleton() {
+  return (
+    <div className="space-y-3 px-4 py-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-6 w-8" />
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-6 w-6" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-6 w-6" />
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-6 w-4" />
+        </div>
+      </div>
+      <Skeleton className="h-8 w-full" />
+    </div>
+  );
+}
 
 function StatTile({
   icon,
