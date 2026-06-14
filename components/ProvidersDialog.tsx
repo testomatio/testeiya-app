@@ -16,6 +16,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -347,6 +359,7 @@ const ProviderRow = observer(function ProviderRow({
   const models = providers.modelsFor(p.id);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [selModel, setSelModel] = useState<string>("");
+  const [modelOpen, setModelOpen] = useState(false);
   const [keyVal, setKeyVal] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [using, setUsing] = useState(false);
@@ -566,21 +579,44 @@ const ProviderRow = observer(function ProviderRow({
             ) : (
               <div className="flex gap-2 min-w-0">
                 <div className="min-w-0 flex-1">
-                  <Select
-                    value={selModel}
-                    onValueChange={(v) => setSelModel(v ?? "")}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {models.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={modelOpen} onOpenChange={setModelOpen}>
+                    <PopoverTrigger
+                      render={
+                        <button
+                          type="button"
+                          role="combobox"
+                          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                        />
+                      }
+                    >
+                      <span className="truncate">
+                        {selModel
+                          ? (models.find((m) => m.id === selModel)?.name ?? selModel)
+                          : "Select model…"}
+                      </span>
+                      <ChevronDownIcon className="ml-2 size-4 shrink-0 text-muted-foreground" />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search model…" autoFocus />
+                        <CommandList className="max-h-60">
+                          <CommandEmpty>No model found.</CommandEmpty>
+                          {models.map((m) => (
+                            <CommandItem
+                              key={m.id}
+                              value={m.name}
+                              onSelect={() => {
+                                setSelModel(m.id);
+                                setModelOpen(false);
+                              }}
+                            >
+                              {m.name}
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <Button
                   onClick={() => void handleUse()}
