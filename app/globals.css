@@ -226,38 +226,38 @@
   --run-pending: #9ca3af;     /* gray-400 */
 }
 
-/* Dark theme — neutral-950 base + indigo accent. */
+/* Dark theme — neutral-900 base + indigo accent. */
 .dark {
-  --background: var(--color-neutral-950);
+  --background: var(--color-neutral-900);
   --foreground: var(--color-neutral-50);
-  --card: var(--color-neutral-900);
+  --card: var(--color-neutral-800);
   --card-foreground: var(--color-neutral-50);
-  --popover: var(--color-neutral-900);
+  --popover: var(--color-neutral-800);
   --popover-foreground: var(--color-neutral-50);
   --primary: var(--color-indigo-500);
   --primary-foreground: #ffffff;
-  --secondary: var(--color-neutral-800);
+  --secondary: var(--color-neutral-700);
   --secondary-foreground: var(--color-neutral-50);
-  --muted: var(--color-neutral-800);
+  --muted: var(--color-neutral-700);
   --muted-foreground: var(--color-neutral-400);
-  --accent: var(--color-neutral-800);
+  --accent: var(--color-neutral-700);
   --accent-foreground: var(--color-neutral-50);
   --destructive: #f87171;
-  --border: var(--color-neutral-800);
-  --input: var(--color-neutral-800);
+  --border: var(--color-neutral-700);
+  --input: var(--color-neutral-700);
   --ring: var(--color-indigo-500);
   --chart-1: var(--color-indigo-400);
   --chart-2: #a78bfa;
   --chart-3: #38bdf8;
   --chart-4: var(--color-indigo-500);
   --chart-5: #c4b5fd;
-  --sidebar: var(--color-neutral-900);
+  --sidebar: var(--color-neutral-800);
   --sidebar-foreground: var(--color-neutral-50);
   --sidebar-primary: var(--color-indigo-500);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--color-neutral-800);
+  --sidebar-accent: var(--color-neutral-700);
   --sidebar-accent-foreground: var(--color-neutral-50);
-  --sidebar-border: var(--color-neutral-800);
+  --sidebar-border: var(--color-neutral-700);
   --sidebar-ring: var(--color-indigo-500);
   /* Status surfaces — backend's notify palette:
      successNotify #234144, errorNotify #412233, warningNotify #41392C,
@@ -416,7 +416,7 @@
 }
 
 .dark .testeiya-overtype-editor {
-  background: var(--color-neutral-900);
+  background: var(--color-neutral-800);
 }
 
 .light .testeiya-overtype-editor {
