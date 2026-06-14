@@ -65,7 +65,9 @@ export function MarkdownEditor({
   const [content, setContent] = useState<string>(initialContent ?? "");
   const [original, setOriginal] = useState<string>(initialContent ?? "");
   const [size, setSize] = useState<Size>("default");
-  const [mode, setMode] = useState<EditorMode>("rich");
+  const [mode, setMode] = useState<EditorMode>(
+    () => (localStorage.getItem("editor-mode") as EditorMode | null) ?? "rich"
+  );
   const [loading, setLoading] = useState<boolean>(initialContent === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -198,7 +200,7 @@ export function MarkdownEditor({
               <TooltipTrigger render={
                 <button
                   type="button"
-                  onClick={() => setMode("rich")}
+                  onClick={() => { setMode("rich"); localStorage.setItem("editor-mode", "rich"); }}
                   className={cn(
                     "rounded p-1 text-muted-foreground hover:bg-muted",
                     mode === "rich" && "bg-muted text-foreground"
@@ -215,7 +217,7 @@ export function MarkdownEditor({
               <TooltipTrigger render={
                 <button
                   type="button"
-                  onClick={() => setMode("markdown")}
+                  onClick={() => { setMode("markdown"); localStorage.setItem("editor-mode", "markdown"); }}
                   className={cn(
                     "rounded p-1 text-muted-foreground hover:bg-muted",
                     mode === "markdown" && "bg-muted text-foreground"
