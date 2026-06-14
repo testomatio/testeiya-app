@@ -585,14 +585,14 @@ const ProviderRow = observer(function ProviderRow({
                         <button
                           type="button"
                           role="combobox"
-                          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 flex items-center justify-between"
                         />
                       }
                     >
-                      <span className="truncate">
+                      <span className="truncate text-left">
                         {selModel
                           ? (models.find((m) => m.id === selModel)?.name ?? selModel)
-                          : "Select model…"}
+                          : <span className="text-muted-foreground">Select model…</span>}
                       </span>
                       <ChevronDownIcon className="ml-2 size-4 shrink-0 text-muted-foreground" />
                     </PopoverTrigger>
