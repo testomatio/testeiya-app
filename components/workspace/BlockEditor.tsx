@@ -47,11 +47,14 @@ if (typeof window !== "undefined") {
 type Schema = typeof customSchema;
 
 export type BlockEditorProps = {
+  /** Markdown source. Consumed once on mount; remount (via key) to reseed. */
   value: string;
   onChange: (markdown: string) => void;
   readOnly?: boolean;
   theme?: "light" | "dark";
+  /** Scroll to and highlight the first block whose text contains this. */
   scrollToText?: string;
+  /** Fired on Cmd/Ctrl+S. */
   onSaveShortcut?: () => void;
   className?: string;
 };
@@ -59,6 +62,8 @@ export type BlockEditorProps = {
 const SCROLL_MAX_FRAMES = 30;
 const SCROLL_HIGHLIGHT_MS = 2000;
 
+/** First block whose rendered text contains the needle, preferring the deepest
+ *  (innermost) match so the highlight lands tightly instead of on a parent. */
 function findMatchingBlock(
   blocks: NodeListOf<HTMLElement>,
   needle: string
@@ -76,6 +81,7 @@ function findMatchingBlock(
   return deepest ?? matches[0];
 }
 
+/** Focus a step/snippet field once its block is rendered. */
 function focusStepField(
   editor: CustomEditor | null | undefined,
   blockId?: string,
