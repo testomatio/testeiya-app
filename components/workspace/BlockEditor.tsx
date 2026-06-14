@@ -37,10 +37,18 @@ import "./block-editor.css";
 // React 18 flags as a warning. Suppress it at module load — before Next.js dev
 // overlay installs its own console.error intercept.
 if (typeof window !== "undefined") {
-  const _orig = console.error.bind(console);
+  const _origError = console.error.bind(console);
   console.error = (...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].includes("flushSync")) return;
-    _orig(...args);
+    const msg = typeof args[0] === "string" ? args[0] : "";
+    if (msg.includes("flushSync")) return;
+    // EditorErrorBoundary catches and retries this; suppress the dev overlay noise.
+    if (msg.includes("Position undefined out of range")) return;
+    _origError(...args);
+  };
+  const _origWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes("TextSelection endpoint")) return;
+    _origWarn(...args);
   };
 }
 
@@ -252,11 +260,11 @@ export function BlockEditor({
   className,
 }: BlockEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const initial = markdownToBlocks(value);
+  const initialRef = useRef(markdownToBlocks(value));
   const editor = useCreateBlockNote({
     schema: customSchema,
     pasteHandler: createMarkdownPasteHandler(markdownToBlocks),
-    initialContent: initial.length ? initial : undefined,
+    initialContent: initialRef.current.length ? initialRef.current : undefined,
   });
 
   const onChangeRef = useRef(onChange);

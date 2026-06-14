@@ -184,6 +184,7 @@ export class ProjectService {
       "/api/auth/testomatio/session",
       { projectId, fromSession: this.root.sessionId ?? undefined }
     );
+    this.root.workspace.close();
     this.root.navigate(session.sessionId);
     return session;
   }
