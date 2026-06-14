@@ -12,6 +12,8 @@ export type OverTypeEditorProps = {
   theme?: "light" | "dark";
   /** Fired on Cmd/Ctrl+S. */
   onSaveShortcut?: () => void;
+  /** Scroll to the line whose text matches this heading. */
+  scrollToText?: string;
   className?: string;
 };
 
@@ -21,6 +23,7 @@ export function OverTypeEditor({
   readOnly,
   theme = "light",
   onSaveShortcut,
+  scrollToText,
   className,
 }: OverTypeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,8 +67,38 @@ export function OverTypeEditor({
     if (textarea) textarea.readOnly = Boolean(readOnly);
   }, [readOnly]);
 
+  const scrollWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!scrollToText?.trim()) return;
+    const needle = scrollToText.trim().toLowerCase();
+    let frame = 0;
+    let attempts = 0;
+    const tryScroll = () => {
+      const container = containerRef.current;
+      const wrap = scrollWrapRef.current;
+      if (!container || !wrap) return;
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        if (node.textContent?.toLowerCase().includes(needle)) {
+          const el = node.parentElement;
+          if (el) {
+            const offsetTop = el.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+            wrap.scrollTo({ top: Math.max(0, offsetTop - 24), behavior: "smooth" });
+            return;
+          }
+        }
+      }
+      if (attempts++ < 30) frame = requestAnimationFrame(tryScroll);
+    };
+    frame = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(frame);
+  }, [scrollToText]);
+
   return (
     <div
+      ref={scrollWrapRef}
       className={cn(
         "testeiya-overtype-editor h-full w-full overflow-auto",
         className

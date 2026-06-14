@@ -318,6 +318,7 @@ export function MarkdownEditor({
             onChange={setContent}
             readOnly={readOnly || saving}
             theme={isDark ? "dark" : "light"}
+            scrollToText={scrollToText}
             onSaveShortcut={() => void saveRef.current()}
           />
         )}
