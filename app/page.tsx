@@ -498,7 +498,7 @@ const ChatPage = observer(function ChatPage() {
 
   const handleClear = useCallback(() => {
     clearSession();
-    toast.success("Session cleared");
+    setTimeout(() => toast.success("Session cleared"), 0);
   }, [clearSession]);
 
   useEffect(() => {
