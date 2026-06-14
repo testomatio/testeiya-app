@@ -4,8 +4,6 @@ import {
   Component,
   Fragment,
   useEffect,
-  useInsertionEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -13,7 +11,6 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import {
   useCreateBlockNote,
-  useEditorChange,
   useBlockNoteEditor,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
@@ -36,17 +33,25 @@ import "@blocknote/mantine/style.css";
 import "testomatio-editor-blocks/styles.css";
 import "./block-editor.css";
 
+// TipTap v2 calls flushSync from ReactRenderer during node-view creation, which
+// React 18 flags as a warning. Suppress it at module load — before Next.js dev
+// overlay installs its own console.error intercept.
+if (typeof window !== "undefined") {
+  const _orig = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes("flushSync")) return;
+    _orig(...args);
+  };
+}
+
 type Schema = typeof customSchema;
 
 export type BlockEditorProps = {
-  /** Markdown source. Consumed once on mount; remount (via key) to reseed. */
   value: string;
   onChange: (markdown: string) => void;
   readOnly?: boolean;
   theme?: "light" | "dark";
-  /** Scroll to and highlight the first block whose text contains this. */
   scrollToText?: string;
-  /** Fired on Cmd/Ctrl+S. */
   onSaveShortcut?: () => void;
   className?: string;
 };
@@ -54,8 +59,6 @@ export type BlockEditorProps = {
 const SCROLL_MAX_FRAMES = 30;
 const SCROLL_HIGHLIGHT_MS = 2000;
 
-/** First block whose rendered text contains the needle, preferring the deepest
- *  (innermost) match so the highlight lands tightly instead of on a parent. */
 function findMatchingBlock(
   blocks: NodeListOf<HTMLElement>,
   needle: string
@@ -73,7 +76,6 @@ function findMatchingBlock(
   return deepest ?? matches[0];
 }
 
-/** Focus a step/snippet field once its block is rendered. */
 function focusStepField(
   editor: CustomEditor | null | undefined,
   blockId?: string,
@@ -196,19 +198,6 @@ function CustomSlashMenu() {
   );
 }
 
-// TipTap calls flushSync in ReactRenderer when editor.isInitialized is true.
-// Temporarily clearing it before the commit makes TipTap use queueMicrotask instead.
-function BlockNoteViewSafe(props: React.ComponentProps<typeof BlockNoteView>) {
-  const editor = props.editor as unknown as { _tiptapEditor?: { isInitialized: boolean } };
-  useInsertionEffect(() => {
-    if (editor._tiptapEditor) editor._tiptapEditor.isInitialized = false;
-  }, []);
-  useLayoutEffect(() => {
-    if (editor._tiptapEditor) editor._tiptapEditor.isInitialized = true;
-  }, [editor]);
-  return <BlockNoteView {...props} />;
-}
-
 const MAX_EDITOR_RETRIES = 3;
 
 /**
@@ -264,13 +253,8 @@ export function BlockEditor({
     initialContent: initial.length ? initial : undefined,
   });
 
-  useEditorChange((inst) => {
-    try {
-      onChange(blocksToMarkdown(inst.document as CustomEditorBlock[]));
-    } catch {
-      /* transient conversion error while editing — ignore */
-    }
-  }, editor);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Auto-focus newly inserted step / snippet blocks.
   useEffect(() => {
@@ -352,15 +336,22 @@ export function BlockEditor({
     >
       {mounted && (
         <EditorErrorBoundary>
-          <BlockNoteViewSafe
+          <BlockNoteView
             editor={editor}
             editable={!readOnly}
             theme={theme}
             slashMenu={false}
             className={testomatioEditorClassName}
+            onChange={(inst) => {
+              try {
+                onChangeRef.current(blocksToMarkdown(inst.document as CustomEditorBlock[]));
+              } catch (err) {
+                console.warn("[BlockEditor] blocksToMarkdown failed:", err);
+              }
+            }}
           >
             <CustomSlashMenu />
-          </BlockNoteViewSafe>
+          </BlockNoteView>
         </EditorErrorBoundary>
       )}
     </div>
