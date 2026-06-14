@@ -289,9 +289,21 @@ export function BlockEditor({
 
   // Defer the view mount past the parent's initial synchronous render so the
   // editor isn't created mid-commit while the chat is streaming.
+  // The extra frame also lets us suppress TipTap's known flushSync warning
+  // (ReactRenderer calls flushSync during node-view init — third-party bug).
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true));
+    const id = requestAnimationFrame(() => {
+      const orig = console.error.bind(console);
+      console.error = (...args: unknown[]) => {
+        if (typeof args[0] === "string" && args[0].includes("flushSync")) return;
+        orig(...args);
+      };
+      setMounted(true);
+      requestAnimationFrame(() => {
+        console.error = orig;
+      });
+    });
     return () => cancelAnimationFrame(id);
   }, []);
 
