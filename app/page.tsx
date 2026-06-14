@@ -66,6 +66,7 @@ import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
 import { ResourceWidgetView } from "@/components/agent-output/ResourceWidgetView";
 import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type FormEvent, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
@@ -500,6 +501,18 @@ const ChatPage = observer(function ChatPage() {
     toast.success("Session cleared");
   }, [clearSession]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyN" && e.altKey) {
+        e.preventDefault();
+        setTimeout(handleClear, 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleClear]);
+
+
   // A file opened from the sidebar fills the content area and hides the chat;
   // an agent-opened file stays a strip above the (still-visible) chat.
   const fileFullHeight =
@@ -613,9 +626,8 @@ const ChatPage = observer(function ChatPage() {
             </div>
           )}
 
-      {/* Chat area — hidden while a file or resource widget is open full-height
-          (kept mounted so state is preserved when the overlay is closed). */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+      {/* MCP status + Clear — shown only when there's an active chat */}
+      <div className={cn("absolute top-3 right-3 z-10 flex items-center gap-2", messages.length === 0 && "hidden")}>
           {isDev && cwd && (
             <span className="flex items-center text-[11px] font-mono">
               {mcpLoaded && mcpTools.length > 0 && (
@@ -690,14 +702,19 @@ const ChatPage = observer(function ChatPage() {
                   <span className="hidden sm:inline">Clear</span>
                 </Button>
               } />
-              <TooltipContent><p>Clear chat history</p></TooltipContent>
+              <TooltipContent className="flex items-center gap-2">
+                <p>New session</p>
+                <kbd className="pointer-events-none inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌥ Option + N" : "Alt + N"}
+                </kbd>
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
       <Conversation className={hideChat ? "hidden" : messages.length === 0 ? "flex-none" : "flex-1"}>
         <ConversationContent className="items-center">
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
-          {messages.length === 0 && (
+          {messages.length === 0 && (!canConnectTestomatio || sessionId || cwd) && (
             <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
               <div className="space-y-3">
                 <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
@@ -926,7 +943,7 @@ const ChatPage = observer(function ChatPage() {
       </Conversation>
 
       {/* Input area */}
-      <div className={hideChat ? "hidden shrink-0" : "shrink-0 flex justify-center"}>
+      <div className={hideChat || (messages.length === 0 && canConnectTestomatio && !sessionId && !cwd) ? "hidden shrink-0" : "shrink-0 flex justify-center"}>
         <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
