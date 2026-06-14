@@ -1,9 +1,10 @@
 "use client";
 
 import { observer } from "mobx-react-lite";
-import { XIcon } from "lucide-react";
+import { XIcon } from "@/lib/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useSearchService } from "@/lib/services/StoreProvider";
 import type { SearchFileResult, SearchMatch } from "@/lib/services/types";
@@ -28,7 +29,21 @@ export const SearchResults = observer(function SearchResults({
         className
       )}
     >
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 p-0"
+              onClick={() => search.closeSearch()}
+              aria-label="Close search"
+            >
+              <XIcon className="size-4" />
+            </Button>
+          } />
+          <TooltipContent><p>Close</p></TooltipContent>
+        </Tooltip>
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="shrink-0 text-sm font-medium">Search</span>
           {results?.query && (
@@ -44,16 +59,6 @@ export const SearchResults = observer(function SearchResults({
             </span>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 shrink-0 p-0"
-          onClick={() => search.closeSearch()}
-          title="Close"
-          aria-label="Close search"
-        >
-          <XIcon className="size-4" />
-        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {search.searching && (

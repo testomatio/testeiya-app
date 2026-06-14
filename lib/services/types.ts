@@ -16,8 +16,9 @@ export interface OpenFile {
 
 export interface TreeNode {
   name: string;
-  kind: "folder" | "file";
+  kind: "folder" | "file" | "test";
   path: string;
+  anchor?: string;
   children?: TreeNode[];
 }
 
@@ -92,6 +93,8 @@ export interface CurrentProject {
   baseUrl: string;
   testsCount: number | null;
   runsCount: number | null;
+  plansCount: number | null;
+  requirementsCount: number | null;
 }
 
 export interface TestomatioAuthState {

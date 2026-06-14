@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { SuiteGlyph, SuiteKindIcon } from "@/components/icons";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "@/lib/icons";
 import type { HTMLAttributes, ReactNode } from "react";
 import {
   createContext,
@@ -78,13 +78,13 @@ export const FileTree = ({
     <FileTreeContext.Provider value={contextValue}>
       <div
         className={cn(
-          "rounded-lg border bg-background font-mono text-sm",
+          "font-sans text-sm",
           className
         )}
         role="tree"
         {...props}
       >
-        <div className="p-2">{children}</div>
+        <div className="px-2 py-1">{children}</div>
       </div>
     </FileTreeContext.Provider>
   );
@@ -97,7 +97,7 @@ export const FileTreeIcon = ({
   children,
   ...props
 }: FileTreeIconProps) => (
-  <span className={cn("shrink-0", className)} {...props}>
+  <span className={cn("shrink-0 flex items-center", className)} {...props}>
     {children}
   </span>
 );
@@ -129,11 +129,15 @@ const FileTreeFolderContext = createContext<FileTreeFolderContextType>({
 export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   path: string;
   name: string;
+  icon?: ReactNode;
+  badge?: ReactNode;
 };
 
 export const FileTreeFolder = ({
   path,
   name,
+  icon,
+  badge,
   className,
   children,
   ...props
@@ -183,13 +187,16 @@ export const FileTreeFolder = ({
               type="button"
             >
               <FileTreeIcon>
-                <SuiteKindIcon fileType="folder" className="size-4" />
+                {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
               </FileTreeIcon>
               <FileTreeName>{name}</FileTreeName>
+              {badge != null && (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+              )}
             </button>
           </div>
           <CollapsibleContent>
-            <div className="ml-4 border-l pl-2">{children}</div>
+            <div className="ml-4 border-l pl-1">{children}</div>
           </CollapsibleContent>
         </div>
       </Collapsible>
@@ -211,12 +218,14 @@ export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
   path: string;
   name: string;
   icon?: ReactNode;
+  badge?: ReactNode;
 };
 
 export const FileTreeFile = ({
   path,
   name,
   icon,
+  badge,
   className,
   children,
   ...props
@@ -261,6 +270,9 @@ export const FileTreeFile = ({
               {icon ?? <SuiteGlyph className="size-4 text-muted-foreground" />}
             </FileTreeIcon>
             <FileTreeName>{name}</FileTreeName>
+            {badge != null && (
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+            )}
           </>
         )}
       </div>

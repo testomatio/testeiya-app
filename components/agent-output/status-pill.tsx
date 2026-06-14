@@ -1,14 +1,9 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  mdiCheckCircle,
-  mdiCircle,
-  mdiMinusCircle,
-  mdiRecordCircle,
-  mdiTimerOffOutline,
-} from "@mdi/js";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 export type TestStatus = "passed" | "failed" | "skipped" | "running";
@@ -53,6 +48,89 @@ export function MetaPill({
   );
 }
 
+const BADGE_GAP = 4;
+const OVERFLOW_BADGE_W = 32;
+
+export function OverflowBadgeList({
+  items,
+  className,
+}: {
+  items: string[];
+  className?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(items.length);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+    if (!container || !measure) return;
+
+    function recalc() {
+      const available = container!.offsetWidth;
+      const badges = Array.from(measure!.children) as HTMLElement[];
+      let used = 0;
+      let count = 0;
+      for (let i = 0; i < badges.length; i++) {
+        const w = badges[i].offsetWidth + (i > 0 ? BADGE_GAP : 0);
+        const remainingNeedOverflow = i + 1 < badges.length;
+        const overflowReserve = remainingNeedOverflow ? OVERFLOW_BADGE_W + BADGE_GAP : 0;
+        if (used + w + overflowReserve > available) break;
+        used += w;
+        count++;
+      }
+      setVisibleCount(count);
+    }
+
+    const observer = new ResizeObserver(recalc);
+    observer.observe(container);
+    recalc();
+    return () => observer.disconnect();
+  }, [items]);
+
+  const visible = items.slice(0, visibleCount);
+  const hidden = items.slice(visibleCount);
+
+  return (
+    <div ref={containerRef} className={cn("relative flex min-w-0 items-center gap-1 overflow-hidden", className)}>
+      <div ref={measureRef} className="pointer-events-none invisible absolute flex gap-1" aria-hidden>
+        {items.map((item, i) => (
+          <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+            {item}
+          </Badge>
+        ))}
+      </div>
+      {visible.map((item, i) => (
+        <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+          {item}
+        </Badge>
+      ))}
+      {hidden.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger render={
+            <Badge variant="secondary" className="h-5 shrink-0 cursor-default rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+              +{hidden.length}
+            </Badge>
+          } />
+          <TooltipContent
+            align="start"
+            side="bottom"
+            hideArrow
+            className="flex flex-col gap-1 bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+          >
+            {hidden.map((item, i) => (
+              <Badge key={i} variant="outline" className="h-5 w-fit rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+                {item}
+              </Badge>
+            ))}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
 export function LabelsRow({
   labels,
   className,
@@ -62,30 +140,18 @@ export function LabelsRow({
 }) {
   const list = Array.isArray(labels) ? (labels as unknown[]) : [];
   if (list.length === 0) return null;
-  return (
-    <div className={cn("flex flex-wrap gap-1", className)}>
-      {list.map((l, i) => {
-        const title =
-          typeof l === "string"
-            ? l
-            : String(
-                (l as { title?: string; name?: string })?.title ??
-                  (l as { name?: string })?.name ??
-                  ""
-              );
-        if (!title) return null;
-        return (
-          <Badge
-            key={`${title}-${i}`}
-            variant="outline"
-            className="h-5 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none"
-          >
-            {title}
-          </Badge>
-        );
-      })}
-    </div>
-  );
+  const titles = list
+    .map((l) =>
+      typeof l === "string"
+        ? l
+        : String(
+            (l as { title?: string; name?: string })?.title ??
+              (l as { name?: string })?.name ??
+              ""
+          )
+    )
+    .filter(Boolean);
+  return <OverflowBadgeList items={titles} className={className} />;
 }
 
 export function formatDuration(v?: number | string | null): string | null {
@@ -172,18 +238,13 @@ export function StatusTriplet({
 
 // 1:1 with frontend/app/components/run-status.js — pick the MDI glyph
 // that matches a Testomat.io run status.
-function mdiPathFor(status: string): string {
+function symbolFor(status: string): string {
   switch (status) {
-    case "passed":
-      return mdiCheckCircle;
-    case "failed":
-      return mdiMinusCircle;
-    case "skipped":
-      return mdiRecordCircle;
-    case "terminated":
-      return mdiTimerOffOutline;
-    default:
-      return mdiCircle;
+    case "passed": return "check_circle";
+    case "failed": return "cancel";
+    case "skipped": return "radio_button_checked";
+    case "terminated": return "timer_off";
+    default: return "circle";
   }
 }
 
@@ -234,15 +295,9 @@ export function RunStatusDot({
   const colorClass = RUN_STATUS_COLOR[s] ?? "text-run-pending";
   return (
     <span className={cn(slot, colorClass)} aria-label={tooltip} title={tooltip}>
-      <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="currentColor"
-        aria-hidden
-      >
-        <path d={mdiPathFor(s)} />
-      </svg>
+      <span className="material-symbols-rounded" style={{ fontSize: 16 }} aria-hidden>
+        {symbolFor(s)}
+      </span>
     </span>
   );
 }

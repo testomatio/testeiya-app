@@ -11,7 +11,7 @@ import {
   ListRowHeader,
 } from "./list-row";
 import { PreviewPane } from "./preview-pane";
-import { LabelsRow, MetaPill } from "./status-pill";
+import { MetaPill, OverflowBadgeList } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
 
 interface McpTest {
@@ -31,8 +31,7 @@ interface McpTest {
   updated_at?: string | null;
 }
 
-// Suite 3fr, title 7fr, meta 2fr — suite leads, then the title-heavy test.
-const TESTS_GRID = "minmax(0,3fr) minmax(0,7fr) minmax(0,2fr)";
+const TESTS_GRID = "minmax(0,3fr) minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
 
 export default function TestsListRenderer({
   json,
@@ -73,6 +72,7 @@ export default function TestsListRenderer({
         <ListRowHeader gridCols={TESTS_GRID}>
           <div className="min-w-0 truncate">Suite</div>
           <div className="min-w-0 truncate">Test</div>
+          <div className="min-w-0 truncate">Tags</div>
           <div className="min-w-0 truncate">State</div>
         </ListRowHeader>
         {items.map((t, idx) => {
@@ -84,12 +84,11 @@ export default function TestsListRenderer({
               gridCols={TESTS_GRID}
               onOpen={() => setSelected(t)}
             >
-              <div className="min-w-0 truncate text-xs text-muted-foreground">
-                <span className="truncate" title={suite}>
-                  {suite ?? "—"}
-                </span>
+              <div className="flex min-w-0 items-center gap-x-1.5 text-xs text-muted-foreground">
+                <SuiteGlyph className="size-4 shrink-0" />
+                <span className="truncate" title={suite}>{suite ?? "—"}</span>
               </div>
-              <div className="flex min-w-0 items-center gap-x-2">
+              <div className="flex min-w-0 items-center gap-x-2 overflow-hidden">
                 {(() => {
                   const kind = resolveType({ state: t.state });
                   if (t.emoji) {
@@ -115,28 +114,17 @@ export default function TestsListRenderer({
                     {t.steps_count} step{t.steps_count === 1 ? "" : "s"}
                   </span>
                 )}
-                <LabelsRow labels={t.labels} className="min-w-0" />
               </div>
-              <div className="flex min-w-0 items-center gap-x-1">
+              <div className="min-w-0">
+                <TagsCell labels={t.labels} tags={t.tags} />
+              </div>
+              <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
                 {t.priority && t.priority !== "normal" && (
                   <MetaPill>{t.priority}</MetaPill>
                 )}
                 {t.state &&
                   t.state !== "manual" &&
                   t.state !== "automated" && <MetaPill>{t.state}</MetaPill>}
-                {Array.isArray(t.tags) &&
-                  (t.tags as unknown[]).slice(0, 2).map((tag, i) => (
-                    <MetaPill key={`tag-${i}`}>
-                      #
-                      {typeof tag === "string"
-                        ? tag
-                        : String(
-                            (tag as { name?: string; title?: string })?.name ??
-                              (tag as { title?: string })?.title ??
-                              ""
-                          )}
-                    </MetaPill>
-                  ))}
               </div>
             </ListRow>
           );
@@ -149,4 +137,35 @@ export default function TestsListRenderer({
       </ListRowGroup>
     </div>
   );
+}
+
+function resolveTagTitle(tag: unknown): string {
+  if (typeof tag === "string") return tag;
+  return String(
+    (tag as { name?: string; title?: string })?.name ??
+      (tag as { title?: string })?.title ??
+      ""
+  );
+}
+
+function TagsCell({ labels, tags }: { labels?: unknown; tags?: unknown }) {
+  const labelTitles = (Array.isArray(labels) ? (labels as unknown[]) : [])
+    .map((l) =>
+      typeof l === "string"
+        ? l
+        : String(
+            (l as { title?: string; name?: string })?.title ??
+              (l as { name?: string })?.name ??
+              ""
+          )
+    )
+    .filter(Boolean);
+
+  const tagTitles = (Array.isArray(tags) ? (tags as unknown[]) : [])
+    .map((t) => `#${resolveTagTitle(t)}`)
+    .filter((t) => t !== "#");
+
+  const all = [...labelTitles, ...tagTitles];
+  if (all.length === 0) return null;
+  return <OverflowBadgeList items={all} />;
 }

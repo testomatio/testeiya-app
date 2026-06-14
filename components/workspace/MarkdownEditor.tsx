@@ -2,17 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { SuiteGlyph } from "@/components/icons";
 import {
   ChevronDownIcon,
   Expand,
   Minimize2,
   SaveIcon,
-  Pencil,
   Blocks,
   Code,
   X,
-} from "lucide-react";
+} from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";
@@ -64,7 +65,9 @@ export function MarkdownEditor({
   const [content, setContent] = useState<string>(initialContent ?? "");
   const [original, setOriginal] = useState<string>(initialContent ?? "");
   const [size, setSize] = useState<Size>("default");
-  const [mode, setMode] = useState<EditorMode>("rich");
+  const [mode, setMode] = useState<EditorMode>(
+    () => (localStorage.getItem("editor-mode") as EditorMode | null) ?? "rich"
+  );
   const [loading, setLoading] = useState<boolean>(initialContent === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,15 +151,32 @@ export function MarkdownEditor({
   return (
     <div
       className={cn(
-        "rounded-md border bg-background text-sm",
+        "rounded-md border bg-background text-sm overflow-hidden",
         fillHeight && "flex h-full min-h-0 flex-col",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+      <div className="relative z-10 flex items-center justify-between gap-2 px-2 py-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <Pencil className="size-4 shrink-0 text-muted-foreground" />
+          {onClose && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="size-7 shrink-0"
+                  aria-label="Close editor"
+                >
+                  <X className="size-4" />
+                </Button>
+              } />
+              <TooltipContent><p>Close editor</p></TooltipContent>
+            </Tooltip>
+          )}
+          <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
           <span className="font-medium truncate">{basename(path)}</span>
           <span
             className="text-[11px] text-muted-foreground truncate hidden sm:inline"
@@ -176,60 +196,84 @@ export function MarkdownEditor({
         <div className="flex items-center gap-1 shrink-0">
           {/* Editor mode: Rich (BlockNote blocks) ↔ Markdown (OverType raw). */}
           <div className="flex items-center rounded-md border p-0.5">
-            <button
-              type="button"
-              onClick={() => setMode("rich")}
-              className={cn(
-                "rounded p-1 text-muted-foreground hover:bg-muted",
-                mode === "rich" && "bg-muted text-foreground"
-              )}
-              title="Rich editor"
-              aria-pressed={mode === "rich"}
-            >
-              <Blocks className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("markdown")}
-              className={cn(
-                "rounded p-1 text-muted-foreground hover:bg-muted",
-                mode === "markdown" && "bg-muted text-foreground"
-              )}
-              title="Markdown editor"
-              aria-pressed={mode === "markdown"}
-            >
-              <Code className="size-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => { setMode("rich"); localStorage.setItem("editor-mode", "rich"); }}
+                  className={cn(
+                    "rounded p-1 text-muted-foreground hover:bg-muted",
+                    mode === "rich" && "bg-muted text-foreground"
+                  )}
+                  aria-pressed={mode === "rich"}
+                  aria-label="Rich editor"
+                >
+                  <Blocks className="size-3.5" />
+                </button>
+              } />
+              <TooltipContent><p>Rich editor</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => { setMode("markdown"); localStorage.setItem("editor-mode", "markdown"); }}
+                  className={cn(
+                    "rounded p-1 text-muted-foreground hover:bg-muted",
+                    mode === "markdown" && "bg-muted text-foreground"
+                  )}
+                  aria-pressed={mode === "markdown"}
+                  aria-label="Markdown editor"
+                >
+                  <Code className="size-3.5" />
+                </button>
+              } />
+              <TooltipContent><p>Markdown editor</p></TooltipContent>
+            </Tooltip>
           </div>
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (
-            <button
-              type="button"
-              onClick={onToggleFullScreen}
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title={fillHeight ? "Exit full screen" : "Full screen"}
-            >
-              {fillHeight ? (
-                <Minimize2 className="size-3.5" />
-              ) : (
-                <Expand className="size-3.5" />
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onToggleFullScreen}
+                  className="size-7"
+                  aria-label={fillHeight ? "Exit full screen" : "Full screen"}
+                >
+                  {fillHeight ? (
+                    <Minimize2 className="size-3.5" />
+                  ) : (
+                    <Expand className="size-3.5" />
+                  )}
+                </Button>
+              } />
+              <TooltipContent><p>{fillHeight ? "Exit full screen" : "Full screen"}</p></TooltipContent>
+            </Tooltip>
           )}
           {/* Collapse to header — only meaningful in the strip layout. */}
           {!fillHeight && (
-            <button
-              type="button"
-              onClick={() =>
-                setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
-              }
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title={size === "collapsed" ? "Show editor" : "Collapse to header"}
-            >
-              <ChevronDownIcon
-                className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
-              />
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    setSize((s) => (s === "collapsed" ? "default" : "collapsed"))
+                  }
+                  className="size-7"
+                  aria-label={size === "collapsed" ? "Show editor" : "Collapse to header"}
+                >
+                  <ChevronDownIcon
+                    className={cn("size-3.5 transition-transform", size === "collapsed" && "-rotate-180")}
+                  />
+                </Button>
+              } />
+              <TooltipContent><p>{size === "collapsed" ? "Show editor" : "Collapse to header"}</p></TooltipContent>
+            </Tooltip>
           )}
           <Button
             type="button"
@@ -242,21 +286,12 @@ export function MarkdownEditor({
             <SaveIcon className="size-3" />
             {saving ? "Saving…" : "Save"}
           </Button>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              title="Close editor"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
       {/* Body */}
       <div
+        style={{ contain: "paint" }}
         className={cn(
           "flex transition-[height]",
           fillHeight ? "min-h-0 flex-1" : heightClass
@@ -283,6 +318,7 @@ export function MarkdownEditor({
             onChange={setContent}
             readOnly={readOnly || saving}
             theme={isDark ? "dark" : "light"}
+            scrollToText={scrollToText}
             onSaveShortcut={() => void saveRef.current()}
           />
         )}

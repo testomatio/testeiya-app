@@ -4,7 +4,7 @@ import { Shimmer } from "./shimmer";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Square } from "lucide-react";
+import { Square } from "@/lib/icons";
 
 export type AgentStatusBarProps = {
   /** One of "ready" | "connecting" | "submitted" | "streaming" */

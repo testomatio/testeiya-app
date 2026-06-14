@@ -206,13 +206,13 @@ export class WorkspaceService {
     this.expanded = next;
   }
 
-  /** Row click: folder → toggle; file → open full-height (hides the chat). */
-  openPath(path: string) {
+  /** Row click: folder → toggle; file → open; test node → open file + scroll to anchor. */
+  openPath(path: string, anchor?: string) {
     if (containsFolder(this.tree, path)) {
       this.toggleFolder(path);
       return;
     }
-    this.open(path, undefined, { fullHeight: true });
+    this.open(path, undefined, { fullHeight: true, scrollToText: anchor });
   }
 
   /**

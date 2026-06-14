@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { ClipboardCheckIcon, ExternalLinkIcon } from "lucide-react";
+import { ClipboardCheckIcon, ExternalLinkIcon } from "@/lib/icons";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { extractList } from "./extract-list";
 import {
@@ -38,7 +38,7 @@ interface McpRequirement {
   labels?: unknown;
 }
 
-const REQS_GRID = "minmax(0,8fr) 2fr 2fr";
+const REQS_GRID = "minmax(0,6fr) 2fr 4fr";
 
 function pick<T>(...vals: (T | undefined | null)[]): T | undefined {
   for (const v of vals) if (v != null && v !== "") return v as T;
@@ -74,7 +74,7 @@ export default function RequirementsListRenderer({
         <ListRowHeader gridCols={REQS_GRID}>
           <div className="min-w-0 truncate">Requirement</div>
           <div className="min-w-0 truncate">Status</div>
-          <div className="min-w-0 truncate text-right pr-3">Tests</div>
+          <div className="min-w-0 truncate">Tests</div>
         </ListRowHeader>
         {items.map((r, idx) => {
           const key = pick(r.jira_key, r.key, r.jira_id, r.identifier);
@@ -111,7 +111,7 @@ export default function RequirementsListRenderer({
                   "—"
                 )}
               </div>
-              <div className="flex items-center justify-end gap-x-1.5 pr-3 text-xs tabular-nums text-muted-foreground">
+              <div className="flex items-center gap-x-1.5 text-xs tabular-nums text-muted-foreground">
                 <span>{count ?? "—"}</span>
                 {url && (
                   <ExternalLinkIcon className="size-3 shrink-0 opacity-60" />

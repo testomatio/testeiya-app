@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { FolderOpenIcon } from "lucide-react";
+import { FolderOpenIcon } from "@/lib/icons";
 import {
   useWorkspaceService,
   useMemoryService,
@@ -71,12 +72,13 @@ export const SettingsDialog = observer(function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Workspace for the agent.</DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {/* Workspace */}
         <section className="space-y-3 py-2">
           <h3 className="text-sm font-semibold">Workspace</h3>
@@ -113,6 +115,7 @@ export const SettingsDialog = observer(function SettingsDialog({
             Opens a local directory as the agent&apos;s workspace (reloads the session).
           </p>
         </section>
+        </DialogBody>
 
         {/* Memory */}
         <section className="space-y-3 border-t pt-4">

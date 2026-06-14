@@ -27,8 +27,12 @@ export function WidgetPane({
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- the persisted width is
+       read after mount on purpose; reading it during render diverges from the
+       default-width SSR markup and breaks hydration */
     setWidth(loadWidth());
     setHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const onResizeMouseDown = useCallback(

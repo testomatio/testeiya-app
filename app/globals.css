@@ -63,6 +63,20 @@
   font-display: swap;
 }
 
+/* Brand palette overrides — Tailwind v4 ships different indigo defaults,
+   so we pin the exact brand hex here so var(--color-indigo-*) is usable. */
+@theme {
+  --color-indigo-50:  #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-neutral-400: #a3a3a3;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -98,9 +112,9 @@
   --color-run-running: var(--run-running);
   --color-run-terminated: var(--run-terminated);
   --color-run-pending: var(--run-pending);
-  --font-sans: "THICCCBOI", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono);
-  --font-heading: "THICCCBOI", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -155,38 +169,38 @@
  * system. Light theme.
  */
 :root {
-  --background: #ffffff;            /* white */
-  --foreground: #171717;           /* neutral-900 */
-  --card: #fafafa;                 /* neutral-50 (surface elevated) */
-  --card-foreground: #171717;
+  --background: #ffffff;
+  --foreground: var(--color-neutral-900);
+  --card: var(--color-neutral-50);
+  --card-foreground: var(--color-neutral-900);
   --popover: #ffffff;
-  --popover-foreground: #171717;
-  --primary: #6366f1;              /* indigo-500 */
+  --popover-foreground: var(--color-neutral-900);
+  --primary: var(--color-indigo-500);
   --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;            /* neutral-100 */
-  --secondary-foreground: #171717;
-  --muted: #f5f5f5;                /* neutral-100 */
-  --muted-foreground: #737373;     /* neutral-500 */
-  --accent: #eef2ff;               /* indigo-50 (brand subtle) */
-  --accent-foreground: #4f46e5;    /* indigo-600 */
-  --destructive: #ef4444;          /* red-500 (functional) */
-  --border: #e5e5e5;               /* neutral-200 */
-  --input: #e5e5e5;                /* neutral-200 */
-  --ring: #6366f1;                 /* indigo-500 */
-  --chart-1: #6366f1;              /* indigo-500 */
-  --chart-2: #8b5cf6;              /* violet-500 */
-  --chart-3: #0ea5e9;              /* sky-500 */
-  --chart-4: #818cf8;              /* indigo-400 */
-  --chart-5: #4f46e5;              /* indigo-600 */
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-neutral-900);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-500);
+  --accent: var(--color-indigo-50);
+  --accent-foreground: var(--color-indigo-600);
+  --destructive: #ef4444;
+  --border: var(--color-neutral-200);
+  --input: var(--color-neutral-200);
+  --ring: var(--color-indigo-500);
+  --chart-1: var(--color-indigo-500);
+  --chart-2: #8b5cf6;
+  --chart-3: #0ea5e9;
+  --chart-4: var(--color-indigo-400);
+  --chart-5: var(--color-indigo-600);
   --radius: 0.625rem;
-  --sidebar: #fafafa;              /* neutral-50 */
-  --sidebar-foreground: #171717;
-  --sidebar-primary: #6366f1;
+  --sidebar: var(--color-neutral-50);
+  --sidebar-foreground: var(--color-neutral-900);
+  --sidebar-primary: var(--color-indigo-500);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef2ff;       /* indigo-50 */
-  --sidebar-accent-foreground: #4f46e5;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #6366f1;
+  --sidebar-accent: var(--color-indigo-50);
+  --sidebar-accent-foreground: var(--color-indigo-600);
+  --sidebar-border: var(--color-neutral-200);
+  --sidebar-ring: var(--color-indigo-500);
   /* Status surfaces (light mode — pale tint from TW's 100/700 pair). */
   --status-success: oklch(0.94 0.08 155);
   --status-success-foreground: oklch(0.42 0.15 155);
@@ -212,39 +226,39 @@
   --run-pending: #9ca3af;     /* gray-400 */
 }
 
-/* Dark theme — neutral-950 base + indigo accent. */
+/* Dark theme — neutral-900 base + indigo accent. */
 .dark {
-  --background: #0a0a0a;           /* neutral-950 */
-  --foreground: #fafafa;           /* neutral-50 */
-  --card: #171717;                 /* neutral-900 (surface elevated) */
-  --card-foreground: #fafafa;
-  --popover: #171717;
-  --popover-foreground: #fafafa;
-  --primary: #6366f1;              /* indigo-500 */
+  --background: var(--color-neutral-900);
+  --foreground: var(--color-neutral-50);
+  --card: var(--color-neutral-800);
+  --card-foreground: var(--color-neutral-50);
+  --popover: var(--color-neutral-800);
+  --popover-foreground: var(--color-neutral-50);
+  --primary: var(--color-indigo-500);
   --primary-foreground: #ffffff;
-  --secondary: #262626;            /* neutral-800 */
-  --secondary-foreground: #fafafa;
-  --muted: #262626;                /* neutral-800 */
-  --muted-foreground: #a3a3a3;     /* neutral-400 */
-  --accent: #262626;               /* neutral-800 (hover surface) */
-  --accent-foreground: #fafafa;
-  --destructive: #f87171;          /* red-400 (functional) */
-  --border: #404040;               /* neutral-700 */
-  --input: #404040;                /* neutral-700 */
-  --ring: #6366f1;                 /* indigo-500 */
-  --chart-1: #818cf8;              /* indigo-400 */
-  --chart-2: #a78bfa;              /* violet-400 */
-  --chart-3: #38bdf8;              /* sky-400 */
-  --chart-4: #6366f1;              /* indigo-500 */
-  --chart-5: #c4b5fd;              /* violet-300 */
-  --sidebar: #171717;              /* neutral-900 */
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #6366f1;
+  --secondary: var(--color-neutral-700);
+  --secondary-foreground: var(--color-neutral-50);
+  --muted: var(--color-neutral-700);
+  --muted-foreground: var(--color-neutral-400);
+  --accent: var(--color-neutral-700);
+  --accent-foreground: var(--color-neutral-50);
+  --destructive: #f87171;
+  --border: var(--color-neutral-700);
+  --input: var(--color-neutral-700);
+  --ring: var(--color-indigo-500);
+  --chart-1: var(--color-indigo-400);
+  --chart-2: #a78bfa;
+  --chart-3: #38bdf8;
+  --chart-4: var(--color-indigo-500);
+  --chart-5: #c4b5fd;
+  --sidebar: var(--color-neutral-800);
+  --sidebar-foreground: var(--color-neutral-50);
+  --sidebar-primary: var(--color-indigo-500);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #262626;       /* neutral-800 */
-  --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #404040;       /* neutral-700 */
-  --sidebar-ring: #6366f1;
+  --sidebar-accent: var(--color-neutral-700);
+  --sidebar-accent-foreground: var(--color-neutral-50);
+  --sidebar-border: var(--color-neutral-700);
+  --sidebar-ring: var(--color-indigo-500);
   /* Status surfaces — backend's notify palette:
      successNotify #234144, errorNotify #412233, warningNotify #41392C,
      infoNotify #1E2D52. Muted backgrounds that sit well over dark-1000. */
@@ -325,6 +339,31 @@
   }
 }
 
+/* ─── Material Symbols Rounded ─────────────────────────────────────────────── */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: 400;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-style: normal;
+  font-size: 1em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Map Tailwind size-* to font-size for icon spans */
+.material-symbols-rounded.size-3   { font-size: 0.75rem; }
+.material-symbols-rounded.size-3\.5 { font-size: 0.875rem; }
+.material-symbols-rounded.size-4   { font-size: 1rem; }
+.material-symbols-rounded.size-5   { font-size: 1.25rem; }
+.material-symbols-rounded.size-6   { font-size: 1.5rem; }
+.material-symbols-rounded.size-8   { font-size: 2rem; }
+.material-symbols-rounded.size-10  { font-size: 2.5rem; }
+
 @layer components {
   /*
    * Replicates the backend's .list-item-border pattern: a 1px bottom
@@ -375,3 +414,26 @@
     }
   }
 }
+
+.dark .testeiya-overtype-editor {
+  background: var(--color-neutral-800);
+}
+
+.light .testeiya-overtype-editor {
+  background: var(--color-neutral-50);
+}
+
+.testeiya-overtype-editor .overtype-container,
+.testeiya-overtype-editor .overtype-wrapper {
+  max-width: 960px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  background: transparent !important;
+}
+
+.testeiya-overtype-editor .overtype-input,
+.testeiya-overtype-editor .overtype-preview {
+  padding-left: 60px !important;
+  padding-right: 60px !important;
+}
+

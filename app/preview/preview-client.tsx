@@ -40,7 +40,7 @@ import {
   testrunsFixture,
   testsFixture,
 } from "@/lib/preview/fixtures";
-import { MoonIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SunIcon } from "@/lib/icons";
 
 function Section({
   id,

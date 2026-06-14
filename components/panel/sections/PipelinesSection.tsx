@@ -1,22 +1,23 @@
 "use client";
 
-import { MdiIcon } from "@/components/icons";
-import { mdiSourceBranch } from "@mdi/js";
+import { Icon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-/** Pipelines service (shell) — placeholder for an upcoming CI/CD integration. */
-export function PipelinesSection({ active, onToggle }: PanelSectionProps) {
+export function PipelinesSection({ active, onToggle, initializing: _initializing }: PanelSectionProps) {
   return (
     <SectionShell
-      icon={<MdiIcon path={mdiSourceBranch} className="size-4" />}
       title="Pipelines"
       active={active}
       onToggle={onToggle}
     >
-      <div className="p-3">
-        <p className="text-xs text-muted-foreground">
-          Pipelines are coming soon.
+      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="account_tree" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">Pipelines coming soon</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          CI/CD pipeline integration will appear here once it's available.
         </p>
       </div>
     </SectionShell>

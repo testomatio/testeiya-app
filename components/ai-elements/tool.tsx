@@ -7,20 +7,16 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { MdiIcon, RenderKindIcon } from "@/components/icons";
+import { RenderKindIcon } from "@/components/icons";
+import { Icon } from "@/lib/icons";
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
-import {
-  mdiFileDocumentEditOutline,
-  mdiFileTreeOutline,
-  mdiPencilOutline,
-} from "@mdi/js";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
   CircleIcon,
   ClockIcon,
   XCircleIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement, useState } from "react";
 import dynamic from "next/dynamic";
@@ -52,7 +48,7 @@ export const Tool = ({
 
   return (
     <Collapsible
-      className={cn("group not-prose w-full rounded-md border", className)}
+      className={cn("group not-prose mb-4 w-full rounded-md border bg-background", className)}
       open={effectiveOpen}
       onOpenChange={(v, details) => {
         setUserOverride(v);
@@ -295,9 +291,7 @@ function deriveHeader(
     const file = payload.path ? payload.path.split("/").pop() ?? payload.path : "file";
     return {
       icon: (
-        <MdiIcon
-          path={toolName === "edit" ? mdiFileDocumentEditOutline : mdiPencilOutline}
-        />
+        <Icon name={toolName === "edit" ? "edit_document" : "edit"} className="size-4" />
       ),
       title: `${toolName === "edit" ? "Edited" : "Wrote"}: ${file}`,
       tag: toolName,
@@ -305,7 +299,7 @@ function deriveHeader(
   }
   if (toolName === "render_tree") {
     return {
-      icon: <MdiIcon path={mdiFileTreeOutline} />,
+      icon: <Icon name="account_tree" />,
       title: payload.title ?? "Tree",
     };
   }

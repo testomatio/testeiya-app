@@ -43,13 +43,13 @@ import { cn } from "@/lib/utils";
 import { captureDisplayScreenshot } from "@/lib/screenshot";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
 import {
-  CornerDownLeftIcon,
+  ArrowUpIcon,
   ImageIcon,
   Monitor,
   PlusIcon,
   SquareIcon,
   XIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import { nanoid } from "nanoid";
 import type {
   ChangeEvent,
@@ -803,19 +803,12 @@ export const PromptInput = ({
 
         const result = onSubmit({ files: convertedFiles, text }, event);
 
-        // Handle both sync and async onSubmit
+        let succeeded = true;
         if (result instanceof Promise) {
-          try {
-            await result;
-            clear();
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
-          } catch {
-            // Don't clear on error - user may want to retry
-          }
-        } else {
-          // Sync function completed without throwing, clear inputs
+          await result.catch(() => { succeeded = false; });
+        }
+
+        if (succeeded) {
           clear();
           if (usingProvider) {
             controller.textInput.clear();
@@ -981,7 +974,7 @@ export const PromptInputTextarea = ({
 
   return (
     <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      className={cn("field-sizing-content max-h-48 min-h-10", className)}
       name="message"
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={handleCompositionStart}
@@ -1147,14 +1140,14 @@ export const PromptInputSubmit = ({
 }: PromptInputSubmitProps) => {
   const isGenerating = status === "submitted" || status === "streaming";
 
-  let Icon = <CornerDownLeftIcon className="size-4" />;
+  let submitIcon = <ArrowUpIcon className="size-4" />;
 
   if (status === "submitted") {
-    Icon = <Spinner />;
+    submitIcon = <Spinner />;
   } else if (status === "streaming") {
-    Icon = <SquareIcon className="size-4" />;
+    submitIcon = <SquareIcon className="size-4" />;
   } else if (status === "error") {
-    Icon = <XIcon className="size-4" />;
+    submitIcon = <XIcon className="size-4" />;
   }
 
   const handleClick = useCallback(
@@ -1179,7 +1172,7 @@ export const PromptInputSubmit = ({
       variant={variant}
       {...props}
     >
-      {children ?? Icon}
+      {children ?? submitIcon}
     </InputGroupButton>
   );
 };

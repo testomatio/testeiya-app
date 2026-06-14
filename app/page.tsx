@@ -19,9 +19,6 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { useFileMentions } from "@/components/ai-elements/prompt-input-mentions";
-import type { MentionItem } from "@/components/ai-elements/prompt-input-mentions";
-import type { TreeNode } from "@/lib/services/types";
 import { AttachmentDialog } from "@/components/AttachmentDialog";
 import {
   Reasoning,
@@ -38,35 +35,24 @@ import {
   renderRichTool,
 } from "@/components/ai-elements/tool";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
-import { FolderGlyph, MdiIcon, ProjectGlyph } from "@/components/icons";
-import { mdiDockLeft, mdiDockRight } from "@mdi/js";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
-import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, BrainIcon, FolderOpenIcon } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { SettingsDialog } from "@/components/SettingsDialog";
-import { MemoryDialog } from "@/components/MemoryDialog";
-import { BrowserControls } from "@/components/BrowserControls";
+import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
-import { useTheme } from "@/lib/theme";
-import { cn } from "@/lib/utils";
+import { MemoryDialog } from "@/components/MemoryDialog";
+import { useFileMentions } from "@/components/ai-elements/prompt-input-mentions";
+import type { MentionItem } from "@/components/ai-elements/prompt-input-mentions";
 import { observer } from "mobx-react-lite";
 import {
   ServicesProvider,
@@ -74,10 +60,10 @@ import {
   useProjectService,
   useProvidersService,
   useConnectionsService,
-  useSessionsService,
   useWidgetService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
+import type { TreeNode } from "@/lib/services/types";
 import { SidebarPanel } from "@/components/panel/SidebarPanel";
 import { WidgetPane } from "@/components/panel/WidgetPane";
 import { ChatPanelHeader } from "@/components/panel/ChatPanelHeader";
@@ -85,6 +71,7 @@ import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
 import { ResourceWidgetView } from "@/components/agent-output/ResourceWidgetView";
 import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type FormEvent, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
@@ -97,27 +84,16 @@ function isAskQuestion(tool: ToolCall): boolean {
   return tool.toolName === "ask_question";
 }
 
-// The agent rewrites its plan via repeated `todo_write` calls; they're folded
-// into a single persistent panel instead of one card each.
-function isTodoWrite(tool: ToolCall): boolean {
-  return tool.toolName === "todo_write";
-}
-
 /** Rich-view tools: `render_*` customs + MCP `*_list` auto-renders. */
 function isRenderish(tool: ToolCall): boolean {
   return !isAskQuestion(tool) && richViewMode(tool.toolName) !== null;
 }
 
-/** Routine tool: anything that isn't a render and isn't the question. */
-function isRoutineTool(tool: ToolCall): boolean {
-  return !isAskQuestion(tool) && !isRenderish(tool);
-}
 
 type Segment =
   | { kind: "routine-solo"; tool: ToolCall }
   | { kind: "routine-group"; tools: ToolCall[] }
-  | { kind: "render"; tool: ToolCall; isLatest: boolean }
-  | { kind: "todo"; tool: ToolCall; running: boolean; current: boolean };
+  | { kind: "render"; tool: ToolCall; isLatest: boolean };
 
 /**
  * Single in-order pass through a message's tools. Routine tools batched
@@ -125,11 +101,7 @@ type Segment =
  * so they keep their position in the narrative. `ask_question` is dropped
  * here — page.tsx renders it separately, pinned to the message bottom.
  */
-function segmentTools(
-  tools: ToolCall[],
-  isStreaming: boolean,
-  isCurrentTodo: boolean
-): Segment[] {
+function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
   // Find the index of the LAST render-ish tool so we can expand just that
   // one when the message has finished streaming.
   let lastRenderIdx = -1;
@@ -140,25 +112,8 @@ function segmentTools(
     }
   }
 
-  // All todo_write calls collapse into one panel showing the latest successful
-  // state (each call's output carries the full plan); a still-running call keeps
-  // the last good list and flags "running".
-  let lastTodo: ToolCall | null = null;
-  let lastTodoWithOutput: ToolCall | null = null;
-  for (const t of tools) {
-    if (!isTodoWrite(t)) continue;
-    lastTodo = t;
-    if (t.state === "output-available") lastTodoWithOutput = t;
-  }
-  const todoTool = lastTodoWithOutput ?? lastTodo;
-  const todoRunning =
-    !!lastTodo &&
-    lastTodo.state !== "output-available" &&
-    lastTodo.state !== "output-error";
-
   const out: Segment[] = [];
   let buf: ToolCall[] = [];
-  let todoEmitted = false;
   const flush = () => {
     if (buf.length === 0) return;
     if (buf.length === 1) out.push({ kind: "routine-solo", tool: buf[0] });
@@ -167,18 +122,6 @@ function segmentTools(
   };
   tools.forEach((t, idx) => {
     if (isAskQuestion(t)) return; // handled at message bottom
-    if (isTodoWrite(t)) {
-      if (todoEmitted || !todoTool) return; // one persistent panel per message
-      flush();
-      out.push({
-        kind: "todo",
-        tool: todoTool,
-        running: todoRunning,
-        current: isCurrentTodo,
-      });
-      todoEmitted = true;
-      return;
-    }
     if (isRenderish(t)) {
       flush();
       out.push({
@@ -216,18 +159,6 @@ function renderSegments(
   return segments.map((seg, idx) => {
     if (seg.kind === "routine-solo") return renderRoutine(seg.tool);
     if (seg.kind === "render") return renderRender(seg.tool, seg.isLatest);
-    if (seg.kind === "todo") {
-      // Stable key (one per message) so the panel updates in place rather than
-      // remounting as later todo_write calls supply newer state.
-      return (
-        <TodoWriteRenderer
-          key="todo"
-          tool={seg.tool}
-          running={seg.running}
-          current={seg.current}
-        />
-      );
-    }
     // routine-group
     const running = seg.tools.some(
       (t) => t.state !== "output-available" && t.state !== "output-error"
@@ -251,6 +182,7 @@ const suggestions = [
   "Find flaky or redundant tests",
   "Suggest new test cases for this project",
   "Review test quality and best practices",
+  "Map requirements to existing test cases",
 ];
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -294,10 +226,12 @@ function ChatWithWorkspace() {
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick, mentionFiles },
+  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick, mentionFiles },
   ref
 ) {
   const [text, setText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<VoiceRecognition | null>(null);
   const mentions = useFileMentions({ text, setText, items: mentionFiles });
 
   useImperativeHandle(
@@ -314,20 +248,55 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     []
   );
 
+  const toggleVoice = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const w = window as VoiceWindow;
+    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+
+    if (!Ctor) {
+      toast.error("Voice input is not supported in this browser");
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.lang = navigator.language;
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event: VoiceRecognitionEvent) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      if (transcript) {
+        setText((prev) => (prev.trimEnd() ? `${prev.trimEnd()} ${transcript}` : transcript));
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [isListening]);
+
   return (
     <div className="relative">
-      <PromptInput onSubmit={onSubmit}>
-        <PromptInputBody>
-          <PromptInputTextarea
-            onChange={mentions.onChange}
-            onKeyDown={mentions.onKeyDown}
-            onBlur={mentions.onBlur}
-            onPaste={onPaste}
-            value={text}
-            placeholder="Ask Testeiya about your tests..."
-          />
-        </PromptInputBody>
-        <PromptInputFooter>
+    <PromptInput onSubmit={onSubmit}>
+      <PromptInputBody>
+        <PromptInputTextarea
+          onChange={mentions.onChange}
+          onKeyDown={mentions.onKeyDown}
+          onBlur={mentions.onBlur}
+          onPaste={onPaste}
+          value={text}
+          placeholder="Ask Testeiya about your tests..."
+        />
+      </PromptInputBody>
+      <PromptInputFooter>
+        <div className="flex items-center gap-1">
+          <SkillsMenu onInsert={onInsertSkill} disabled={skillsDisabled} />
           <PromptInputButton
             onClick={onAttachClick}
             tooltip="Attach files"
@@ -335,9 +304,49 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           >
             <PaperclipIcon className="size-4" />
           </PromptInputButton>
+        </div>
+        <div className="flex items-center gap-1">
+          {isListening && (
+            <span className="flex items-center gap-1.5 text-xs text-destructive animate-pulse select-none">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-destructive" />
+              </span>
+              Listening...
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 px-2 text-muted-foreground text-xs shrink-0"
+                onClick={onModelClick}
+                aria-label="Change provider / model"
+              >
+                {modelLabel}
+                <ChevronDownIcon className="size-3" />
+              </Button>
+            } />
+            <TooltipContent side="top"><p>Change provider / model</p></TooltipContent>
+          </Tooltip>
+          <div className="relative">
+            {isListening && (
+              <span className="absolute inset-0 rounded-md animate-ping bg-destructive/20" />
+            )}
+            <PromptInputButton
+              onClick={toggleVoice}
+              tooltip={isListening ? "Stop recording" : "Voice input"}
+              aria-label={isListening ? "Stop recording" : "Voice input"}
+              className={isListening ? "relative text-destructive bg-destructive/10 hover:bg-destructive/20" : undefined}
+            >
+              <MicIcon className="size-4" />
+            </PromptInputButton>
+          </div>
           <PromptInputSubmit status={status} onStop={onStop} />
-        </PromptInputFooter>
-      </PromptInput>
+        </div>
+      </PromptInputFooter>
+    </PromptInput>
       {mentions.dropdown}
     </div>
   );
@@ -356,38 +365,23 @@ const ChatPage = observer(function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectIds.join(","), sessionId]);
 
-  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, answeredQuestions, currentConversationId, sendMessage, answerQuestion, stop, clearSession, openConversation, clearError } =
+  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, sendMessage, answerQuestion, stop, clearSession, clearError } =
     useTesteiya(params);
   const host = useHost();
   const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
   const chatInputRef = useRef<ChatInputHandle>(null);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
-  const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
   const panel = usePanel();
   const workspace = useWorkspaceService();
-  const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
   const project = useProjectService();
   const providers = useProvidersService();
   const connections = useConnectionsService();
-  const sessions = useSessionsService();
   const widget = useWidgetService();
-
-  // Inject the agent-socket actions into the Chats service so the sidebar
-  // section can switch / start conversations through the live connection.
-  useEffect(() => {
-    sessions.setHandlers(openConversation, clearSession);
-  }, [sessions, openConversation, clearSession]);
-  // Mirror the live conversation id (highlights the active chat) and refresh the
-  // list when it changes — a brand-new chat appears once it has output.
-  useEffect(() => {
-    sessions.setActiveId(currentConversationId);
-    void sessions.load();
-  }, [sessions, currentConversationId]);
+  const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
 
   // Feed the running session's MCP tools into the connections service so the
   // sidebar can show live connected/disconnected status per server.
@@ -395,17 +389,32 @@ const ChatPage = observer(function ChatPage() {
     connections.setRuntime(mcpTools, mcpLoaded);
   }, [connections, mcpTools, mcpLoaded]);
 
-  // Refresh project counters + open widgets once each AI turn finishes (the
-  // agent may have created/edited tests or runs). Only on a busy→ready edge.
-  const prevStatusRef = useRef(status);
+  // The agent's rich renders move out of the chat stream into the widget pane:
+  // find the latest completed renderish tool and show it (deduped by toolCallId
+  // so a finished render replaces the previous one without churning).
+  const latestRenderTool = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      const tools = messages[m].tools ?? [];
+      for (let i = tools.length - 1; i >= 0; i--) {
+        const t = tools[i];
+        if (t.toolName === "ask_question") continue;
+        if (t.state !== "output-available") continue;
+        if (richViewMode(t.toolName) === null) continue;
+        return t;
+      }
+    }
+    return null;
+  }, [messages]);
   useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = status;
-    if (status !== "ready") return;
-    if (prev !== "submitted" && prev !== "streaming") return;
-    project.refresh();
-    void sessions.load();
-  }, [status, project, sessions]);
+    if (!latestRenderTool) return;
+    widget.show({
+      source: "tool",
+      key: latestRenderTool.toolCallId,
+      toolName: latestRenderTool.toolName,
+      input: latestRenderTool.input,
+      output: latestRenderTool.output,
+    });
+  }, [latestRenderTool, widget]);
 
   // Keep the header's provider/model label in sync — refresh when the Providers
   // dialog opens/closes so a new selection shows immediately. (The live session
@@ -437,42 +446,6 @@ const ChatPage = observer(function ChatPage() {
     if (sessionId) return;
     void workspace.openDefault();
   }, [sessionId, workspace]);
-
-  // The agent's rich renders move out of the chat stream into the widget pane:
-  // find the latest completed renderish tool and show it (deduped by toolCallId
-  // so a finished render replaces the previous one without churning).
-  const latestRenderTool = useMemo(() => {
-    for (let m = messages.length - 1; m >= 0; m--) {
-      const tools = messages[m].tools ?? [];
-      for (let i = tools.length - 1; i >= 0; i--) {
-        const t = tools[i];
-        if (t.toolName === "ask_question") continue;
-        if (t.state !== "output-available") continue;
-        if (richViewMode(t.toolName) === null) continue;
-        return t;
-      }
-    }
-    return null;
-  }, [messages]);
-  useEffect(() => {
-    if (!latestRenderTool) return;
-    widget.show({
-      source: "tool",
-      key: latestRenderTool.toolCallId,
-      toolName: latestRenderTool.toolName,
-      input: latestRenderTool.input,
-      output: latestRenderTool.output,
-    });
-  }, [latestRenderTool, widget]);
-
-  // The plan evolves across turns; only the most recent message's todo panel is
-  // still relevant, so earlier ones render collapsed.
-  const lastTodoMessageId = useMemo(() => {
-    for (let m = messages.length - 1; m >= 0; m--) {
-      if ((messages[m].tools ?? []).some(isTodoWrite)) return messages[m].id;
-    }
-    return null;
-  }, [messages]);
 
   const addAttachments = useCallback((files: File[]) => {
     const accepted = files.filter((file) => {
@@ -561,179 +534,22 @@ const ChatPage = observer(function ChatPage() {
 
   const handleClear = useCallback(() => {
     clearSession();
-    toast.success("Session cleared");
+    setTimeout(() => toast.success("Session cleared"), 0);
   }, [clearSession]);
 
-  return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 shrink-0"
-            onClick={panel.togglePanel}
-            title={panel.open ? "Hide panel" : "Show panel"}
-            aria-label="Toggle panel"
-          >
-            <MdiIcon path={mdiDockLeft} className="size-4" />
-          </Button>
-          <h1 className="font-semibold text-lg shrink-0">Testeiya</h1>
-          {project.currentProject && (
-            <div className="flex min-w-0 items-center text-xs">
-              <button
-                type="button"
-                onClick={() => panel.openSection("project")}
-                title={`Project: ${project.currentProject.title}\nClick to view in sidebar`}
-                className="flex min-w-0 max-w-[260px] items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-muted/50"
-              >
-                <ProjectGlyph className="size-3.5 shrink-0 text-primary" />
-                <span className="truncate font-medium text-foreground">
-                  {project.currentProject.title}
-                </span>
-                {project.currentProject.testsCount !== null && (
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    · {project.currentProject.testsCount.toLocaleString()} tests
-                  </span>
-                )}
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <button
-                      type="button"
-                      title="Workspace settings"
-                      aria-label="Workspace settings"
-                      className="ml-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                    />
-                  }
-                >
-                  <ChevronsUpDownIcon className="size-3.5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setMemoryOpen(true)}>
-                    <BrainIcon className="size-3.5" />
-                    Project memory
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSwitchProjectOpen(true)}>
-                    <ChevronsUpDownIcon className="size-3.5" />
-                    Switch project…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void workspace.openFolder()}>
-                    <FolderOpenIcon className="size-3.5" />
-                    Open folder…
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-          {isDev && cwd && (
-            <span className="flex min-w-0 max-w-[360px] items-center text-[11px] font-mono">
-              {/* Clicking the path opens a folder picker to switch workspace.
-                  The path is truncated from the START so the tail (the actual
-                  folder) stays visible. */}
-              <button
-                type="button"
-                onClick={() => void workspace.openFolder()}
-                title={`${cwd}\nClick to open another folder`}
-                className="flex min-w-0 items-center text-muted-foreground/80 transition-colors hover:text-foreground"
-              >
-                <FolderGlyph className="inline size-3 mr-1 shrink-0 align-[-1px]" />
-                <span className="truncate text-left [direction:rtl]">{cwd}</span>
-              </button>
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 px-2 text-muted-foreground text-xs shrink-0"
-            onClick={() => setProvidersOpen(true)}
-            title="Change provider / model"
-            aria-label="Providers and models"
-          >
-            {model || providers.label || "Select model"}
-            <ChevronDownIcon className="size-3" />
-          </Button>
-          {status === "connecting" && (
-            <span className="flex items-center gap-1.5 text-muted-foreground text-xs shrink-0">
-              <Spinner className="size-3" /> Connecting...
-            </span>
-          )}
-          {status === "ready" && model && (
-            <CircleDotIcon className="size-3 text-green-500 shrink-0" />
-          )}
-          {isDev && cwd && (
-            <span className="flex items-center text-[11px] font-mono shrink-0">
-              {mcpLoaded && mcpTools.length > 0 && (
-                <span
-                  className="text-emerald-500"
-                  title={`MCP tools: ${mcpTools.length}\n${mcpTools.join(", ")}`}
-                >
-                  MCP:{mcpTools.length}
-                </span>
-              )}
-              {mcpLoaded && mcpTools.length === 0 && (
-                <span className="text-red-500">MCP:failed</span>
-              )}
-              {!mcpLoaded && expectedMcpServers.length > 0 && (
-                <span
-                  className="text-amber-500"
-                  title={`MCP servers pending (connect on first prompt): ${expectedMcpServers.join(", ")}`}
-                >
-                  MCP:pending ({expectedMcpServers.length})
-                </span>
-              )}
-              {!mcpLoaded && expectedMcpServers.length === 0 && (
-                <span className="text-muted-foreground">MCP:—</span>
-              )}
-            </span>
-          )}
-          <Button
-            onClick={panel.toggleChat}
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            title={panel.chatOpen ? "Hide chat" : "Show chat"}
-            aria-label="Toggle chat"
-          >
-            <MdiIcon path={mdiDockRight} className="size-4" />
-          </Button>
-          {/* Playwright CLI session controls (record / stop / screenshot).
-              Self-contained — relocate anywhere as needed. */}
-          <BrowserControls />
-          {!themeLocked && (
-            <Button
-              onClick={toggleTheme}
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              aria-label="Toggle theme"
-            >
-              {theme === "dark" ? (
-                <SunIcon className="size-4" />
-              ) : (
-                <MoonIcon className="size-4" />
-              )}
-            </Button>
-          )}
-          <Button
-            onClick={() => setSettingsOpen(true)}
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            title="Settings"
-            aria-label="Settings"
-          >
-            <SettingsIcon className="size-4" />
-          </Button>
-        </div>
-      </div>
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyN" && e.altKey) {
+        e.preventDefault();
+        setTimeout(handleClear, 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleClear]);
 
+  return (
+    <div className="flex h-full flex-col">
       {error && (
         <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
           <div className="min-w-0">
@@ -760,12 +576,6 @@ const ChatPage = observer(function ChatPage() {
         </div>
       )}
 
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        cwd={cwd}
-      />
-
       <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
 
       <TestomatioLogin
@@ -773,17 +583,17 @@ const ChatPage = observer(function ChatPage() {
         onOpenChange={setSwitchProjectOpen}
       />
 
-      <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
-
       <AttachmentDialog
         open={attachOpen}
         onOpenChange={setAttachOpen}
         onAdd={addAttachments}
       />
 
+      <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
+
       {/* Below-header region: sidebar | widget pane | chat column. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <SidebarPanel />
+        <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
         <WidgetPane fill={!panel.chatOpen}>
           {(() => {
             const current = widget.current;
@@ -872,59 +682,159 @@ const ChatPage = observer(function ChatPage() {
           })()}
         </WidgetPane>
         {panel.chatOpen && (
-        <div className="flex min-w-0 flex-1 flex-col">
-          <ChatPanelHeader
-            onClear={handleClear}
-            canClear={messages.length > 0}
-          />
-      {/* Chat area */}
-      <Conversation className="flex-1">
-        <ConversationContent>
-          {messages.length === 0 && canConnectTestomatio && !sessionId && (
-            project.restoring ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                <Spinner className="size-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Restoring your last project…
+        <div className={cn("relative flex min-w-0 flex-1 flex-col bg-muted/30", messages.length === 0 && "justify-center")}>
+          <ChatPanelHeader onOpenMemory={() => setMemoryOpen(true)} />
+      {/* MCP status + Clear — shown only when there's an active chat */}
+      <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", messages.length === 0 && "hidden")}>
+          {isDev && cwd && (
+            <span className="flex items-center text-[11px] font-mono">
+              {mcpLoaded && mcpTools.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-run-passed">MCP:{mcpTools.length}</span>
+                  } />
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-semibold mb-1">{mcpTools.length} tools across {Object.keys(mcpTools.reduce<Record<string, number>>((acc, t) => { const server = t.split("_").slice(0, 3).join("_"); acc[server] = (acc[server] ?? 0) + 1; return acc; }, {})).length} servers</p>
+                    <ul className="space-y-0.5">
+                      {Object.entries(mcpTools.reduce<Record<string, number>>((acc, t) => { const server = t.split("_").slice(0, 3).join("_"); acc[server] = (acc[server] ?? 0) + 1; return acc; }, {})).map(([server, count]) => (
+                        <li key={server} className="flex items-center justify-between gap-4 font-mono text-xs">
+                          <span className="text-muted-foreground">{server}</span>
+                          <span className="text-foreground">{count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {mcpLoaded && mcpTools.length === 0 && (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-run-failed">MCP:failed</span>
+                  } />
+                  <TooltipContent side="bottom">
+                    <p className="font-semibold">MCP failed to load</p>
+                    <p className="text-xs text-muted-foreground">No tools available. Check MCP server config.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {!mcpLoaded && expectedMcpServers.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-run-skipped">MCP:pending ({expectedMcpServers.length})</span>
+                  } />
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-semibold mb-1">Pending MCP servers: {expectedMcpServers.length}</p>
+                    <p className="text-xs text-muted-foreground mb-1">Will connect on first prompt</p>
+                    <ul className="space-y-0.5">
+                      {expectedMcpServers.map((s) => (
+                        <li key={s} className="font-mono text-xs text-muted-foreground">{s}</li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {!mcpLoaded && expectedMcpServers.length === 0 && (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-muted-foreground">MCP:—</span>
+                  } />
+                  <TooltipContent side="bottom">
+                    <p className="font-semibold">MCP not configured</p>
+                    <p className="text-xs text-muted-foreground">No MCP servers found for this workspace.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </span>
+          )}
+          {messages.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  onClick={handleClear}
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+                  aria-label="Clear chat"
+                >
+                  <Trash className="size-3.5" />
+                  <span className="hidden sm:inline">Clear</span>
+                </Button>
+              } />
+              <TooltipContent className="flex items-center gap-2">
+                <p>New session</p>
+                <kbd className="pointer-events-none inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌥ Option + N" : "Alt + N"}
+                </kbd>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      <Conversation className={messages.length === 0 ? "flex-none" : "flex-1"}>
+        <ConversationContent className="items-center">
+          <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
+          {messages.length === 0 && (!canConnectTestomatio || sessionId || cwd) && (
+            <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
+              <div className="space-y-3">
+                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
+                  Test smarter, ship faster
+                </h1>
+                <p className="text-base text-muted-foreground max-w-md mx-auto">
+                  Ask anything about your tests — coverage gaps, flaky cases, quality reviews, or new test ideas.
                 </p>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                  <KeyRoundIcon className="size-5 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium">Connect a Testomat.io project</p>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    Authorize Testeiya to load your projects and work with your
-                    tests — or just start chatting below.
-                  </p>
-                </div>
-                <Button onClick={() => setSwitchProjectOpen(true)}>
-                  <KeyRoundIcon className="size-4" />
-                  Connect Testomat.io
-                </Button>
+              <Suggestions>
+                {suggestions.map((s) => (
+                  <Suggestion
+                    key={s}
+                    onClick={handleSuggestionClick}
+                    suggestion={s}
+                  />
+                ))}
+              </Suggestions>
+            </div>
+          )}
+          {messages.length === 0 && canConnectTestomatio && !sessionId && project.restoring && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <Spinner className="size-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Restoring your last project…
+              </p>
+            </div>
+          )}
+          {messages.length === 0 && canConnectTestomatio && !sessionId && !project.restoring && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <KeyRoundIcon className="size-5 text-muted-foreground" />
               </div>
-            )
+              <div className="space-y-1">
+                <p className="font-medium">Connect a Testomat.io project</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Authorize Testeiya to load your projects and work with your
+                  tests — or just start chatting below.
+                </p>
+              </div>
+              <Button onClick={() => panel.openSection("project")}>
+                <KeyRoundIcon className="size-4" />
+                Connect Testomat.io
+              </Button>
+            </div>
           )}
           {messages.map((message) => (
             <Message
-              className={message.role === "user" ? "max-w-[85%]" : "max-w-full"}
+              className="max-w-[85%]"
               from={message.role}
               key={message.id}
             >
               {/* `/<skill>` command banner — shows which skill drove this reply. */}
               {message.skill && (
-                <div className="mb-2 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs">
-                  <SparklesIcon className="size-3.5 shrink-0 text-primary" />
-                  <span className="font-medium text-primary">
-                    Using skill: {message.skill.name}
-                  </span>
-                  {message.skill.description && (
-                    <span className="truncate text-muted-foreground">
-                      — {message.skill.description}
-                    </span>
-                  )}
+                <div className="mb-2 inline-flex max-w-full items-center gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                  <SparklesIcon className="size-4 shrink-0 text-primary" />
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="font-semibold leading-none text-primary">Using skill: {message.skill.name}</span>
+                    {message.skill.description && (
+                      <span className="truncate leading-none text-muted-foreground">{message.skill.description}</span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -973,9 +883,10 @@ const ChatPage = observer(function ChatPage() {
               {/* Tools — rendered in tool-call order so the narrative stays
                   coherent. Routine tools (bash/read/find/…) batch into
                   collapsible groups; rich renders (render_* + MCP auto-
-                  rendered lists) leave a chip here that opens the widget in the
-                  side pane. `ask_question` is rendered separately below the
-                  text. */}
+                  rendered lists) show in-place as collapsed RenderFrames,
+                  with only the LAST one auto-expanded (and only after the
+                  message has finished streaming). `ask_question` is
+                  rendered separately below the text. */}
               {(() => {
                 const tools = message.tools ?? [];
                 const isLastMessage =
@@ -983,18 +894,9 @@ const ChatPage = observer(function ChatPage() {
                 const isStreaming =
                   isLastMessage &&
                   (status === "streaming" || status === "submitted");
-                const segments = segmentTools(
-                  tools,
-                  isStreaming,
-                  message.id === lastTodoMessageId
-                );
+                const segments = segmentTools(tools, isStreaming);
 
-                const renderRoutine = (tool: ToolCall): ReactNode => {
-                  // `_i` is the model's short intent label for the call —
-                  // surface it next to the tool name.
-                  let intent: string | undefined;
-                  if (typeof tool.input._i === "string") intent = tool.input._i;
-                  return (
+                const renderRoutine = (tool: ToolCall): ReactNode => (
                   <div key={tool.toolCallId}>
                     <Tool>
                       <ToolHeader
@@ -1002,7 +904,6 @@ const ChatPage = observer(function ChatPage() {
                         type="dynamic-tool"
                         toolName={tool.toolName}
                         state={tool.state}
-                        description={intent}
                       />
                       <ToolContent>
                         <ToolInput input={tool.input} />
@@ -1020,8 +921,7 @@ const ChatPage = observer(function ChatPage() {
                       </ToolContent>
                     </Tool>
                   </div>
-                  );
-                };
+                );
 
                 // Rich renders live in the widget pane now; the chat keeps a
                 // compact chip at the narrative spot that re-opens that widget.
@@ -1094,17 +994,13 @@ const ChatPage = observer(function ChatPage() {
                   options?: string[];
                 } | undefined;
                 if (!q?.question || !Array.isArray(q.options)) return null;
-                const picked = answeredQuestions[tool.toolCallId] ?? tool.output;
                 return (
                   <AskQuestionRenderer
                     key={tool.toolCallId}
                     question={q.question}
                     options={q.options}
-                    answered={
-                      tool.toolCallId in answeredQuestions ||
-                      tool.state !== "input-available"
-                    }
-                    selected={picked}
+                    answered={tool.state !== "input-available"}
+                    selected={tool.output}
                     onPick={(opt) => answerQuestion(tool.toolCallId, opt)}
                   />
                 );
@@ -1119,33 +1015,15 @@ const ChatPage = observer(function ChatPage() {
                 <Shimmer as="span">Thinking...</Shimmer>
               </div>
             )}
+          </div>
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
       {/* Input area */}
-      <div className="grid shrink-0 gap-3 border-t p-4">
+      <div className={cn("shrink-0 flex justify-center", (messages.length === 0 && canConnectTestomatio && !sessionId && !cwd) && "hidden")}>
+        <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
-
-        {messages.length === 0 && (
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <Suggestions>
-                {suggestions.map((s) => (
-                  <Suggestion
-                    key={s}
-                    onClick={handleSuggestionClick}
-                    suggestion={s}
-                  />
-                ))}
-              </Suggestions>
-            </div>
-            <SkillsMenu
-              onInsert={handleInsertSkill}
-              disabled={status === "streaming" || status === "submitted"}
-            />
-          </div>
-        )}
 
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -1187,8 +1065,13 @@ const ChatPage = observer(function ChatPage() {
           onSubmit={handleSubmit}
           onPaste={handlePaste}
           onAttachClick={() => setAttachOpen(true)}
+          onInsertSkill={handleInsertSkill}
+          skillsDisabled={status === "streaming" || status === "submitted"}
+          modelLabel={model ? model.split("/").slice(1).join("/") || model : providers.label || "Select model"}
+          onModelClick={() => setProvidersOpen(true)}
           mentionFiles={mentionFiles}
         />
+        </div>
       </div>
         </div>
         )}
@@ -1204,6 +1087,15 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+function flattenTree(nodes: TreeNode[]): MentionItem[] {
+  const out: MentionItem[] = [];
+  for (const node of nodes) {
+    out.push({ name: node.name, path: node.path, kind: node.kind });
+    if (node.children) out.push(...flattenTree(node.children));
+  }
+  return out;
 }
 
 interface PendingAttachment {
@@ -1226,14 +1118,30 @@ interface ChatInputProps {
   ) => void | Promise<void>;
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   onAttachClick: () => void;
+  onInsertSkill: (name: string) => void;
+  skillsDisabled: boolean;
+  modelLabel: string;
+  onModelClick: () => void;
   mentionFiles: MentionItem[];
 }
 
-function flattenTree(nodes: TreeNode[]): MentionItem[] {
-  const out: MentionItem[] = [];
-  for (const node of nodes) {
-    out.push({ name: node.name, path: node.path, kind: node.kind });
-    if (node.children) out.push(...flattenTree(node.children));
-  }
-  return out;
+interface VoiceRecognitionEvent {
+  results: { [index: number]: { [index: number]: { transcript: string } } };
+}
+
+interface VoiceRecognition {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: VoiceRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface VoiceWindow {
+  SpeechRecognition?: new () => VoiceRecognition;
+  webkitSpeechRecognition?: new () => VoiceRecognition;
 }

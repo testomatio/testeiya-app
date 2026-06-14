@@ -138,6 +138,17 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - `os.tmpdir()/testeiya-<uuid>/` — ephemeral multi-project `/api/agent/start` workspace (per-`<slug>/` subdirs). Deleted when the session expires.
 - The project config dir name (`.testeiya`) and `manual-tests`/`testeiya.json` are centralized in `testeiya/src/project-dir.ts` — the SDK reads MCP/skills/rules from `.testeiya` (see the monkey-patch in `session-factory.ts`), so anything that *writes* MCP config must use the same dir.
 
+## Icons
+
+All icons use **Material Symbols Rounded** (weight 300, fill 0 — outline style). The font is loaded globally in `app/globals.css`.
+
+**Rules:**
+- **Never import from `lucide-react` directly** — import everything from `@/lib/icons`.
+- For system/UI icons (chevrons, close, search, add, settings, delete, etc.) use the pre-exported wrappers from `@/lib/icons` (e.g. `ChevronDownIcon`, `XIcon`, `PlusIcon`). These render Material Symbols automatically.
+- For one-off Material icons not yet in `@/lib/icons`, use the `Icon` primitive: `import { Icon } from "@/lib/icons"` → `<Icon name="arrow_upward" className="size-4" />`.
+- Semantic/status icons (tool states, test tree, AI reasoning, etc.) are kept as Lucide SVGs in `@/lib/icons` — do not replace them with Material.
+- Size via Tailwind: `size-3`, `size-3.5`, `size-4`, `size-5`, `size-6` — the CSS in `globals.css` maps these to `font-size` for Material Symbols.
+
 ## Branding / design system
 
 The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark themes. It's wired through the theme variables so it propagates to all shadcn components — don't hardcode colors.
@@ -146,6 +157,31 @@ The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark the
 - **Palette:** the `:root` / `.dark` blocks in `app/globals.css` map shadcn tokens to the brand hex — `--primary` = indigo-500 `#6366f1`, neutral surfaces (`#ffffff`/`#fafafa`/`#f5f5f5` light, `#0a0a0a`/`#171717`/`#262626` dark), neutral borders/text. Only `--destructive` (red) and the `--status-*`/`--run-*`/`--type-*` vars stay non-brand (functional status indicators). No `gray`/`zinc`/`slate`/`stone`; no hues other than indigo for accents.
 - **Headings:** compact scale in `@layer base` — H1 `text-2xl` (24px) → H6 `text-sm` (14px, the indigo uppercase "eyebrow"). Element defaults only; explicit `text-*` utilities still win.
 - To restyle, edit the variables/`@layer base` in `globals.css` — components inherit automatically.
+
+## Tooltips
+
+`TooltipProvider` is mounted globally in `app/layout.tsx` — no need to add it per-component.
+
+**Always wrap with `<Tooltip>` when adding:**
+- Icon-only buttons (no visible text label) — toolbars, section headers, inline row actions.
+- Buttons whose label is hidden at small viewports (e.g. `hidden sm:inline` text).
+- Status indicators or badges that need extra context on hover.
+
+**Pattern** (Base UI via `@/components/ui/tooltip`):
+```tsx
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+<Tooltip>
+  <TooltipTrigger render={<Button aria-label="Refresh" ...><RefreshIcon /></Button>} />
+  <TooltipContent><p>Refresh</p></TooltipContent>
+</Tooltip>
+```
+
+- Use `render=` prop on `TooltipTrigger` — do **not** nest a `<TooltipTrigger>` wrapper around an existing element.
+- Keep tooltip text short: action verb + object ("Refresh connections", "Copy code", "Push to Testomat.io").
+- For dynamic labels (e.g. toggle state), mirror the same logic in `aria-label` and tooltip text.
+- Use `side="right"` for buttons in the left icon strip; default (`"top"`) everywhere else.
+- Never use the HTML `title=` attribute as a substitute — it renders an unstyled browser tooltip and is not keyboard-accessible.
 
 ## Conventions
 

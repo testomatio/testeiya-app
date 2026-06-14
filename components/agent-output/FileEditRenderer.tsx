@@ -48,7 +48,7 @@ function parseInput(raw: unknown): { path?: string; content?: string } | null {
  * the file into the shared workspace editor panel for persistent access.
  */
 function FileEditRenderer({ json }: Props) {
-  const { sessionId, open, markChanged } = useWorkspaceService();
+  const { sessionId, open, markChanged, triggerRefresh } = useWorkspaceService();
   const parsed = parseInput(json);
   const path = parsed?.path;
   const content = parsed?.content;
@@ -75,6 +75,10 @@ function FileEditRenderer({ json }: Props) {
         path={path}
         initialContent={content}
         onSaved={() => markChanged(path)}
+        onToggleFullScreen={() => {
+          open(path, content, { fullHeight: true });
+          triggerRefresh();
+        }}
       />
     </div>
   );

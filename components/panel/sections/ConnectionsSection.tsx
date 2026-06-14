@@ -6,15 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { MdiIcon } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import {
-  mdiConnection,
-  mdiRefresh,
-  mdiPlus,
-  mdiTrashCanOutline,
-  mdiKeyOutline,
-} from "@mdi/js";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import { McpServersDialog } from "@/components/McpServersDialog";
 import { mcpServiceDisplay } from "@/lib/mcp-services";
@@ -32,6 +27,7 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 export const ConnectionsSection = observer(function ConnectionsSection({
   active,
   onToggle,
+  initializing,
 }: PanelSectionProps) {
   const conn = useConnectionsService();
   const [mcpOpen, setMcpOpen] = useState(false);
@@ -42,42 +38,49 @@ export const ConnectionsSection = observer(function ConnectionsSection({
 
   return (
     <SectionShell
-      icon={<MdiIcon path={mdiConnection} className="size-4" />}
       title="Connections"
       active={active}
       onToggle={onToggle}
       actions={
         <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!conn.sessionId}
-            onClick={() => setMcpOpen(true)}
-            title="Add a service or custom MCP server"
-            aria-label="Add connection"
-          >
-            <MdiIcon path={mdiPlus} className="size-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            disabled={!conn.sessionId}
-            onClick={() => void conn.load()}
-            title="Refresh connections"
-            aria-label="Refresh connections"
-          >
-            <MdiIcon
-              path={mdiRefresh}
-              className={conn.loading ? "size-3.5 animate-spin" : "size-3.5"}
-            />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                disabled={!conn.sessionId}
+                onClick={() => setMcpOpen(true)}
+                aria-label="Add connection"
+              >
+                <Icon name="add" className="size-4" />
+              </Button>
+            } />
+            <TooltipContent><p>Add a service or custom MCP server</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                disabled={!conn.sessionId}
+                onClick={() => void conn.load()}
+                aria-label="Refresh connections"
+              >
+                <Icon
+                  name="refresh"
+                  className={conn.loading ? "size-4 animate-spin" : "size-4"}
+                />
+              </Button>
+            } />
+            <TooltipContent><p>Refresh connections</p></TooltipContent>
+          </Tooltip>
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <ConnectionsBody conn={conn} onManage={() => setMcpOpen(true)} />
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-2">
+        {initializing ? <ConnectionsSkeleton /> : <ConnectionsBody conn={conn} onManage={() => setMcpOpen(true)} />}
       </div>
 
       <McpServersDialog open={mcpOpen} onOpenChange={setMcpOpen} />
@@ -94,28 +97,38 @@ const ConnectionsBody = observer(function ConnectionsBody({
 }) {
   if (!conn.sessionId) {
     return (
-      <p className="text-[11px] text-muted-foreground">
-        Start a session to manage connections.
-      </p>
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="linked_services" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">No active session</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Send a message to start a session, then manage connections here.
+        </p>
+      </div>
     );
   }
   if (conn.loading && conn.servers.length === 0) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <Spinner className="size-3" /> Loading…
+      <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+        <Spinner className="size-3.5 shrink-0" /> Loading connections…
       </div>
     );
   }
   if (conn.servers.length === 0) {
     return (
-      <>
-        <p className="text-[11px] text-muted-foreground">
-          No connections yet. Add a service or a custom MCP server.
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+          <Icon name="add_link" className="size-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-foreground">No connections yet</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Connect a service or custom MCP server to extend the agent.
         </p>
-        <Button size="sm" variant="outline" className="w-full" onClick={onManage}>
-          <MdiIcon path={mdiPlus} className="size-3.5" /> Add connection
+        <Button size="sm" variant="outline" className="mt-1 w-full" onClick={onManage}>
+          <Icon name="add" className="size-3.5" /> Add connection
         </Button>
-      </>
+      </div>
     );
   }
   return (
@@ -187,38 +200,46 @@ function ConnectionRow({
         </div>
       </div>
       {isOauth && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="size-6 p-0 text-muted-foreground hover:text-foreground"
-          disabled={authBusy}
-          onClick={onAuthenticate}
-          title={server.authenticated ? "Re-authenticate" : "Authenticate in browser"}
-          aria-label="Authenticate connection"
-        >
-          {authBusy ? (
-            <Spinner className="size-3" />
-          ) : (
-            <MdiIcon path={mdiKeyOutline} className="size-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-6 p-0 text-muted-foreground hover:text-foreground"
+              disabled={authBusy}
+              onClick={onAuthenticate}
+              aria-label="Authenticate connection"
+            >
+              {authBusy ? (
+                <Spinner className="size-3" />
+              ) : (
+                <Icon name="key" className="size-3.5" />
+              )}
+            </Button>
+          } />
+          <TooltipContent><p>{server.authenticated ? "Re-authenticate" : "Authenticate in browser"}</p></TooltipContent>
+        </Tooltip>
       )}
       {server.removable && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="size-6 p-0 text-muted-foreground hover:text-destructive"
-          disabled={busy}
-          onClick={onRemove}
-          title="Remove connection"
-          aria-label="Remove connection"
-        >
-          {busy ? (
-            <Spinner className="size-3" />
-          ) : (
-            <MdiIcon path={mdiTrashCanOutline} className="size-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-6 p-0 text-muted-foreground hover:text-destructive"
+              disabled={busy}
+              onClick={onRemove}
+              aria-label="Remove connection"
+            >
+              {busy ? (
+                <Spinner className="size-3" />
+              ) : (
+                <Icon name="delete" className="size-3.5" />
+              )}
+            </Button>
+          } />
+          <TooltipContent><p>Remove connection</p></TooltipContent>
+        </Tooltip>
       )}
       <Switch
         checked={server.enabled}
@@ -238,17 +259,33 @@ function StatusDot({
   if (!enabled) {
     return <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" title="Disabled" />;
   }
-  const color =
-    status === "connected"
-      ? "bg-emerald-500"
-      : status === "disconnected"
-        ? "bg-red-500"
-        : "bg-amber-500";
-  const label =
-    status === "connected"
-      ? "Connected"
-      : status === "disconnected"
-        ? "Not connected (failed or pending auth)"
-        : "Pending — start a session to connect";
-  return <span className={cn("size-1.5 shrink-0 rounded-full", color)} title={label} />;
+  const colorMap: Record<McpConnectionStatus, string> = {
+    connected: "bg-run-passed",
+    disconnected: "bg-run-failed",
+    unknown: "bg-run-skipped",
+  };
+  const labelMap: Record<McpConnectionStatus, string> = {
+    connected: "Connected",
+    disconnected: "Not connected (failed or pending auth)",
+    unknown: "Pending — start a session to connect",
+  };
+  return <span className={cn("size-1.5 shrink-0 rounded-full", colorMap[status])} title={labelMap[status]} />;
 }
+
+function ConnectionsSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 py-1">
+      {(["w-3/4", "w-1/2", "w-4/5"] as const).map((w, i) => (
+        <div key={i} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+          <Skeleton className="size-4 shrink-0 rounded-sm" />
+          <div className="flex flex-1 flex-col gap-1.5">
+            <Skeleton className={`h-3 ${w}`} />
+            <Skeleton className="h-2.5 w-2/5" />
+          </div>
+          <Skeleton className="size-6 shrink-0 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
+}
+

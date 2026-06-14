@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { mdiOpenInNew } from "@mdi/js";
-import { RotateCwIcon, SearchIcon, XIcon } from "lucide-react";
+import { Icon, RotateCwIcon, SearchIcon, XIcon } from "@/lib/icons";
 import { useTestomatio } from "@/lib/agent-output/use-testomatio";
 import type { ProjectResource } from "@/lib/services/project-service";
-import { MdiIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { ListPager } from "./list-row";
@@ -163,7 +162,21 @@ export function ResourceWidgetView({
         className
       )}
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 p-0"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <XIcon className="size-4" />
+            </Button>
+          } />
+          <TooltipContent><p>Close</p></TooltipContent>
+        </Tooltip>
         <span className="shrink-0 text-sm font-medium">{label}</span>
         {searchVar && (
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -212,20 +225,10 @@ export function ResourceWidgetView({
               onClick={onOpenExternal}
               title="Open in Testomat.io"
             >
-              <MdiIcon path={mdiOpenInNew} className="size-3.5" />
+              <Icon name="open_in_new" className="size-3.5" />
               <span className="hidden sm:inline">Open in Testomat.io</span>
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            onClick={onClose}
-            title="Close"
-            aria-label="Close"
-          >
-            <XIcon className="size-4" />
-          </Button>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">{body}</div>

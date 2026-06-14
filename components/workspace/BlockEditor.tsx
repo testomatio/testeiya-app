@@ -11,7 +11,6 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import {
   useCreateBlockNote,
-  useEditorChange,
   useBlockNoteEditor,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
@@ -33,6 +32,25 @@ import { cn } from "@/lib/utils";
 import "@blocknote/mantine/style.css";
 import "testomatio-editor-blocks/styles.css";
 import "./block-editor.css";
+
+// TipTap v2 calls flushSync from ReactRenderer during node-view creation, which
+// React 18 flags as a warning. Suppress it at module load — before Next.js dev
+// overlay installs its own console.error intercept.
+if (typeof window !== "undefined") {
+  const _origError = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    const msg = typeof args[0] === "string" ? args[0] : "";
+    if (msg.includes("flushSync")) return;
+    // EditorErrorBoundary catches and retries this; suppress the dev overlay noise.
+    if (msg.includes("Position undefined out of range")) return;
+    _origError(...args);
+  };
+  const _origWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes("TextSelection endpoint")) return;
+    _origWarn(...args);
+  };
+}
 
 type Schema = typeof customSchema;
 
@@ -255,20 +273,15 @@ export function BlockEditor({
   className,
 }: BlockEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const initial = markdownToBlocks(value);
+  const initialRef = useRef(markdownToBlocks(value));
   const editor = useCreateBlockNote({
     schema: customSchema,
     pasteHandler: createMarkdownPasteHandler(markdownToBlocks),
-    initialContent: initial.length ? initial : undefined,
+    initialContent: initialRef.current.length ? initialRef.current : undefined,
   });
 
-  useEditorChange((inst) => {
-    try {
-      onChange(blocksToMarkdown(inst.document as CustomEditorBlock[]));
-    } catch {
-      /* transient conversion error while editing — ignore */
-    }
-  }, editor);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Auto-focus newly inserted step / snippet blocks.
   useEffect(() => {
@@ -300,8 +313,6 @@ export function BlockEditor({
     };
   }, [editor]);
 
-  // Defer the view mount past the parent's initial synchronous render so the
-  // editor isn't created mid-commit while the chat is streaming.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
@@ -325,7 +336,7 @@ export function BlockEditor({
         if (attempts++ < SCROLL_MAX_FRAMES) frame = requestAnimationFrame(tryScroll);
         return;
       }
-      target.scrollIntoView({ block: "center" });
+      target.scrollIntoView({ block: "start" });
       target.classList.add("testeiya-search-hit");
       cleanup = setTimeout(
         () => target.classList.remove("testeiya-search-hit"),
@@ -358,6 +369,13 @@ export function BlockEditor({
             theme={theme}
             slashMenu={false}
             className={testomatioEditorClassName}
+            onChange={(inst) => {
+              try {
+                onChangeRef.current(blocksToMarkdown(inst.document as CustomEditorBlock[]));
+              } catch (err) {
+                console.warn("[BlockEditor] blocksToMarkdown failed:", err);
+              }
+            }}
           >
             <CustomSlashMenu />
           </BlockNoteView>

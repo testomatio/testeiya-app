@@ -193,6 +193,7 @@ export class ProjectService {
       "/api/auth/testomatio/session",
       { projectId, fromSession: this.root.sessionId ?? undefined }
     );
+    this.root.workspace.close();
     this.root.navigate(session.sessionId);
     return session;
   }
@@ -282,16 +283,22 @@ export class ProjectService {
         baseUrl,
         testsCount: null,
         runsCount: null,
+        plansCount: null,
+        requirementsCount: null,
       };
     });
-    const [tests, runs] = await Promise.all([
+    const [tests, runs, plans, requirements] = await Promise.all([
       fetchTotal(sessionId, "tests"),
       fetchTotal(sessionId, "runs"),
+      fetchTotal(sessionId, "plans"),
+      fetchTotal(sessionId, "issues"),
     ]);
     runInAction(() => {
       if (this.currentProject?.id !== project.slug) return;
       this.currentProject.testsCount = tests;
       this.currentProject.runsCount = runs;
+      this.currentProject.plansCount = plans;
+      this.currentProject.requirementsCount = requirements;
     });
   }
 
@@ -326,7 +333,7 @@ export class ProjectService {
 // enough to read it cheaply. Returns null on any failure (count simply hidden).
 async function fetchTotal(
   sessionId: string,
-  resource: "tests" | "runs"
+  resource: "tests" | "runs" | "plans" | "issues"
 ): Promise<number | null> {
   try {
     const data = await getJson<{ meta?: { total?: number } }>(

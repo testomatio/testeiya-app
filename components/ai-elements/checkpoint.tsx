@@ -8,8 +8,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { LucideProps } from "lucide-react";
-import { BookmarkIcon } from "lucide-react";
+import type { LucideProps } from "@/lib/icons";
+import { BookmarkIcon } from "@/lib/icons";
 import type { ComponentProps, HTMLAttributes } from "react";
 
 export type CheckpointProps = HTMLAttributes<HTMLDivElement>;

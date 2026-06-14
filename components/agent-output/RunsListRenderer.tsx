@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
-import { ListChecksIcon } from "lucide-react";
+import { ListChecksIcon } from "@/lib/icons";
 import RunItemRenderer from "./items/RunItemRenderer";
 import ManualRunRenderer from "./items/ManualRunRenderer";
 import { extractList } from "./extract-list";
@@ -17,6 +17,7 @@ import {
   formatDuration,
   LabelsRow,
   MetaPill,
+  OverflowBadgeList,
   RunProgress,
   RunStatusDot,
   StatusTriplet,
@@ -47,9 +48,7 @@ interface McpRun {
   labels?: unknown;
 }
 
-// Frontend's grid: `minmax(0, 8fr) 2fr 2fr` — title column takes 8/12,
-// statuses 2/12, meta 2/12. Column gap 0.5rem matches list-runs.scss.
-const RUNS_GRID = "minmax(0,8fr) 2fr 2fr";
+const RUNS_GRID = "minmax(0,7fr) minmax(0,2fr) minmax(0,3fr) minmax(0,2fr)";
 
 export default function RunsListRenderer({
   json,
@@ -107,6 +106,7 @@ export default function RunsListRenderer({
           <div className="min-w-0 truncate">Run</div>
           <div className="min-w-0 truncate">Status</div>
           <div className="min-w-0 truncate">Finished</div>
+          <div className="min-w-0 truncate">Environment</div>
         </ListRowHeader>
         {items.map((r, idx) => {
           const total =
@@ -162,20 +162,11 @@ export default function RunsListRenderer({
                   <RunProgress percent={percent} automated={r.automated} />
                 )}
               </div>
-              <div className="flex min-w-0 items-center justify-between gap-x-2 text-xs text-muted-foreground">
-                <span className="truncate">
-                  {formatDuration(r.duration) ?? "—"}
-                </span>
-                {env && (
-                  <span className="truncate" title={env}>
-                    {env}
-                  </span>
-                )}
-                {r.assigned_to && (
-                  <span className="truncate" title={r.assigned_to}>
-                    {r.assigned_to}
-                  </span>
-                )}
+              <div className="flex min-w-0 items-center text-xs text-muted-foreground overflow-hidden">
+                <span className="truncate">{r.assigned_to ?? "—"}</span>
+              </div>
+              <div className="min-w-0">
+                {env && <OverflowBadgeList items={env.split(/[,;]+/).map(s => s.trim()).filter(Boolean)} />}
               </div>
             </ListRow>
           );

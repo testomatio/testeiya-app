@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -9,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon } from "@/lib/icons";
 import type { ComponentProps, CSSProperties, HTMLAttributes } from "react";
 import {
   createContext,
@@ -498,15 +499,21 @@ export const CodeBlockCopyButton = ({
   const Icon = isCopied ? CheckIcon : CopyIcon;
 
   return (
-    <Button
-      className={cn("shrink-0", className)}
-      onClick={copyToClipboard}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {children ?? <Icon size={14} />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={
+        <Button
+          className={cn("shrink-0", className)}
+          onClick={copyToClipboard}
+          size="icon"
+          variant="ghost"
+          aria-label={isCopied ? "Copied" : "Copy code"}
+          {...props}
+        >
+          {children ?? <Icon className="size-3.5" />}
+        </Button>
+      } />
+      <TooltipContent><p>{isCopied ? "Copied!" : "Copy code"}</p></TooltipContent>
+    </Tooltip>
   );
 };
 

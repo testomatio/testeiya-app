@@ -1,14 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { observer } from "mobx-react-lite";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
+import { useProjectService } from "@/lib/services/StoreProvider";
+import { useTheme } from "@/lib/theme";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Icon, SunIcon, MoonIcon, ChevronsUpDownIcon, ExternalLinkIcon } from "@/lib/icons";
+import { ProjectGlyph, FolderGlyph } from "@/components/icons";
 import { PANEL_SECTIONS } from "./sections/registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
-const DEFAULT_WIDTH = 280;
+const DEFAULT_WIDTH = 400;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 700;
+const ICON_STRIP_W = 48;
 
 function loadWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
@@ -25,101 +32,242 @@ function saveWidth(w: number): void {
   } catch {}
 }
 
-/**
- * The left sidebar panel: a single-open accordion of "services" (Workspace,
- * Project, Connections, Pipelines) from the registry. The expanded section
- * fills the remaining height; collapsed sections show only their header row.
- * Width is drag-resizable and persisted. Hidden entirely when the panel is
- * closed.
- */
-export function SidebarPanel({ className }: { className?: string }) {
-  const { open, activeSection, setActiveSection } = usePanel();
+export const SidebarPanel = observer(function SidebarPanel({
+  cwd,
+  onSwitchProject,
+  className,
+}: {
+  cwd?: string | null;
+  onSwitchProject?: () => void;
+  className?: string;
+}) {
+  const { open, activeSection, setActiveSection, togglePanel } = usePanel();
+  const project = useProjectService();
+  const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
 
-  // Resize handle — drag to change panel width, persisted in localStorage.
-  // Start at the deterministic default so the first client render matches the
-  // server (reading localStorage in the initializer causes a hydration
-  // mismatch); apply the stored width after mount.
-  const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [initializing, setInitializing] = useState(true);
+  useLayoutEffect(() => {
     setWidth(loadWidth());
-    setHydrated(true);
   }, []);
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const onResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      dragRef.current = { startX: e.clientX, startW: width };
-      const onMove = (ev: MouseEvent) => {
-        if (!dragRef.current) return;
-        const delta = ev.clientX - dragRef.current.startX;
-        const next = Math.min(
-          MAX_WIDTH,
-          Math.max(MIN_WIDTH, dragRef.current.startW + delta)
-        );
-        setWidth(next);
-      };
-      const onUp = () => {
-        if (dragRef.current) {
-          saveWidth(width);
-          dragRef.current = null;
-        }
-        document.body.style.userSelect = "";
-        document.body.style.cursor = "";
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      document.body.style.userSelect = "none";
-      document.body.style.cursor = "col-resize";
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [width]
-  );
-  // Persist final width after each state settle (belt-and-suspenders). Gated on
-  // `hydrated` so the initial default doesn't overwrite the stored value before
-  // it's been read back in.
   useEffect(() => {
-    if (!hydrated) return;
-    saveWidth(width);
-  }, [width, hydrated]);
+    const t = setTimeout(() => setInitializing(false), 800);
+    return () => clearTimeout(t);
+  }, []);
 
-  if (!open) return null;
+  const widthRef = useRef(width);
+  widthRef.current = width;
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startW: widthRef.current };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startW + delta)));
+    };
+    const onUp = () => {
+      saveWidth(widthRef.current);
+      dragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
 
   return (
     <aside
       className={cn(
-        "relative flex shrink-0 flex-col border-r bg-muted/20",
+        "relative flex shrink-0 border-r bg-background",
         className
       )}
-      style={{ width }}
+      style={open ? { width } : { width: ICON_STRIP_W }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        {PANEL_SECTIONS.map((def) => {
-          const isActive = activeSection === def.id;
-          return (
-            <def.Section
-              key={def.id}
-              active={isActive}
-              onToggle={() => setActiveSection(isActive ? null : def.id)}
-            />
-          );
-        })}
-      </div>
+      {/* Icon strip — always visible */}
+      <nav
+        className="flex shrink-0 flex-col items-center border-r"
+        style={{ width: ICON_STRIP_W }}
+        aria-label="Panel sections"
+      >
+        {/* Panel toggle */}
+        <div className="flex h-12 shrink-0 flex-col items-center justify-center w-full px-1 border-b">
+          <Tooltip>
+            <TooltipTrigger render={
+              <button
+                type="button"
+                onClick={togglePanel}
+                aria-label={open ? "Hide panel" : "Show panel"}
+                className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
+              >
+                <Icon name={open ? "dock_to_left" : "side_navigation"} className="size-4" />
+              </button>
+            } />
+            <TooltipContent side="right"><p>{open ? "Hide panel" : "Show panel"}</p></TooltipContent>
+          </Tooltip>
+        </div>
 
-      {/* Drag handle on the right edge — visible stripe on hover. */}
-      <div
-        onMouseDown={onResizeMouseDown}
-        className={cn(
-          "absolute top-0 right-0 h-full w-1 cursor-col-resize",
-          "bg-transparent hover:bg-primary/30 transition-colors",
-          "after:content-[''] after:absolute after:top-0 after:-right-1 after:h-full after:w-2"
-        )}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        title="Drag to resize"
-      />
+        {/* Section icons */}
+        <div className="flex flex-1 flex-col items-center gap-1 w-full px-1 pt-1">
+          {PANEL_SECTIONS.map((def) => {
+            const isActive = open && activeSection === def.id;
+            return (
+              <Tooltip key={def.id}>
+                <TooltipTrigger render={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!open) {
+                        togglePanel();
+                      }
+                      setActiveSection(def.id);
+                    }}
+                    aria-label={def.title}
+                    aria-pressed={isActive}
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-md transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    {def.icon}
+                  </button>
+                } />
+                <TooltipContent side="right"><p>{def.title}</p></TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+
+        {/* Bottom: theme toggle */}
+        <div className="flex flex-col items-center gap-1 w-full px-1 pb-1">
+          {!themeLocked && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                  className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
+                >
+                  {theme === "dark" && <SunIcon className="size-4" />}
+                  {theme !== "dark" && <MoonIcon className="size-4" />}
+                </button>
+              } />
+              <TooltipContent side="right">
+                <p>{theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </nav>
+
+      {/* Content panel — only when open */}
+      {open && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Sidebar header: project info */}
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <span className="font-semibold text-sm shrink-0">Testeiya</span>
+            <div className="flex-1" />
+            {project.currentProject && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <button
+                      type="button"
+                      onClick={onSwitchProject}
+                      aria-label="Switch project"
+                      className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/50"
+                    >
+                      <ProjectGlyph className="size-3 shrink-0 text-primary" />
+                      <span className="truncate font-medium text-foreground">
+                        {project.currentProject.title}
+                      </span>
+                      {project.currentProject.testsCount !== null && (
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          · {project.currentProject.testsCount.toLocaleString()} tests
+                        </span>
+                      )}
+                      <ChevronsUpDownIcon className="size-3 shrink-0 text-muted-foreground" />
+                    </button>
+                  } />
+                  <TooltipContent side="bottom"><p>Switch project</p></TooltipContent>
+                </Tooltip>
+                {project.currentLinks?.project && (
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <button
+                        type="button"
+                        onClick={() => project.openExternal(project.currentLinks!.project)}
+                        aria-label="Open project in Testomat.io"
+                        className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                      >
+                        <ExternalLinkIcon className="size-4" />
+                      </button>
+                    } />
+                    <TooltipContent side="bottom"><p>Open project in Testomat.io</p></TooltipContent>
+                  </Tooltip>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Section content */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {PANEL_SECTIONS.map((def) => {
+              const isActive = activeSection === def.id;
+              return (
+                <def.Section
+                  key={def.id}
+                  active={isActive}
+                  onToggle={() => setActiveSection(isActive ? null : def.id)}
+                  initializing={initializing}
+                />
+              );
+            })}
+          </div>
+
+          {/* Bottom: cwd path → opens settings section */}
+          {cwd && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("settings")}
+                  className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground truncate"
+                >
+                  <FolderGlyph className="size-3 shrink-0" />
+                  <span className="truncate [direction:rtl]">{cwd}</span>
+                </button>
+              } />
+              <TooltipContent side="top">
+                <p className="font-mono text-xs break-all">{cwd}</p>
+                <p className="text-muted-foreground text-xs">Open workspace settings</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
+      {/* Drag handle */}
+      {open && (
+        <div
+          onMouseDown={onResizeMouseDown}
+          className={cn(
+            "absolute top-0 -right-1 h-full w-3 cursor-col-resize z-10",
+            "bg-transparent hover:bg-primary/30 transition-colors",
+          )}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          title="Drag to resize"
+        />
+      )}
     </aside>
   );
-}
+});

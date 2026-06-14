@@ -1,23 +1,9 @@
 "use client";
 
 import type { ComponentType, SVGProps } from "react";
-import {
-  mdiChartBoxOutline,
-  mdiClipboardTextOutline,
-  mdiFileDocumentOutline,
-  mdiPlayCircleOutline,
-  mdiRocketLaunchOutline,
-} from "@mdi/js";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/lib/icons";
 import { FolderGlyph, SuiteGlyph } from "@/components/agent-output/type-icons";
-
-/*
- * Single import surface for the agent's icon system. Brand glyphs (vendored
- * `currentColor` SVGs) live in `type-icons.tsx` and are re-exported here;
- * `MdiIcon` renders a Material Design path for the cases the brand set has no
- * equivalent for. Everything is inline SVG + `currentColor` so it inherits the
- * theme and survives `next export`.
- */
 
 export {
   ManualGlyph,
@@ -61,8 +47,6 @@ export function MdiIcon({
   );
 }
 
-// Brand glyph per render kind (singular + plural). Suites read as folders,
-// tests as brand files — matching the list renderers.
 const KIND_GLYPH: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   suite: FolderGlyph,
   suites: FolderGlyph,
@@ -70,17 +54,16 @@ const KIND_GLYPH: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   tests: SuiteGlyph,
 };
 
-// Material Design fallback per render kind (no brand equivalent).
-const KIND_MDI: Record<string, string> = {
-  plan: mdiClipboardTextOutline,
-  plans: mdiClipboardTextOutline,
-  run: mdiPlayCircleOutline,
-  runs: mdiChartBoxOutline,
-  testrun: mdiRocketLaunchOutline,
-  testruns: mdiRocketLaunchOutline,
+const KIND_SYMBOL: Record<string, string> = {
+  plan: "assignment",
+  plans: "assignment",
+  run: "play_circle",
+  runs: "bar_chart",
+  testrun: "rocket_launch",
+  testruns: "rocket_launch",
 };
 
-/** Maps a `render_*` kind to its brand glyph, falling back to an MDI icon. */
+/** Maps a `render_*` kind to its brand glyph, falling back to a Material Symbol. */
 export function RenderKindIcon({
   kind,
   className,
@@ -91,5 +74,5 @@ export function RenderKindIcon({
   const k = (kind ?? "").toLowerCase();
   const Glyph = KIND_GLYPH[k];
   if (Glyph) return <Glyph className={cn("size-4", className)} />;
-  return <MdiIcon path={KIND_MDI[k] ?? mdiFileDocumentOutline} className={className} />;
+  return <Icon name={KIND_SYMBOL[k] ?? "draft"} className={cn("size-4", className)} />;
 }

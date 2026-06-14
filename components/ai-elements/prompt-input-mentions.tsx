@@ -161,7 +161,7 @@ function filterItems(items: MentionItem[], query: string): MentionItem[] {
 export interface MentionItem {
   name: string;
   path: string;
-  kind: "file" | "folder";
+  kind: "file" | "folder" | "test";
 }
 
 interface MentionState {

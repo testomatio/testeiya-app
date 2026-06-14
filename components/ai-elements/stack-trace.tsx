@@ -13,7 +13,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import type { ComponentProps } from "react";
 import {
   createContext,

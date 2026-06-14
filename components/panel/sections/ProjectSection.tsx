@@ -3,15 +3,9 @@
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
-import { MdiIcon, ProjectGlyph } from "@/components/icons";
-import {
-  mdiOpenInNew,
-  mdiFlaskOutline,
-  mdiPlayCircleOutline,
-  mdiClipboardTextOutline,
-  mdiTextBoxCheckOutline,
-  mdiRefresh,
-} from "@mdi/js";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Icon } from "@/lib/icons";
+import { ProjectGlyph } from "@/components/icons";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { useProjectService } from "@/lib/services/StoreProvider";
@@ -25,6 +19,7 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 export const ProjectSection = observer(function ProjectSection({
   active,
   onToggle,
+  initializing,
 }: PanelSectionProps) {
   const project = useProjectService();
   const [authOpen, setAuthOpen] = useState(false);
@@ -33,13 +28,14 @@ export const ProjectSection = observer(function ProjectSection({
 
   return (
     <SectionShell
-      icon={<ProjectGlyph className="size-4" />}
       title="Project"
       active={active}
       onToggle={onToggle}
     >
-      {current && links ? (
-        <div className="space-y-3 p-3">
+      {initializing ? (
+        <ProjectSkeleton />
+      ) : current && links ? (
+        <div className="space-y-3 px-4 py-3">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -49,8 +45,8 @@ export const ProjectSection = observer(function ProjectSection({
             >
               <ProjectGlyph className="size-4 shrink-0 text-primary" />
               <span className="truncate text-sm font-medium">{current.title}</span>
-              <MdiIcon
-                path={mdiOpenInNew}
+              <Icon
+                name="open_in_new"
                 className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
               />
             </button>
@@ -62,19 +58,19 @@ export const ProjectSection = observer(function ProjectSection({
               title="Refresh"
               aria-label="Refresh"
             >
-              <MdiIcon path={mdiRefresh} className="size-4" />
+              <Icon name="refresh" className="size-4" />
             </Button>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <StatTile
-              icon={mdiFlaskOutline}
+              icon="science"
               label="Tests"
               count={current.testsCount}
               onClick={() => project.showResource("tests")}
             />
             <StatTile
-              icon={mdiPlayCircleOutline}
+              icon="play_circle"
               label="Runs"
               count={current.runsCount}
               onClick={() => project.showResource("runs")}
@@ -82,14 +78,16 @@ export const ProjectSection = observer(function ProjectSection({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <LinkTile
-              icon={mdiClipboardTextOutline}
+            <StatTile
+              icon="assignment"
               label="Plans"
+              count={current.plansCount}
               onClick={() => project.showResource("plans")}
             />
-            <LinkTile
-              icon={mdiTextBoxCheckOutline}
+            <StatTile
+              icon="rule"
               label="Requirements"
+              count={current.requirementsCount}
               onClick={() => project.showResource("requirements")}
             />
           </div>
@@ -104,16 +102,22 @@ export const ProjectSection = observer(function ProjectSection({
           </Button>
         </div>
       ) : (
-        <div className="space-y-3 p-3">
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+            <Icon name="folder_managed" className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-foreground">
+            {project.connected ? "No project selected" : "Not connected"}
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {project.connected
               ? "Select a Testomat.io project to load its tests into the workspace."
-              : "Connect a Testomat.io project to load its tests into the workspace."}
+              : "Connect your Testomat.io account to load tests into the workspace."}
           </p>
           <Button
             size="sm"
             variant="outline"
-            className="w-full"
+            className="mt-1 w-full"
             onClick={() => setAuthOpen(true)}
           >
             {project.connected ? "Open a project" : "Connect a project"}
@@ -125,6 +129,34 @@ export const ProjectSection = observer(function ProjectSection({
     </SectionShell>
   );
 });
+
+function ProjectSkeleton() {
+  return (
+    <div className="space-y-3 px-4 py-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-6 w-8" />
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-6 w-6" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-6 w-6" />
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-6 w-4" />
+        </div>
+      </div>
+      <Skeleton className="h-8 w-full" />
+    </div>
+  );
+}
 
 function StatTile({
   icon,
@@ -145,10 +177,10 @@ function StatTile({
       className="group flex flex-col gap-1 rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
     >
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <MdiIcon path={icon} className="size-3.5" />
+        <Icon name={icon} className="size-3.5" />
         {label}
-        <MdiIcon
-          path={mdiOpenInNew}
+        <Icon
+          name="open_in_new"
           className="ml-auto size-3 opacity-0 transition-opacity group-hover:opacity-100"
         />
       </span>
@@ -175,10 +207,10 @@ function LinkTile({
       title={`Open ${label.toLowerCase()} in Testomat.io`}
       className="group flex items-center gap-1.5 rounded-md border bg-muted/20 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 hover:text-foreground"
     >
-      <MdiIcon path={icon} className="size-3.5 shrink-0" />
+      <Icon name={icon} className="size-3.5 shrink-0" />
       <span className="truncate">{label}</span>
-      <MdiIcon
-        path={mdiOpenInNew}
+      <Icon
+        name="open_in_new"
         className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
       />
     </button>

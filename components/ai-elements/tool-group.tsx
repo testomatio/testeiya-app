@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDownIcon, WrenchIcon } from "lucide-react";
+import { ChevronDownIcon, WrenchIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 export type ToolGroupProps = {
@@ -28,7 +28,7 @@ export function ToolGroup({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={cn("not-prose w-full rounded-md border", className)}>
+    <div className={cn("not-prose mb-4 w-full rounded-md border bg-background", className)}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

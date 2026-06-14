@@ -8,6 +8,7 @@ import {
   mdiPencilOutline,
 } from "@mdi/js";
 import { ChevronDownIcon, Trash, Trash2Icon } from "lucide-react";
+import { BrainIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { MdiIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,14 @@ import { useSessionsService } from "@/lib/services/StoreProvider";
 export const ChatPanelHeader = observer(function ChatPanelHeader({
   onClear,
   canClear,
+  onOpenMemory,
 }: {
   /** Clear the current chat (wired to the live agent socket by the page). */
   onClear?: () => void;
   /** Whether there is anything to clear (hides the button on an empty chat). */
   canClear?: boolean;
+  /** Open the project-memory dialog. */
+  onOpenMemory?: () => void;
 }) {
   const sessions = useSessionsService();
   const [editing, setEditing] = useState(false);
@@ -173,6 +177,18 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
       >
         <MdiIcon path={mdiChatPlusOutline} className="size-3.5" />
       </Button>
+      {onOpenMemory && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 w-6 shrink-0 p-0"
+          onClick={onOpenMemory}
+          title="Project memory"
+          aria-label="Project memory"
+        >
+          <BrainIcon className="size-3.5" />
+        </Button>
+      )}
       {canClear && onClear && (
         <Button
           size="sm"

@@ -11,6 +11,23 @@
  * class/attribute give these higher specificity than BlockNote's defaults.
  */
 
+.dark .testeiya-block-editor {
+  background: var(--color-neutral-800);
+}
+
+.light .testeiya-block-editor {
+  background: var(--color-neutral-50);
+}
+
+.testeiya-block-editor .bn-editor {
+  max-width: 960px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 60px !important;
+  padding-right: 60px !important;
+  background: transparent !important;
+}
+
 .testeiya-block-editor [data-content-type="heading"],
 .testeiya-block-editor [data-content-type="heading"][data-level="1"] {
   --level: 1.375em; /* 22px */
