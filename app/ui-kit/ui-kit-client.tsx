@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 import {
   SunIcon, MoonIcon, CheckIcon, InfoIcon, AlertTriangleIcon, XCircleIcon,
   UserIcon, ZapIcon, StarIcon, SearchIcon, MailIcon, LockIcon, PhoneIcon,
@@ -79,7 +80,7 @@ function Section({ title, id, children }: { title: string; id?: string; children
 
 function Row({ children, wrap = true }: { children: React.ReactNode; wrap?: boolean }) {
   return (
-    <div className={`flex items-center gap-3 ${wrap ? "flex-wrap" : ""}`}>
+    <div className={cn("flex items-center gap-3", wrap && "flex-wrap")}>
       {children}
     </div>
   )
@@ -175,7 +176,8 @@ export function UIKit() {
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Toggle theme"
           >
-            {theme === "dark" ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
+            {theme === "dark" && <SunIcon className="size-4" />}
+            {theme !== "dark" && <MoonIcon className="size-4" />}
           </button>
         </div>
 
@@ -550,11 +552,11 @@ export function UIKit() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <Switch checked={switchA} onCheckedChange={setSwitchA} />
-                  <span className="text-sm">{switchA ? "On" : "Off"} — default size</span>
+                  <span className="text-sm">{switchA && "On"}{!switchA && "Off"} — default size</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Switch size="sm" checked={switchB} onCheckedChange={setSwitchB} />
-                  <span className="text-sm">{switchB ? "On" : "Off"} — small size</span>
+                  <span className="text-sm">{switchB && "On"}{!switchB && "Off"} — small size</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Switch disabled />
@@ -915,11 +917,11 @@ export function UIKit() {
                         <TableCell className="font-medium">{row.name}</TableCell>
                         <TableCell className="text-muted-foreground">{row.type}</TableCell>
                         <TableCell>
-                          <span className={
-                            row.status === "Passed" ? "text-run-passed" :
-                            row.status === "Failed" ? "text-run-failed" :
-                            "text-run-skipped"
-                          }>
+                          <span className={{
+                            Passed: "text-run-passed",
+                            Failed: "text-run-failed",
+                            Skipped: "text-run-skipped",
+                          }[row.status] ?? "text-muted-foreground"}>
                             {row.status}
                           </span>
                         </TableCell>
@@ -949,7 +951,7 @@ export function UIKit() {
                   <Row>
                     <Avatar><AvatarImage src="/broken.png" alt="Broken" /><AvatarFallback>FB</AvatarFallback></Avatar>
                     <Avatar><AvatarFallback className="bg-primary text-primary-foreground">TM</AvatarFallback></Avatar>
-                    <Avatar><AvatarFallback className="bg-chart-2 text-white">AI</AvatarFallback></Avatar>
+                    <Avatar><AvatarFallback className="bg-chart-2 text-primary-foreground">AI</AvatarFallback></Avatar>
                   </Row>
                 </div>
               </Sub>

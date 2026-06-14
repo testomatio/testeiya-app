@@ -47,7 +47,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Icon, Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
+import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
@@ -84,10 +84,6 @@ function isRenderish(tool: ToolCall): boolean {
   return !isAskQuestion(tool) && richViewMode(tool.toolName) !== null;
 }
 
-/** Routine tool: anything that isn't a render and isn't the question. */
-function isRoutineTool(tool: ToolCall): boolean {
-  return !isAskQuestion(tool) && !isRenderish(tool);
-}
 
 type Segment =
   | { kind: "routine-solo"; tool: ToolCall }
@@ -261,7 +257,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     }
 
     const recognition = new Ctor();
-    recognition.lang = "ru-RU";
+    recognition.lang = navigator.language;
     recognition.interimResults = false;
     recognition.continuous = false;
 
@@ -570,7 +566,7 @@ const ChatPage = observer(function ChatPage() {
       {/* Below-header region: the multi-section sidebar panel + chat column. */}
       <div className="flex flex-1 min-h-0">
         <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
-        <div className={`relative flex min-w-0 flex-1 flex-col bg-muted/30${messages.length === 0 ? " justify-center" : ""}`}>
+        <div className={cn("relative flex min-w-0 flex-1 flex-col bg-muted/30", messages.length === 0 && "justify-center")}>
           {/* Project resource widget (tests/runs/plans) — fills the main area,
               fed live from the Testomat.io v2 proxy, using the same widgets the
               agent renders in chat. */}
@@ -629,7 +625,7 @@ const ChatPage = observer(function ChatPage() {
               {mcpLoaded && mcpTools.length > 0 && (
                 <Tooltip>
                   <TooltipTrigger render={
-                    <span className="text-emerald-500">MCP:{mcpTools.length}</span>
+                    <span className="text-run-passed">MCP:{mcpTools.length}</span>
                   } />
                   <TooltipContent side="bottom" className="max-w-xs">
                     <p className="font-semibold mb-1">{mcpTools.length} tools across {Object.keys(mcpTools.reduce<Record<string, number>>((acc, t) => { const server = t.split("_").slice(0, 3).join("_"); acc[server] = (acc[server] ?? 0) + 1; return acc; }, {})).length} servers</p>
@@ -647,7 +643,7 @@ const ChatPage = observer(function ChatPage() {
               {mcpLoaded && mcpTools.length === 0 && (
                 <Tooltip>
                   <TooltipTrigger render={
-                    <span className="text-red-500">MCP:failed</span>
+                    <span className="text-run-failed">MCP:failed</span>
                   } />
                   <TooltipContent side="bottom">
                     <p className="font-semibold">MCP failed to load</p>
@@ -658,7 +654,7 @@ const ChatPage = observer(function ChatPage() {
               {!mcpLoaded && expectedMcpServers.length > 0 && (
                 <Tooltip>
                   <TooltipTrigger render={
-                    <span className="text-amber-500">MCP:pending ({expectedMcpServers.length})</span>
+                    <span className="text-run-skipped">MCP:pending ({expectedMcpServers.length})</span>
                   } />
                   <TooltipContent side="bottom" className="max-w-xs">
                     <p className="font-semibold mb-1">Pending MCP servers: {expectedMcpServers.length}</p>
@@ -731,32 +727,31 @@ const ChatPage = observer(function ChatPage() {
               </Suggestions>
             </div>
           )}
-          {messages.length === 0 && canConnectTestomatio && !sessionId && (
-            project.restoring ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                <Spinner className="size-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Restoring your last project…
+          {messages.length === 0 && canConnectTestomatio && !sessionId && project.restoring && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <Spinner className="size-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Restoring your last project…
+              </p>
+            </div>
+          )}
+          {messages.length === 0 && canConnectTestomatio && !sessionId && !project.restoring && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <KeyRoundIcon className="size-5 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium">Connect a Testomat.io project</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Authorize Testeiya to load your projects and work with your
+                  tests — or just start chatting below.
                 </p>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                  <KeyRoundIcon className="size-5 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium">Connect a Testomat.io project</p>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    Authorize Testeiya to load your projects and work with your
-                    tests — or just start chatting below.
-                  </p>
-                </div>
-                <Button onClick={() => panel.openSection("project")}>
-                  <KeyRoundIcon className="size-4" />
-                  Connect Testomat.io
-                </Button>
-              </div>
-            )
+              <Button onClick={() => panel.openSection("project")}>
+                <KeyRoundIcon className="size-4" />
+                Connect Testomat.io
+              </Button>
+            </div>
           )}
           {messages.map((message) => (
             <Message
@@ -939,21 +934,9 @@ const ChatPage = observer(function ChatPage() {
       </Conversation>
 
       {/* Input area */}
-      <div className={hideChat || (messages.length === 0 && canConnectTestomatio && !sessionId && !cwd) ? "hidden shrink-0" : "shrink-0 flex justify-center"}>
+      <div className={cn("shrink-0 flex justify-center", (hideChat || (messages.length === 0 && canConnectTestomatio && !sessionId && !cwd)) && "hidden")}>
         <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
-
-        {false && (
-          <Suggestions>
-            {suggestions.map((s) => (
-              <Suggestion
-                key={s}
-                onClick={handleSuggestionClick}
-                suggestion={s}
-              />
-            ))}
-          </Suggestions>
-        )}
 
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">

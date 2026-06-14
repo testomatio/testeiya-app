@@ -7,7 +7,6 @@ import { usePanel } from "@/lib/panel/PanelContext";
 import { useProjectService } from "@/lib/services/StoreProvider";
 import { useTheme } from "@/lib/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
 import { Icon, SunIcon, MoonIcon, ChevronsUpDownIcon, ExternalLinkIcon } from "@/lib/icons";
 import { ProjectGlyph, FolderGlyph } from "@/components/icons";
 import { PANEL_SECTIONS } from "./sections/registry";
@@ -156,11 +155,8 @@ export const SidebarPanel = observer(function SidebarPanel({
                   aria-label="Toggle theme"
                   className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
                 >
-                  {theme === "dark" ? (
-                    <SunIcon className="size-4" />
-                  ) : (
-                    <MoonIcon className="size-4" />
-                  )}
+                  {theme === "dark" && <SunIcon className="size-4" />}
+                  {theme !== "dark" && <MoonIcon className="size-4" />}
                 </button>
               } />
               <TooltipContent side="right">
@@ -238,15 +234,22 @@ export const SidebarPanel = observer(function SidebarPanel({
 
           {/* Bottom: cwd path → opens settings section */}
           {cwd && (
-            <button
-              type="button"
-              onClick={() => setActiveSection("settings")}
-              title={`${cwd}\nClick to open workspace settings`}
-              className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground truncate"
-            >
-              <FolderGlyph className="size-3 shrink-0" />
-              <span className="truncate [direction:rtl]">{cwd}</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("settings")}
+                  className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground truncate"
+                >
+                  <FolderGlyph className="size-3 shrink-0" />
+                  <span className="truncate [direction:rtl]">{cwd}</span>
+                </button>
+              } />
+              <TooltipContent side="top">
+                <p className="font-mono text-xs break-all">{cwd}</p>
+                <p className="text-muted-foreground text-xs">Open workspace settings</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       )}

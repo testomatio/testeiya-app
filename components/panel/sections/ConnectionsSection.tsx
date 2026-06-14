@@ -260,19 +260,17 @@ function StatusDot({
   if (!enabled) {
     return <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" title="Disabled" />;
   }
-  const color =
-    status === "connected"
-      ? "bg-emerald-500"
-      : status === "disconnected"
-        ? "bg-red-500"
-        : "bg-amber-500";
-  const label =
-    status === "connected"
-      ? "Connected"
-      : status === "disconnected"
-        ? "Not connected (failed or pending auth)"
-        : "Pending — start a session to connect";
-  return <span className={cn("size-1.5 shrink-0 rounded-full", color)} title={label} />;
+  const colorMap: Record<McpConnectionStatus, string> = {
+    connected: "bg-run-passed",
+    disconnected: "bg-run-failed",
+    unknown: "bg-run-skipped",
+  };
+  const labelMap: Record<McpConnectionStatus, string> = {
+    connected: "Connected",
+    disconnected: "Not connected (failed or pending auth)",
+    unknown: "Pending — start a session to connect",
+  };
+  return <span className={cn("size-1.5 shrink-0 rounded-full", colorMap[status])} title={labelMap[status]} />;
 }
 
 function ConnectionsSkeleton() {
