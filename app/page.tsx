@@ -623,7 +623,7 @@ const ChatPage = observer(function ChatPage() {
           )}
 
       {/* MCP status + Clear — shown only when there's an active chat */}
-      <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", messages.length === 0 && "hidden")}>
+      <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", (messages.length === 0 || workspace.openFile || openResource) && "hidden")}>
           {isDev && cwd && (
             <span className="flex items-center text-[11px] font-mono">
               {mcpLoaded && mcpTools.length > 0 && (
