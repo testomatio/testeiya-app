@@ -11,7 +11,7 @@ export const Suggestions = ({
   className,
   children,
 }: SuggestionsProps) => (
-  <div className={cn("flex flex-wrap-reverse justify-center gap-2 px-0.5 py-0.5", className)}>
+  <div className={cn("flex flex-wrap justify-center gap-2 px-0.5 py-0.5", className)}>
     {children}
   </div>
 );

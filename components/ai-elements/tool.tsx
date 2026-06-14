@@ -49,7 +49,7 @@ export const Tool = ({
 
   return (
     <Collapsible
-      className={cn("group not-prose mb-4 w-full rounded-md border", className)}
+      className={cn("group not-prose mb-4 w-full rounded-md border bg-background", className)}
       open={effectiveOpen}
       onOpenChange={(v, details) => {
         setUserOverride(v);
@@ -289,7 +289,7 @@ function deriveHeader(
     const file = payload.path ? payload.path.split("/").pop() ?? payload.path : "file";
     return {
       icon: (
-        <Icon name={toolName === "edit" ? "edit_document" : "edit"} />
+        <Icon name={toolName === "edit" ? "edit_document" : "edit"} className="size-4" />
       ),
       title: `${toolName === "edit" ? "Edited" : "Wrote"}: ${file}`,
       tag: toolName,

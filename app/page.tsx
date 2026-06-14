@@ -180,6 +180,7 @@ const suggestions = [
   "Find flaky or redundant tests",
   "Suggest new test cases for this project",
   "Review test quality and best practices",
+  "Map requirements to existing test cases",
 ];
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -557,7 +558,7 @@ const ChatPage = observer(function ChatPage() {
       {/* Below-header region: the multi-section sidebar panel + chat column. */}
       <div className="flex flex-1 min-h-0">
         <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
-        <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
+        <div className={`relative flex min-w-0 flex-1 flex-col bg-muted/30${messages.length === 0 ? " justify-center" : ""}`}>
           {/* Project resource widget (tests/runs/plans) — fills the main area,
               fed live from the Testomat.io v2 proxy, using the same widgets the
               agent renders in chat. */}
@@ -614,31 +615,64 @@ const ChatPage = observer(function ChatPage() {
 
       {/* Chat area — hidden while a file or resource widget is open full-height
           (kept mounted so state is preserved when the overlay is closed). */}
-      <Conversation className={hideChat ? "hidden" : "flex-1"}>
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
           {isDev && cwd && (
             <span className="flex items-center text-[11px] font-mono">
               {mcpLoaded && mcpTools.length > 0 && (
-                <span
-                  className="text-emerald-500"
-                  title={`MCP tools: ${mcpTools.length}\n${mcpTools.join(", ")}`}
-                >
-                  MCP:{mcpTools.length}
-                </span>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-emerald-500">MCP:{mcpTools.length}</span>
+                  } />
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-semibold mb-1">{mcpTools.length} tools across {Object.keys(mcpTools.reduce<Record<string, number>>((acc, t) => { const server = t.split("_").slice(0, 3).join("_"); acc[server] = (acc[server] ?? 0) + 1; return acc; }, {})).length} servers</p>
+                    <ul className="space-y-0.5">
+                      {Object.entries(mcpTools.reduce<Record<string, number>>((acc, t) => { const server = t.split("_").slice(0, 3).join("_"); acc[server] = (acc[server] ?? 0) + 1; return acc; }, {})).map(([server, count]) => (
+                        <li key={server} className="flex items-center justify-between gap-4 font-mono text-xs">
+                          <span className="text-muted-foreground">{server}</span>
+                          <span className="text-foreground">{count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {mcpLoaded && mcpTools.length === 0 && (
-                <span className="text-red-500">MCP:failed</span>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-red-500">MCP:failed</span>
+                  } />
+                  <TooltipContent side="bottom">
+                    <p className="font-semibold">MCP failed to load</p>
+                    <p className="text-xs text-muted-foreground">No tools available. Check MCP server config.</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {!mcpLoaded && expectedMcpServers.length > 0 && (
-                <span
-                  className="text-amber-500"
-                  title={`MCP servers pending (connect on first prompt): ${expectedMcpServers.join(", ")}`}
-                >
-                  MCP:pending ({expectedMcpServers.length})
-                </span>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-amber-500">MCP:pending ({expectedMcpServers.length})</span>
+                  } />
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-semibold mb-1">Pending MCP servers: {expectedMcpServers.length}</p>
+                    <p className="text-xs text-muted-foreground mb-1">Will connect on first prompt</p>
+                    <ul className="space-y-0.5">
+                      {expectedMcpServers.map((s) => (
+                        <li key={s} className="font-mono text-xs text-muted-foreground">{s}</li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {!mcpLoaded && expectedMcpServers.length === 0 && (
-                <span className="text-muted-foreground">MCP:—</span>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <span className="text-muted-foreground">MCP:—</span>
+                  } />
+                  <TooltipContent side="bottom">
+                    <p className="font-semibold">MCP not configured</p>
+                    <p className="text-xs text-muted-foreground">No MCP servers found for this workspace.</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </span>
           )}
@@ -648,7 +682,7 @@ const ChatPage = observer(function ChatPage() {
                 <Button
                   onClick={handleClear}
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   className="gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
                   aria-label="Clear chat"
                 >
@@ -660,8 +694,30 @@ const ChatPage = observer(function ChatPage() {
             </Tooltip>
           )}
         </div>
+      <Conversation className={hideChat ? "hidden" : messages.length === 0 ? "flex-none" : "flex-1"}>
         <ConversationContent className="items-center">
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
+              <div className="space-y-3">
+                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
+                  Test smarter, ship faster
+                </h1>
+                <p className="text-base text-muted-foreground max-w-md mx-auto">
+                  Ask anything about your tests — coverage gaps, flaky cases, quality reviews, or new test ideas.
+                </p>
+              </div>
+              <Suggestions>
+                {suggestions.map((s) => (
+                  <Suggestion
+                    key={s}
+                    onClick={handleSuggestionClick}
+                    suggestion={s}
+                  />
+                ))}
+              </Suggestions>
+            </div>
+          )}
           {messages.length === 0 && canConnectTestomatio && !sessionId && (
             project.restoring ? (
               <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
@@ -874,7 +930,7 @@ const ChatPage = observer(function ChatPage() {
         <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
-        {messages.length === 0 && (
+        {false && (
           <Suggestions>
             {suggestions.map((s) => (
               <Suggestion
@@ -928,7 +984,7 @@ const ChatPage = observer(function ChatPage() {
           onAttachClick={() => setAttachOpen(true)}
           onInsertSkill={handleInsertSkill}
           skillsDisabled={status === "streaming" || status === "submitted"}
-          modelLabel={(model || providers.label || "Select model").split("/").pop() ?? "Select model"}
+          modelLabel={model ? model.split("/").slice(1).join("/") || model : providers.label || "Select model"}
           onModelClick={() => setProvidersOpen(true)}
         />
         </div>
