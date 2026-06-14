@@ -171,7 +171,7 @@ export const SidebarPanel = observer(function SidebarPanel({
       {open && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Sidebar header: project info */}
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <span className="font-semibold text-sm shrink-0">Testeiya</span>
             <div className="flex-1" />
             {project.currentProject && (
