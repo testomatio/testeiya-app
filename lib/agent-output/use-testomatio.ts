@@ -35,7 +35,10 @@ export interface TestomatioMeta {
   total_pages?: number;
 }
 
-const cache = new Map<string, { data: unknown; meta: TestomatioMeta | null }>();
+const cache = new Map<
+  string,
+  { data: unknown; meta: TestomatioMeta | null; tick: number }
+>();
 
 function buildUrl(
   resource: string,
@@ -84,6 +87,15 @@ export function useTestomatio<T>(
     () => reaction(() => store.sessionId, setSessionId, { fireImmediately: true }),
     [store]
   );
+  // Bumping ProjectService.refreshTick revalidates this widget (stale-while-revalidate).
+  const [refreshTick, setRefreshTick] = useState(store.project.refreshTick);
+  useEffect(
+    () =>
+      reaction(() => store.project.refreshTick, setRefreshTick, {
+        fireImmediately: true,
+      }),
+    [store]
+  );
   const skip = opts.skip || !sessionId;
   const url = sessionId ? buildUrl(resource, query, sessionId) : null;
 
@@ -100,11 +112,15 @@ export function useTestomatio<T>(
       return;
     }
     const cached = cache.get(url);
-    if (cached) {
+    if (cached && cached.tick === refreshTick) {
       setState({ data: cached.data as T, loading: false, error: null, meta: cached.meta });
       return;
     }
-    setState({ data: null, loading: true, error: null, meta: null });
+    if (cached) {
+      setState({ data: cached.data as T, loading: false, error: null, meta: cached.meta });
+    } else {
+      setState({ data: null, loading: true, error: null, meta: null });
+    }
     const ctrl = new AbortController();
     fetch(url, { signal: ctrl.signal })
       .then(async (r) => {
@@ -119,11 +135,12 @@ export function useTestomatio<T>(
         }
         const data = unwrap<T>(json);
         const meta = extractMeta(json);
-        cache.set(url, { data, meta });
+        cache.set(url, { data, meta, tick: refreshTick });
         setState({ data, loading: false, error: null, meta });
       })
       .catch((err: unknown) => {
         if ((err as { name?: string })?.name === "AbortError") return;
+        if (cached) return;
         setState({
           data: null,
           loading: false,
@@ -132,7 +149,7 @@ export function useTestomatio<T>(
         });
       });
     return () => ctrl.abort();
-  }, [url, skip]);
+  }, [url, skip, refreshTick]);
 
   return state;
 }
@@ -173,4 +190,45 @@ export async function mutateTestomatio<T>(
   }
   clearTestomatioCache();
   return unwrap<T>(json);
+}
+
+/**
+ * Upload a screenshot/image as an attachment on the current test run. With a
+ * `file` it posts multipart to `/api/testomatio/attachment` (screen/file
+ * sources); without one the server captures the controlled browser itself via
+ * `/api/playwright/attach`. Context ids ride on the query; the server resolves
+ * the project + token. Throws on a non-OK response.
+ */
+export async function uploadTestRunAttachment(opts: {
+  sessionId: string;
+  testrunId?: string | number;
+  runId?: string;
+  testId?: string;
+  file?: File;
+}): Promise<unknown> {
+  const params = new URLSearchParams({ session: opts.sessionId });
+  if (opts.testrunId != null) params.set("testrun_id", String(opts.testrunId));
+  if (opts.runId) params.set("run_id", opts.runId);
+  if (opts.testId) params.set("test_id", opts.testId);
+
+  let url = `/api/playwright/attach?${params.toString()}`;
+  const init: RequestInit = { method: "POST" };
+  if (opts.file) {
+    url = `/api/testomatio/attachment?${params.toString()}`;
+    const body = new FormData();
+    body.append("file", opts.file);
+    init.body = body;
+  }
+
+  const r = await fetch(url, init);
+  const text = await r.text();
+  const json = text ? (JSON.parse(text) as unknown) : null;
+  if (!r.ok) {
+    const msg =
+      json && typeof json === "object" && "error" in json
+        ? String((json as { error: unknown }).error)
+        : `HTTP ${r.status}`;
+    throw new Error(msg || `HTTP ${r.status}`);
+  }
+  return unwrap(json);
 }

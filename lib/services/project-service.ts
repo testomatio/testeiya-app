@@ -42,6 +42,10 @@ export class ProjectService {
   // content area. Mutually exclusive with the workspace's open file.
   openResource: ProjectResource | null = null;
 
+  // Bumped to make open resource widgets revalidate (stale-while-revalidate)
+  // and to re-read the counters after the agent, a click, or a refocus.
+  refreshTick = 0;
+
   // public so they can be excluded in the overrides map (`keyof this` omits privates)
   inFlight: Promise<TestomatioAuthState> | null = null;
   restoreAttempted = false;
@@ -75,6 +79,11 @@ export class ProjectService {
         if (file) this.openResource = null;
       }
     );
+    // Re-read data when the user returns to the app (edits may have happened
+    // in the Testomat.io web UI in another tab).
+    if (typeof window !== "undefined") {
+      window.addEventListener("visibilitychange", this.onVisible);
+    }
   }
 
   get connected(): boolean {
@@ -222,6 +231,16 @@ export class ProjectService {
     // Closing any open file hands the main area to the widget view.
     this.root.workspace.close();
     this.openResource = resource;
+    this.refresh();
+  }
+
+  /**
+   * Revalidate stale-while-revalidate: bump the widget tick (open resource
+   * widgets re-fetch in the background) and re-read the counters in place.
+   */
+  refresh(): void {
+    this.refreshTick++;
+    void this.refreshCounts();
   }
 
   /** Close the resource widget view, returning to the chat. */
@@ -274,6 +293,32 @@ export class ProjectService {
       this.currentProject.testsCount = tests;
       this.currentProject.runsCount = runs;
     });
+  }
+
+  /**
+   * Re-fetch the test/run totals into the existing currentProject without the
+   * null-reset loadCurrentProject does on a session switch (which flashes "—").
+   */
+  async refreshCounts(): Promise<void> {
+    const sessionId = this.root.sessionId;
+    if (!sessionId) return;
+    const current = this.currentProject;
+    if (!current) return;
+    const [tests, runs] = await Promise.all([
+      fetchTotal(sessionId, "tests"),
+      fetchTotal(sessionId, "runs"),
+    ]);
+    runInAction(() => {
+      if (this.currentProject?.id !== current.id) return;
+      if (typeof tests === "number") this.currentProject.testsCount = tests;
+      if (typeof runs === "number") this.currentProject.runsCount = runs;
+    });
+  }
+
+  private onVisible(): void {
+    if (document.visibilityState !== "visible") return;
+    if (!this.root.sessionId) return;
+    this.refresh();
   }
 }
 

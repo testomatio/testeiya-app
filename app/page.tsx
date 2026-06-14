@@ -19,6 +19,9 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
+import { useFileMentions } from "@/components/ai-elements/prompt-input-mentions";
+import type { MentionItem } from "@/components/ai-elements/prompt-input-mentions";
+import type { TreeNode } from "@/lib/services/types";
 import { AttachmentDialog } from "@/components/AttachmentDialog";
 import {
   Reasoning,
@@ -35,10 +38,10 @@ import {
   renderRichTool,
 } from "@/components/ai-elements/tool";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
-import { RenderFrame } from "@/components/ai-elements/render-frame";
 import { FolderGlyph, MdiIcon, ProjectGlyph } from "@/components/icons";
-import { mdiDockLeft } from "@mdi/js";
+import { mdiDockLeft, mdiDockRight } from "@mdi/js";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
+import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
@@ -48,24 +51,36 @@ import { Spinner } from "@/components/ui/spinner";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon } from "lucide-react";
+import { CircleDotIcon, SettingsIcon, SunIcon, MoonIcon, KeyRoundIcon, ChevronDownIcon, ChevronsUpDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, BrainIcon, FolderOpenIcon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { MemoryDialog } from "@/components/MemoryDialog";
 import { BrowserControls } from "@/components/BrowserControls";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
 import { useTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { observer } from "mobx-react-lite";
 import {
   ServicesProvider,
   useWorkspaceService,
-  useSearchService,
   useProjectService,
   useProvidersService,
   useConnectionsService,
+  useSessionsService,
+  useWidgetService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import { SidebarPanel } from "@/components/panel/SidebarPanel";
+import { WidgetPane } from "@/components/panel/WidgetPane";
+import { ChatPanelHeader } from "@/components/panel/ChatPanelHeader";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
 import { ResourceWidgetView } from "@/components/agent-output/ResourceWidgetView";
@@ -82,6 +97,12 @@ function isAskQuestion(tool: ToolCall): boolean {
   return tool.toolName === "ask_question";
 }
 
+// The agent rewrites its plan via repeated `todo_write` calls; they're folded
+// into a single persistent panel instead of one card each.
+function isTodoWrite(tool: ToolCall): boolean {
+  return tool.toolName === "todo_write";
+}
+
 /** Rich-view tools: `render_*` customs + MCP `*_list` auto-renders. */
 function isRenderish(tool: ToolCall): boolean {
   return !isAskQuestion(tool) && richViewMode(tool.toolName) !== null;
@@ -95,7 +116,8 @@ function isRoutineTool(tool: ToolCall): boolean {
 type Segment =
   | { kind: "routine-solo"; tool: ToolCall }
   | { kind: "routine-group"; tools: ToolCall[] }
-  | { kind: "render"; tool: ToolCall; isLatest: boolean };
+  | { kind: "render"; tool: ToolCall; isLatest: boolean }
+  | { kind: "todo"; tool: ToolCall; running: boolean; current: boolean };
 
 /**
  * Single in-order pass through a message's tools. Routine tools batched
@@ -103,7 +125,11 @@ type Segment =
  * so they keep their position in the narrative. `ask_question` is dropped
  * here — page.tsx renders it separately, pinned to the message bottom.
  */
-function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
+function segmentTools(
+  tools: ToolCall[],
+  isStreaming: boolean,
+  isCurrentTodo: boolean
+): Segment[] {
   // Find the index of the LAST render-ish tool so we can expand just that
   // one when the message has finished streaming.
   let lastRenderIdx = -1;
@@ -114,8 +140,25 @@ function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
     }
   }
 
+  // All todo_write calls collapse into one panel showing the latest successful
+  // state (each call's output carries the full plan); a still-running call keeps
+  // the last good list and flags "running".
+  let lastTodo: ToolCall | null = null;
+  let lastTodoWithOutput: ToolCall | null = null;
+  for (const t of tools) {
+    if (!isTodoWrite(t)) continue;
+    lastTodo = t;
+    if (t.state === "output-available") lastTodoWithOutput = t;
+  }
+  const todoTool = lastTodoWithOutput ?? lastTodo;
+  const todoRunning =
+    !!lastTodo &&
+    lastTodo.state !== "output-available" &&
+    lastTodo.state !== "output-error";
+
   const out: Segment[] = [];
   let buf: ToolCall[] = [];
+  let todoEmitted = false;
   const flush = () => {
     if (buf.length === 0) return;
     if (buf.length === 1) out.push({ kind: "routine-solo", tool: buf[0] });
@@ -124,6 +167,18 @@ function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
   };
   tools.forEach((t, idx) => {
     if (isAskQuestion(t)) return; // handled at message bottom
+    if (isTodoWrite(t)) {
+      if (todoEmitted || !todoTool) return; // one persistent panel per message
+      flush();
+      out.push({
+        kind: "todo",
+        tool: todoTool,
+        running: todoRunning,
+        current: isCurrentTodo,
+      });
+      todoEmitted = true;
+      return;
+    }
     if (isRenderish(t)) {
       flush();
       out.push({
@@ -161,6 +216,18 @@ function renderSegments(
   return segments.map((seg, idx) => {
     if (seg.kind === "routine-solo") return renderRoutine(seg.tool);
     if (seg.kind === "render") return renderRender(seg.tool, seg.isLatest);
+    if (seg.kind === "todo") {
+      // Stable key (one per message) so the panel updates in place rather than
+      // remounting as later todo_write calls supply newer state.
+      return (
+        <TodoWriteRenderer
+          key="todo"
+          tool={seg.tool}
+          running={seg.running}
+          current={seg.current}
+        />
+      );
+    }
     // routine-group
     const running = seg.tools.some(
       (t) => t.state !== "output-available" && t.state !== "output-error"
@@ -227,10 +294,11 @@ function ChatWithWorkspace() {
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick },
+  { status, onStop, onSubmit, onPaste, onAttachClick, mentionFiles },
   ref
 ) {
   const [text, setText] = useState("");
+  const mentions = useFileMentions({ text, setText, items: mentionFiles });
 
   useImperativeHandle(
     ref,
@@ -247,26 +315,31 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   );
 
   return (
-    <PromptInput onSubmit={onSubmit}>
-      <PromptInputBody>
-        <PromptInputTextarea
-          onChange={(e) => setText(e.target.value)}
-          onPaste={onPaste}
-          value={text}
-          placeholder="Ask Testeiya about your tests..."
-        />
-      </PromptInputBody>
-      <PromptInputFooter>
-        <PromptInputButton
-          onClick={onAttachClick}
-          tooltip="Attach files"
-          aria-label="Attach files"
-        >
-          <PaperclipIcon className="size-4" />
-        </PromptInputButton>
-        <PromptInputSubmit status={status} onStop={onStop} />
-      </PromptInputFooter>
-    </PromptInput>
+    <div className="relative">
+      <PromptInput onSubmit={onSubmit}>
+        <PromptInputBody>
+          <PromptInputTextarea
+            onChange={mentions.onChange}
+            onKeyDown={mentions.onKeyDown}
+            onBlur={mentions.onBlur}
+            onPaste={onPaste}
+            value={text}
+            placeholder="Ask Testeiya about your tests..."
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputButton
+            onClick={onAttachClick}
+            tooltip="Attach files"
+            aria-label="Attach files"
+          >
+            <PaperclipIcon className="size-4" />
+          </PromptInputButton>
+          <PromptInputSubmit status={status} onStop={onStop} />
+        </PromptInputFooter>
+      </PromptInput>
+      {mentions.dropdown}
+    </div>
   );
 });
 
@@ -283,7 +356,7 @@ const ChatPage = observer(function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectIds.join(","), sessionId]);
 
-  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, sendMessage, answerQuestion, stop, clearSession, clearError } =
+  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, answeredQuestions, currentConversationId, sendMessage, answerQuestion, stop, clearSession, openConversation, clearError } =
     useTesteiya(params);
   const host = useHost();
   const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
@@ -293,19 +366,46 @@ const ChatPage = observer(function ChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
   const panel = usePanel();
   const workspace = useWorkspaceService();
-  const search = useSearchService();
+  const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
   const project = useProjectService();
   const providers = useProvidersService();
   const connections = useConnectionsService();
+  const sessions = useSessionsService();
+  const widget = useWidgetService();
+
+  // Inject the agent-socket actions into the Chats service so the sidebar
+  // section can switch / start conversations through the live connection.
+  useEffect(() => {
+    sessions.setHandlers(openConversation, clearSession);
+  }, [sessions, openConversation, clearSession]);
+  // Mirror the live conversation id (highlights the active chat) and refresh the
+  // list when it changes — a brand-new chat appears once it has output.
+  useEffect(() => {
+    sessions.setActiveId(currentConversationId);
+    void sessions.load();
+  }, [sessions, currentConversationId]);
 
   // Feed the running session's MCP tools into the connections service so the
   // sidebar can show live connected/disconnected status per server.
   useEffect(() => {
     connections.setRuntime(mcpTools, mcpLoaded);
   }, [connections, mcpTools, mcpLoaded]);
+
+  // Refresh project counters + open widgets once each AI turn finishes (the
+  // agent may have created/edited tests or runs). Only on a busy→ready edge.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status !== "ready") return;
+    if (prev !== "submitted" && prev !== "streaming") return;
+    project.refresh();
+    void sessions.load();
+  }, [status, project, sessions]);
 
   // Keep the header's provider/model label in sync — refresh when the Providers
   // dialog opens/closes so a new selection shows immediately. (The live session
@@ -337,6 +437,42 @@ const ChatPage = observer(function ChatPage() {
     if (sessionId) return;
     void workspace.openDefault();
   }, [sessionId, workspace]);
+
+  // The agent's rich renders move out of the chat stream into the widget pane:
+  // find the latest completed renderish tool and show it (deduped by toolCallId
+  // so a finished render replaces the previous one without churning).
+  const latestRenderTool = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      const tools = messages[m].tools ?? [];
+      for (let i = tools.length - 1; i >= 0; i--) {
+        const t = tools[i];
+        if (t.toolName === "ask_question") continue;
+        if (t.state !== "output-available") continue;
+        if (richViewMode(t.toolName) === null) continue;
+        return t;
+      }
+    }
+    return null;
+  }, [messages]);
+  useEffect(() => {
+    if (!latestRenderTool) return;
+    widget.show({
+      source: "tool",
+      key: latestRenderTool.toolCallId,
+      toolName: latestRenderTool.toolName,
+      input: latestRenderTool.input,
+      output: latestRenderTool.output,
+    });
+  }, [latestRenderTool, widget]);
+
+  // The plan evolves across turns; only the most recent message's todo panel is
+  // still relevant, so earlier ones render collapsed.
+  const lastTodoMessageId = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      if ((messages[m].tools ?? []).some(isTodoWrite)) return messages[m].id;
+    }
+    return null;
+  }, [messages]);
 
   const addAttachments = useCallback((files: File[]) => {
     const accepted = files.filter((file) => {
@@ -428,22 +564,8 @@ const ChatPage = observer(function ChatPage() {
     toast.success("Session cleared");
   }, [clearSession]);
 
-  // A file opened from the sidebar fills the content area and hides the chat;
-  // an agent-opened file stays a strip above the (still-visible) chat.
-  const fileFullHeight =
-    !!workspace.openFile && !!workspace.sessionId && !!workspace.openFile.fullHeight;
-
-  // A project resource (tests/runs/plans) opened from the Project section shows
-  // its widget full-height in the main area, taking over from the chat.
-  const openResource = project.openResource;
-  const resourceUrl =
-    openResource && project.currentLinks
-      ? project.currentLinks[openResource]
-      : undefined;
-  const hideChat = fileFullHeight || !!openResource || search.showSearch;
-
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -476,15 +598,35 @@ const ChatPage = observer(function ChatPage() {
                   </span>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => setSwitchProjectOpen(true)}
-                title="Change project"
-                aria-label="Change project"
-                className="ml-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              >
-                <ChevronsUpDownIcon className="size-3.5" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      title="Workspace settings"
+                      aria-label="Workspace settings"
+                      className="ml-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    />
+                  }
+                >
+                  <ChevronsUpDownIcon className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => setMemoryOpen(true)}>
+                    <BrainIcon className="size-3.5" />
+                    Project memory
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSwitchProjectOpen(true)}>
+                    <ChevronsUpDownIcon className="size-3.5" />
+                    Switch project…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void workspace.openFolder()}>
+                    <FolderOpenIcon className="size-3.5" />
+                    Open folder…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
           {isDev && cwd && (
@@ -550,6 +692,16 @@ const ChatPage = observer(function ChatPage() {
               )}
             </span>
           )}
+          <Button
+            onClick={panel.toggleChat}
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            title={panel.chatOpen ? "Hide chat" : "Show chat"}
+            aria-label="Toggle chat"
+          >
+            <MdiIcon path={mdiDockRight} className="size-4" />
+          </Button>
           {/* Playwright CLI session controls (record / stop / screenshot).
               Self-contained — relocate anywhere as needed. */}
           <BrowserControls />
@@ -621,86 +773,112 @@ const ChatPage = observer(function ChatPage() {
         onOpenChange={setSwitchProjectOpen}
       />
 
+      <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
+
       <AttachmentDialog
         open={attachOpen}
         onOpenChange={setAttachOpen}
         onAdd={addAttachments}
       />
 
-      {/* Below-header region: the multi-section sidebar panel + chat column. */}
-      <div className="flex flex-1 min-h-0">
+      {/* Below-header region: sidebar | widget pane | chat column. */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         <SidebarPanel />
+        <WidgetPane fill={!panel.chatOpen}>
+          {(() => {
+            const current = widget.current;
+            if (!current) return null;
+            if (current.source === "tool") {
+              const rich = renderRichTool(
+                current.toolName,
+                current.input,
+                current.output
+              );
+              if (!rich) return null;
+              return (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex items-center gap-2 border-b px-3 py-2">
+                    <span className="shrink-0 text-muted-foreground">
+                      {rich.header.icon}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {rich.header.title}
+                    </span>
+                    {rich.header.tag && (
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                        {rich.header.tag}
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0 p-0"
+                      onClick={() => widget.clear()}
+                      aria-label="Close widget"
+                    >
+                      <XIcon className="size-4" />
+                    </Button>
+                  </div>
+                  <div
+                    key={current.key}
+                    className="min-h-0 flex-1 overflow-auto p-3"
+                  >
+                    {rich.body}
+                  </div>
+                </div>
+              );
+            }
+            if (current.source === "resource") {
+              const url = project.currentLinks?.[current.resource];
+              return (
+                <div className="flex min-h-0 flex-1 p-2">
+                  <ResourceWidgetView
+                    resource={current.resource}
+                    externalUrl={url}
+                    onOpenExternal={() => url && project.openExternal(url)}
+                    onRefresh={() => project.refresh()}
+                    onClose={() => project.closeResource()}
+                    className="min-w-0 flex-1"
+                  />
+                </div>
+              );
+            }
+            if (current.source === "file") {
+              const file = workspace.openFile;
+              const sid = workspace.sessionId;
+              if (!file || !sid) return null;
+              return (
+                <div className="flex min-h-0 flex-1 p-2">
+                  <MarkdownEditor
+                    key={file.key}
+                    sessionId={sid}
+                    path={file.path}
+                    initialContent={file.initialContent}
+                    scrollToText={file.scrollToText}
+                    readOnly={status === "streaming" || status === "submitted"}
+                    onClose={workspace.close}
+                    onSaved={() => workspace.markChanged(file.path)}
+                    fillHeight
+                    className="min-w-0 flex-1"
+                  />
+                </div>
+              );
+            }
+            return (
+              <div className="flex min-h-0 flex-1 p-2">
+                <SearchResults className="min-w-0 flex-1" />
+              </div>
+            );
+          })()}
+        </WidgetPane>
+        {panel.chatOpen && (
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Project resource widget (tests/runs/plans) — fills the main area,
-              fed live from the Testomat.io v2 proxy, using the same widgets the
-              agent renders in chat. */}
-          {openResource && (
-            <div className="flex min-h-0 flex-1 p-2">
-              <ResourceWidgetView
-                resource={openResource}
-                externalUrl={resourceUrl}
-                onOpenExternal={() =>
-                  resourceUrl && project.openExternal(resourceUrl)
-                }
-                onClose={() => project.closeResource()}
-                className="min-w-0 flex-1"
-              />
-            </div>
-          )}
-
-          {/* Open-file editor panel — pinned above the chat when active.
-              Opened either by clicking a file in the tree or when the agent
-              writes a file. */}
-          {!openResource && workspace.openFile && workspace.sessionId && (
-            <div
-              className={
-                fileFullHeight
-                  ? "flex min-h-0 flex-1 p-2"
-                  : "border-b bg-muted/20 p-2"
-              }
-            >
-              <MarkdownEditor
-                key={workspace.openFile.key}
-                sessionId={workspace.sessionId}
-                path={workspace.openFile.path}
-                initialContent={workspace.openFile.initialContent}
-                scrollToText={workspace.openFile.scrollToText}
-                readOnly={status === "streaming" || status === "submitted"}
-                onClose={workspace.close}
-                onSaved={() => workspace.triggerRefresh()}
-                fillHeight={fileFullHeight}
-                onToggleFullScreen={() =>
-                  workspace.setFullHeight(!workspace.openFile?.fullHeight)
-                }
-                className={fileFullHeight ? "min-w-0 flex-1" : undefined}
-              />
-            </div>
-          )}
-
-          {/* Workspace search results — fills the main area until a result is
-              opened (which shows the editor) or the view is closed. */}
-          {!openResource && !workspace.openFile && search.showSearch && (
-            <div className="flex min-h-0 flex-1 p-2">
-              <SearchResults className="min-w-0 flex-1" />
-            </div>
-          )}
-
-      {/* Chat area — hidden while a file or resource widget is open full-height
-          (kept mounted so state is preserved when the overlay is closed). */}
-      <Conversation className={hideChat ? "hidden" : "flex-1"}>
-        {messages.length > 0 && (
-          <Button
-            onClick={handleClear}
-            size="sm"
-            variant="ghost"
-            className="absolute top-3 right-3 z-10 gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
-            title="Clear chat"
-            aria-label="Clear chat"
-          >
-            <Trash className="size-3.5" />
-            <span className="hidden sm:inline">Clear</span>
-          </Button>
-        )}
+          <ChatPanelHeader
+            onClear={handleClear}
+            canClear={messages.length > 0}
+          />
+      {/* Chat area */}
+      <Conversation className="flex-1">
         <ConversationContent>
           {messages.length === 0 && canConnectTestomatio && !sessionId && (
             project.restoring ? (
@@ -795,10 +973,9 @@ const ChatPage = observer(function ChatPage() {
               {/* Tools — rendered in tool-call order so the narrative stays
                   coherent. Routine tools (bash/read/find/…) batch into
                   collapsible groups; rich renders (render_* + MCP auto-
-                  rendered lists) show in-place as collapsed RenderFrames,
-                  with only the LAST one auto-expanded (and only after the
-                  message has finished streaming). `ask_question` is
-                  rendered separately below the text. */}
+                  rendered lists) leave a chip here that opens the widget in the
+                  side pane. `ask_question` is rendered separately below the
+                  text. */}
               {(() => {
                 const tools = message.tools ?? [];
                 const isLastMessage =
@@ -806,9 +983,18 @@ const ChatPage = observer(function ChatPage() {
                 const isStreaming =
                   isLastMessage &&
                   (status === "streaming" || status === "submitted");
-                const segments = segmentTools(tools, isStreaming);
+                const segments = segmentTools(
+                  tools,
+                  isStreaming,
+                  message.id === lastTodoMessageId
+                );
 
-                const renderRoutine = (tool: ToolCall): ReactNode => (
+                const renderRoutine = (tool: ToolCall): ReactNode => {
+                  // `_i` is the model's short intent label for the call —
+                  // surface it next to the tool name.
+                  let intent: string | undefined;
+                  if (typeof tool.input._i === "string") intent = tool.input._i;
+                  return (
                   <div key={tool.toolCallId}>
                     <Tool>
                       <ToolHeader
@@ -816,6 +1002,7 @@ const ChatPage = observer(function ChatPage() {
                         type="dynamic-tool"
                         toolName={tool.toolName}
                         state={tool.state}
+                        description={intent}
                       />
                       <ToolContent>
                         <ToolInput input={tool.input} />
@@ -833,34 +1020,56 @@ const ChatPage = observer(function ChatPage() {
                       </ToolContent>
                     </Tool>
                   </div>
-                );
+                  );
+                };
 
-                const renderRender = (
-                  tool: ToolCall,
-                  isLatest: boolean
-                ): ReactNode => {
+                // Rich renders live in the widget pane now; the chat keeps a
+                // compact chip at the narrative spot that re-opens that widget.
+                const renderRender = (tool: ToolCall): ReactNode => {
                   const rich = renderRichTool(
                     tool.toolName,
                     tool.input,
                     tool.output
                   );
                   if (!rich) return null;
+                  const active =
+                    widget.current?.source === "tool" &&
+                    widget.current.key === tool.toolCallId;
                   return (
-                    <RenderFrame
+                    <button
                       key={tool.toolCallId}
-                      icon={rich.header.icon}
-                      title={rich.header.title}
-                      tag={
-                        rich.header.tag ? (
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {rich.header.tag}
-                          </span>
-                        ) : undefined
+                      type="button"
+                      onClick={() =>
+                        widget.show({
+                          source: "tool",
+                          key: tool.toolCallId,
+                          toolName: tool.toolName,
+                          input: tool.input,
+                          output: tool.output,
+                        })
                       }
-                      defaultOpen={isLatest}
+                      className={cn(
+                        "my-1 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors",
+                        active
+                          ? "border-primary/50 bg-primary/5"
+                          : "hover:bg-muted/50"
+                      )}
                     >
-                      {rich.body}
-                    </RenderFrame>
+                      <span className="shrink-0 text-muted-foreground">
+                        {rich.header.icon}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {rich.header.title}
+                      </span>
+                      {rich.header.tag && (
+                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                          {rich.header.tag}
+                        </span>
+                      )}
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        View →
+                      </span>
+                    </button>
                   );
                 };
 
@@ -885,13 +1094,17 @@ const ChatPage = observer(function ChatPage() {
                   options?: string[];
                 } | undefined;
                 if (!q?.question || !Array.isArray(q.options)) return null;
+                const picked = answeredQuestions[tool.toolCallId] ?? tool.output;
                 return (
                   <AskQuestionRenderer
                     key={tool.toolCallId}
                     question={q.question}
                     options={q.options}
-                    answered={tool.state !== "input-available"}
-                    selected={tool.output}
+                    answered={
+                      tool.toolCallId in answeredQuestions ||
+                      tool.state !== "input-available"
+                    }
+                    selected={picked}
                     onPick={(opt) => answerQuestion(tool.toolCallId, opt)}
                   />
                 );
@@ -911,7 +1124,7 @@ const ChatPage = observer(function ChatPage() {
       </Conversation>
 
       {/* Input area */}
-      <div className={`grid shrink-0 gap-3 border-t p-4${hideChat ? " hidden" : ""}`}>
+      <div className="grid shrink-0 gap-3 border-t p-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
         {messages.length === 0 && (
@@ -974,9 +1187,11 @@ const ChatPage = observer(function ChatPage() {
           onSubmit={handleSubmit}
           onPaste={handlePaste}
           onAttachClick={() => setAttachOpen(true)}
+          mentionFiles={mentionFiles}
         />
       </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -1011,4 +1226,14 @@ interface ChatInputProps {
   ) => void | Promise<void>;
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   onAttachClick: () => void;
+  mentionFiles: MentionItem[];
+}
+
+function flattenTree(nodes: TreeNode[]): MentionItem[] {
+  const out: MentionItem[] = [];
+  for (const node of nodes) {
+    out.push({ name: node.name, path: node.path, kind: node.kind });
+    if (node.children) out.push(...flattenTree(node.children));
+  }
+  return out;
 }

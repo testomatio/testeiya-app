@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { mdiOpenInNew } from "@mdi/js";
-import { SearchIcon, XIcon } from "lucide-react";
+import { RotateCwIcon, SearchIcon, XIcon } from "lucide-react";
 import { useTestomatio } from "@/lib/agent-output/use-testomatio";
 import type { ProjectResource } from "@/lib/services/project-service";
 import { MdiIcon } from "@/components/icons";
@@ -67,12 +67,14 @@ export function ResourceWidgetView({
   resource,
   externalUrl,
   onOpenExternal,
+  onRefresh,
   onClose,
   className,
 }: {
   resource: ProjectResource;
   externalUrl?: string;
   onOpenExternal?: () => void;
+  onRefresh?: () => void;
   onClose: () => void;
   className?: string;
 }) {
@@ -190,6 +192,18 @@ export function ResourceWidgetView({
           </div>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {onRefresh && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-muted-foreground"
+              onClick={onRefresh}
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <RotateCwIcon className="size-4" />
+            </Button>
+          )}
           {externalUrl && (
             <Button
               size="sm"

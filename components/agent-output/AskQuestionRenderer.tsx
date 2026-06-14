@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +17,9 @@ interface Props {
  * multi-line button. Clicking one resolves the agent's pending `ask_question`
  * call with that exact text, and the turn continues.
  *
- * Once answered the buttons disable; the picked option stays highlighted and
- * the rest dim, so the choice remains visible in history.
+ * Once answered the buttons collapse to a compact, read-only chip that prints
+ * the picked option, so the choice stays visible in history without lingering
+ * as a live, clickable form while the agent keeps working.
  *
  * Options can be any length — long ones wrap to multiple lines so the
  * agent is free to include short descriptions inside each option string.
@@ -29,6 +31,19 @@ export default function AskQuestionRenderer({
   answered,
   selected,
 }: Props) {
+  if (answered) {
+    return (
+      <div className="not-prose my-4 w-full space-y-2">
+        <div className="text-sm text-foreground">{question}</div>
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          <CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" />
+          <span className="whitespace-normal break-words text-foreground">
+            You answered: {selected || "Answered"}
+          </span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="not-prose my-4 w-full space-y-3">
       <div className="text-sm text-foreground">{question}</div>

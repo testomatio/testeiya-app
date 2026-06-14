@@ -55,3 +55,6 @@ export const useConnectionsService = () => useRootStore().connections;
 export const useProvidersService = () => useRootStore().providers;
 export const useSkillsService = () => useRootStore().skills;
 export const useBrowserService = () => useRootStore().browser;
+export const useMemoryService = () => useRootStore().memory;
+export const useSessionsService = () => useRootStore().sessions;
+export const useWidgetService = () => useRootStore().widget;

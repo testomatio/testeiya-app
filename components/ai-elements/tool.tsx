@@ -19,7 +19,6 @@ import {
   ChevronDownIcon,
   CircleIcon,
   ClockIcon,
-  WrenchIcon,
   XCircleIcon,
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
@@ -53,7 +52,7 @@ export const Tool = ({
 
   return (
     <Collapsible
-      className={cn("group not-prose mb-4 w-full rounded-md border", className)}
+      className={cn("group not-prose w-full rounded-md border", className)}
       open={effectiveOpen}
       onOpenChange={(v, details) => {
         setUserOverride(v);
@@ -69,6 +68,7 @@ export type ToolPart = ToolUIPart | DynamicToolUIPart;
 export type ToolHeaderProps = {
   title?: string;
   className?: string;
+  description?: string;
 } & (
   | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
   | {
@@ -111,6 +111,7 @@ export const ToolHeader = ({
   type,
   state,
   toolName,
+  description,
   ...props
 }: ToolHeaderProps) => {
   const derivedName =
@@ -118,18 +119,19 @@ export const ToolHeader = ({
 
   return (
     <CollapsibleTrigger
-      className={cn(
-        "flex w-full items-center justify-between gap-4 p-3",
-        className
-      )}
+      className={cn("flex w-full items-center gap-2 p-3 text-left", className)}
       {...props}
     >
-      <div className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
-      </div>
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      <span className="shrink-0 font-medium text-sm">
+        {title ?? derivedName}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+        {description}
+      </span>
+      <span className="flex shrink-0 items-center" title={statusLabels[state]}>
+        {statusIcons[state]}
+      </span>
+      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
   );
 };

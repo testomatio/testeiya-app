@@ -16,6 +16,7 @@ import {
   mdiFileTreeOutline,
   mdiFolderOpenOutline,
   mdiMagnify,
+  mdiFilterVariant,
   mdiRefresh,
   mdiCloudDownloadOutline,
   mdiCloudUploadOutline,
@@ -28,7 +29,8 @@ import {
 import type { TreeNode } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-function NodeRow({ node }: { node: TreeNode }) {
+const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
+  const ws = useWorkspaceService();
   const isMarkdown = /\.md$/i.test(node.name);
   if (node.kind === "folder") {
     return (
@@ -39,10 +41,15 @@ function NodeRow({ node }: { node: TreeNode }) {
       </FileTreeFolder>
     );
   }
+  const status = ws.changedFiles.get(node.path);
   return (
     <FileTreeFile
       path={node.path}
       name={node.name}
+      className={cn(
+        status === "created" && "font-medium text-status-success-foreground",
+        status === "changed" && "font-medium text-status-warning-foreground"
+      )}
       icon={
         isMarkdown ? (
           <FileTreeIcon>
@@ -52,7 +59,7 @@ function NodeRow({ node }: { node: TreeNode }) {
       }
     />
   );
-}
+});
 
 /**
  * Workspace service — the project's pulled test markdown as a file tree. A thin
@@ -84,6 +91,18 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             aria-label="Search workspace"
           >
             <MdiIcon path={mdiMagnify} className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={cn("h-6 w-6 p-0", ws.changedOnly && "text-primary")}
+            disabled={ws.changedFiles.size === 0}
+            onClick={() => ws.toggleChangedOnly()}
+            aria-pressed={ws.changedOnly}
+            title="Show changed files only"
+            aria-label="Show changed files only"
+          >
+            <MdiIcon path={mdiFilterVariant} className="size-3.5" />
           </Button>
           <Button
             size="sm"
@@ -181,7 +200,10 @@ export const WorkspaceSection = observer(function WorkspaceSection({
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && !ws.awaitingTests && !ws.treeLoading && (
           <div className="text-xs text-muted-foreground">(empty)</div>
         )}
-        {ws.tree.length > 0 && (
+        {ws.tree.length > 0 && ws.changedOnly && ws.visibleTree.length === 0 && (
+          <div className="text-xs text-muted-foreground">No changed files yet.</div>
+        )}
+        {ws.visibleTree.length > 0 && (
           <FileTree
             className="min-h-0 flex-1 overflow-auto"
             expanded={ws.expanded}
@@ -189,7 +211,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             selectedPath={ws.openFile?.path}
             onSelect={(p) => ws.openPath(p)}
           >
-            {ws.tree.map((node) => (
+            {ws.visibleTree.map((node) => (
               <NodeRow key={node.path} node={node} />
             ))}
           </FileTree>

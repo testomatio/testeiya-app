@@ -9,23 +9,44 @@ import {
   useRef,
   useState,
 } from "react";
+import { observer } from "mobx-react-lite";
+import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { mdiOpenInNew } from "@mdi/js";
-import { ArrowLeftIcon, SearchIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CameraIcon,
+  ChevronDownIcon,
+  MonitorIcon,
+  SearchIcon,
+  UploadIcon,
+} from "lucide-react";
 import { MdiIcon } from "@/components/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   mutateTestomatio,
+  uploadTestRunAttachment,
   useTestomatio,
 } from "@/lib/agent-output/use-testomatio";
-import { useProjectService, useStores } from "@/lib/services/StoreProvider";
+import {
+  useBrowserService,
+  useProjectService,
+  useStores,
+} from "@/lib/services/StoreProvider";
+import { captureDisplayScreenshot } from "@/lib/screenshot";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
 import { ListPager } from "../list-row";
@@ -57,7 +78,7 @@ const STATUS_TONE: Record<string, string> = {
   skipped: "border-run-skipped text-run-skipped",
 };
 
-export default function ManualRunRenderer({
+function ManualRunRenderer({
   data,
   onExit,
 }: {
@@ -67,6 +88,7 @@ export default function ManualRunRenderer({
   const run = data as ManualRunData;
   const store = useStores();
   const project = useProjectService();
+  const browser = useBrowserService();
   const runId = run.id;
   const title = run.title ?? run.clean_title ?? run.id ?? "(untitled run)";
   const runsUrl = project.currentLinks?.runs;
@@ -100,9 +122,14 @@ export default function ManualRunRenderer({
   const [statusFilter, setStatusFilter] = useState<StatusBucket | null>(null);
   const [saving, setSaving] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [shots, setShots] = useState<Record<string, Shot[]>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const activeRowRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrls = useRef<string[]>([]);
   const [leftPct, setLeftPct] = useState(50);
 
   // Reset to the first test/page whenever the search changes (render-time reset,
@@ -118,6 +145,19 @@ export default function ManualRunRenderer({
   useEffect(() => {
     rootRef.current?.focus();
   }, []);
+
+  // Keep the selected row visible as the user navigates with the keyboard.
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [index]);
+
+  // Free the local thumbnail object URLs (screen/file captures) on unmount.
+  useEffect(
+    () => () => {
+      for (const u of objectUrls.current) URL.revokeObjectURL(u);
+    },
+    []
+  );
 
   useEffect(() => {
     if (testruns.length === 0) return;
@@ -195,6 +235,7 @@ export default function ManualRunRenderer({
 
   const current = testruns[index];
   const draft = current ? drafts[String(current.id)] : undefined;
+  const currentShots = current ? shots[String(current.id)] ?? [] : [];
   const currentTitle =
     current?.test_title ?? current?.title ?? String(current?.id ?? "");
   const currentTestId = current?.test_id;
@@ -333,10 +374,11 @@ export default function ManualRunRenderer({
                     return (
                       <button
                         key={t.id ?? i}
+                        ref={i === index ? activeRowRef : undefined}
                         type="button"
                         onClick={() => setIndex(i)}
                         className={cn(
-                          "flex w-full items-center gap-2 border-l-2 px-2 py-1.5 text-left text-sm",
+                          "flex w-full scroll-mt-8 items-center gap-2 border-l-2 px-2 py-1.5 text-left text-sm",
                           i === index
                             ? "border-primary bg-primary/10 font-medium"
                             : "border-transparent hover:bg-muted/50"
@@ -451,6 +493,39 @@ export default function ManualRunRenderer({
                 <p className="text-xs text-destructive">{actionError}</p>
               )}
 
+              {currentShots.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {currentShots.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => void openExternalUrl(s.url)}
+                      title="Open attachment"
+                      className="block size-16 overflow-hidden rounded border hover:ring-1 hover:ring-primary"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={s.url}
+                        alt="attachment"
+                        className="size-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void attach(f);
+                }}
+              />
+
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -469,6 +544,60 @@ export default function ManualRunRenderer({
                 >
                   {saving ? "Saving…" : isLast ? "Save" : "Save & Next"}
                 </Button>
+
+                <div className="ml-auto flex items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void attach()}
+                    disabled={attaching || browser.busy || !browser.browserOpen}
+                    title={
+                      browser.browserOpen
+                        ? "Attach a screenshot of the controlled browser"
+                        : "Start the browser to capture it"
+                    }
+                    className="gap-1 rounded-r-none"
+                  >
+                    <CameraIcon className="size-3.5" />
+                    {attaching ? "Attaching…" : "Attach screenshot"}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={attaching}
+                          aria-label="More screenshot sources"
+                          className="rounded-l-none border-l-0 px-1.5"
+                        />
+                      }
+                    >
+                      <ChevronDownIcon className="size-3.5 opacity-60" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={!browser.browserOpen}
+                        onClick={() => void attach()}
+                      >
+                        <CameraIcon className="size-4" />
+                        From controlled browser
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void captureScreen()}>
+                        <MonitorIcon className="size-4" />
+                        From screen…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <UploadIcon className="size-4" />
+                        Upload image…
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               <p className="text-[11px] text-muted-foreground">
@@ -506,18 +635,18 @@ export default function ManualRunRenderer({
     if (e.ctrlKey || e.metaKey) {
       if (e.key === "Enter") {
         e.preventDefault();
-        save(false, "passed");
+        save(true, "passed");
         return;
       }
       const k = e.key.toLowerCase();
       if (k === "u") {
         e.preventDefault();
-        save(false, "failed");
+        save(true, "failed");
         return;
       }
       if (k === "i") {
         e.preventDefault();
-        save(false, "skipped");
+        save(true, "skipped");
         return;
       }
       if (e.key === "ArrowRight") {
@@ -607,6 +736,54 @@ export default function ManualRunRenderer({
     }
   }
 
+  async function attach(file?: File) {
+    const sessionId = store.sessionId;
+    if (attaching || !current || !sessionId) return;
+    setAttaching(true);
+    setActionError(null);
+    try {
+      const res = await uploadTestRunAttachment({
+        sessionId,
+        testrunId: current.id,
+        runId,
+        testId: current.test_id,
+        file,
+      });
+      let url: string | null = null;
+      if (file) {
+        url = URL.createObjectURL(file);
+        objectUrls.current.push(url);
+      } else {
+        url = attachmentUrl(res, project.baseUrl);
+      }
+      if (url) {
+        const key = String(current.id);
+        const next = url;
+        setShots((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { url: next }] }));
+      }
+      toast.success("Screenshot attached to test run");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function captureScreen() {
+    try {
+      const file = await captureDisplayScreenshot();
+      if (file) await attach(file);
+    } catch (e) {
+      if (
+        e instanceof DOMException &&
+        (e.name === "NotAllowedError" || e.name === "AbortError")
+      ) {
+        return;
+      }
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function finish() {
     const sessionId = store.sessionId;
     if (!runId || !sessionId) return;
@@ -625,6 +802,8 @@ export default function ManualRunRenderer({
     }
   }
 }
+
+export default observer(ManualRunRenderer);
 
 function isPending(status?: string): boolean {
   return !status || status.toLowerCase() === "pending";
@@ -667,6 +846,31 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
+// Dig a displayable image URL out of the upstream attachment response (its exact
+// shape varies), absolutized against the project base URL when it's relative.
+function attachmentUrl(res: unknown, base: string): string | null {
+  const root = (res as { attachment?: unknown })?.attachment;
+  const candidates = [root, (root as { data?: unknown })?.data];
+  for (const v of candidates) {
+    if (typeof v === "string") return absolutize(v, base);
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    for (const key of ["url", "file", "link", "download_url", "preview"]) {
+      if (typeof o[key] === "string") return absolutize(o[key] as string, base);
+    }
+  }
+  return null;
+}
+
+function absolutize(url: string, base: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  try {
+    return new URL(url, base).toString();
+  } catch {
+    return url;
+  }
+}
+
 function Kbd({ children }: { children: ReactNode }) {
   return (
     <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground">
@@ -707,4 +911,8 @@ interface TestDetail {
 interface Draft {
   status: string;
   message: string;
+}
+
+interface Shot {
+  url: string;
 }

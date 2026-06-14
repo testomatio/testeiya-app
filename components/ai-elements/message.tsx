@@ -12,6 +12,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useWorkspaceService } from "@/lib/services/StoreProvider";
+import { observer } from "mobx-react-lite";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
@@ -323,14 +325,61 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+const INLINE_CODE_BASE = "rounded bg-muted px-1.5 py-0.5 font-mono text-sm";
+
+// Inline code that names a workspace file is rendered as a clickable link that
+// opens it in the editor (post-processing — the agent doesn't format these).
+const InlineFileCode = observer(function InlineFileCode({
+  children,
+  className,
+}: ComponentProps<"code">) {
+  const workspace = useWorkspaceService();
+  let path: string | null = null;
+  if (typeof children === "string") path = workspace.resolveFilePath(children);
+
+  if (!path) {
+    return (
+      <code className={cn(INLINE_CODE_BASE, className)} data-streamdown="inline-code">
+        {children}
+      </code>
+    );
+  }
+
+  const openFile = () => workspace.open(path, undefined, { fullHeight: true });
+  return (
+    <code
+      className={cn(
+        INLINE_CODE_BASE,
+        "cursor-pointer text-primary underline decoration-primary/40 decoration-dotted underline-offset-2 transition-colors hover:bg-primary/10 hover:decoration-primary",
+        className
+      )}
+      data-streamdown="inline-code"
+      role="button"
+      tabIndex={0}
+      title={`Open ${path}`}
+      onClick={openFile}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        openFile();
+      }}
+    >
+      {children}
+    </code>
+  );
+});
+
+const streamdownComponents = { inlineCode: InlineFileCode };
+
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, components, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
       plugins={streamdownPlugins}
+      components={{ ...streamdownComponents, ...components }}
       {...props}
     />
   ),

@@ -29,6 +29,12 @@ export class WorkspaceService {
   treeError: string | null = null;
   expanded = new Set<string>();
 
+  // Files written this session (agent write/edit or manual editor saves).
+  // "created" (new file) stays sticky over later edits; "changed" otherwise.
+  changedFiles = new Map<string, "created" | "changed">();
+  // When true, the tree is pruned to only changed/created files.
+  changedOnly = false;
+
   // Workspace classification (from the tree response): where manual tests live
   // (`""` root, `.testeiya/manual-tests`, or null), and the linked project.
   manualTestsDir: string | null = null;
@@ -100,9 +106,64 @@ export class WorkspaceService {
     if (this.openFile) this.openFile = { ...this.openFile, fullHeight };
   }
 
+  /** All file paths in the tree (relative to cwd), for clickable-filename lookup. */
+  get filePaths(): Set<string> {
+    const set = new Set<string>();
+    collectFilePaths(this.tree, set);
+    return set;
+  }
+
+  /**
+   * Resolve an arbitrary inline-code string to a workspace file path, so the
+   * chat can turn mentioned filenames into clickable links. Matches a full
+   * relative path, else a unique basename/suffix; returns null when it isn't an
+   * unambiguous file in the tree.
+   */
+  resolveFilePath(text: string): string | null {
+    const cleaned = text.trim().replace(/^\.\//, "");
+    if (!cleaned) return null;
+    const paths = this.filePaths;
+    if (paths.has(cleaned)) return cleaned;
+    const suffix = `/${cleaned}`;
+    let match: string | null = null;
+    for (const p of paths) {
+      if (!p.endsWith(suffix)) continue;
+      if (match) return null;
+      match = p;
+    }
+    return match;
+  }
+
   /** Re-fetch the tree (e.g. after the agent writes a file). */
   triggerRefresh() {
     void this.loadTree();
+  }
+
+  /**
+   * Record a file written this session (agent or manual save) and refresh the
+   * tree. Status is derived from the pre-refresh tree: a path not yet present
+   * is "created", an existing one is "changed". "created" is sticky.
+   */
+  markChanged(path: string) {
+    if (!this.changedFiles.has(path)) {
+      const next = new Map(this.changedFiles);
+      next.set(path, treeHasPath(this.tree, path) ? "changed" : "created");
+      this.changedFiles = next;
+    }
+    void this.loadTree();
+  }
+
+  toggleChangedOnly() {
+    this.changedOnly = !this.changedOnly;
+    if (!this.changedOnly) return;
+    const next = new Set(this.expanded);
+    for (const path of this.changedFiles.keys()) expandAncestors(next, path);
+    this.expanded = next;
+  }
+
+  get visibleTree(): TreeNode[] {
+    if (!this.changedOnly) return this.tree;
+    return filterChangedTree(this.tree, this.changedFiles);
   }
 
   // --- file tree ---
@@ -243,6 +304,8 @@ export class WorkspaceService {
     this.tree = [];
     this.treeError = null;
     this.expanded = new Set();
+    this.changedFiles = new Map();
+    this.changedOnly = false;
     this.manualTestsDir = null;
     this.isProject = false;
     this.project = null;
@@ -308,6 +371,13 @@ export class WorkspaceService {
   }
 }
 
+function collectFilePaths(nodes: TreeNode[], set: Set<string>): void {
+  for (const n of nodes) {
+    if (n.kind === "file") set.add(n.path);
+    if (n.children) collectFilePaths(n.children, set);
+  }
+}
+
 function containsFolder(nodes: TreeNode[], path: string): boolean {
   for (const n of nodes) {
     if (n.path === path) return n.kind === "folder";
@@ -316,6 +386,32 @@ function containsFolder(nodes: TreeNode[], path: string): boolean {
     }
   }
   return false;
+}
+
+function treeHasPath(nodes: TreeNode[], path: string): boolean {
+  for (const n of nodes) {
+    if (n.path === path) return true;
+    if (n.children && path.startsWith(n.path + "/") && treeHasPath(n.children, path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function filterChangedTree(
+  nodes: TreeNode[],
+  changed: Map<string, "created" | "changed">
+): TreeNode[] {
+  const kept: TreeNode[] = [];
+  for (const n of nodes) {
+    if (n.kind === "file") {
+      if (changed.has(n.path)) kept.push(n);
+      continue;
+    }
+    const children = filterChangedTree(n.children ?? [], changed);
+    if (children.length > 0) kept.push({ ...n, children });
+  }
+  return kept;
 }
 
 // Expand the manual-tests dir and every folder on the way to it (e.g.

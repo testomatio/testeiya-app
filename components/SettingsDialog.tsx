@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { observer } from "mobx-react-lite";
 import {
   Dialog,
   DialogContent,
@@ -11,9 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { FolderOpenIcon } from "lucide-react";
-import { useWorkspaceService } from "@/lib/services/StoreProvider";
+import {
+  useWorkspaceService,
+  useMemoryService,
+} from "@/lib/services/StoreProvider";
 
 /**
  * In-app Settings for the desktop build: workspace switching (open a local
@@ -23,7 +28,7 @@ import { useWorkspaceService } from "@/lib/services/StoreProvider";
  * dialog (`ProvidersDialog`, opened from the header model name). MCP servers are
  * managed in their own dialog (`McpServersDialog`).
  */
-export function SettingsDialog({
+export const SettingsDialog = observer(function SettingsDialog({
   open,
   onOpenChange,
   cwd,
@@ -33,12 +38,16 @@ export function SettingsDialog({
   cwd?: string | null;
 }) {
   const workspace = useWorkspaceService();
+  const memory = useMemoryService();
   const [folder, setFolder] = useState("");
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
-    if (open) setFolder("");
-  }, [open]);
+    if (open) {
+      setFolder("");
+      void memory.load();
+    }
+  }, [open, memory]);
 
   // The WorkspaceService owns the open-folder flow (pick → POST → navigate).
   const openWorkspace = useCallback(
@@ -105,6 +114,59 @@ export function SettingsDialog({
           </p>
         </section>
 
+        {/* Memory */}
+        <section className="space-y-3 border-t pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Project memory</h3>
+              <p className="text-muted-foreground text-xs">
+                The agent consolidates durable facts from this project&apos;s past
+                sessions and reuses them later. Secret-like values are redacted, so
+                it is not a store for credentials.
+              </p>
+            </div>
+            <Switch
+              checked={memory.enabled}
+              onCheckedChange={(checked) => void memory.setEnabled(checked)}
+              aria-label="Enable project memory"
+            />
+          </div>
+
+          {memory.enabled && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">
+                {memory.loading
+                  ? "Checking…"
+                  : memory.exists
+                    ? "Memory stored for this project."
+                    : "No memory stored yet."}
+              </span>
+              <div className="ml-auto flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={memory.busy}
+                  onClick={() => void memory.rebuild()}
+                >
+                  Rebuild
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={memory.busy || !memory.exists}
+                  onClick={() => void memory.clear()}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <p className="text-muted-foreground text-xs">
+            Changes apply on the next session.
+          </p>
+        </section>
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Close
@@ -113,4 +175,4 @@ export function SettingsDialog({
       </DialogContent>
     </Dialog>
   );
-}
+});

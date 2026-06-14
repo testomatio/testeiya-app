@@ -48,7 +48,7 @@ function parseInput(raw: unknown): { path?: string; content?: string } | null {
  * the file into the shared workspace editor panel for persistent access.
  */
 function FileEditRenderer({ json }: Props) {
-  const { sessionId, open, triggerRefresh } = useWorkspaceService();
+  const { sessionId, open, markChanged } = useWorkspaceService();
   const parsed = parseInput(json);
   const path = parsed?.path;
   const content = parsed?.content;
@@ -56,7 +56,7 @@ function FileEditRenderer({ json }: Props) {
   useEffect(() => {
     if (!path) return;
     open(path, content);
-    triggerRefresh();
+    markChanged(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
@@ -74,7 +74,7 @@ function FileEditRenderer({ json }: Props) {
         sessionId={sessionId}
         path={path}
         initialContent={content}
-        onSaved={() => triggerRefresh()}
+        onSaved={() => markChanged(path)}
       />
     </div>
   );

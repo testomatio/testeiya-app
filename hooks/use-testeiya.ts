@@ -88,10 +88,21 @@ export function useTesteiya(params?: TesteiyaParams) {
   const [mcpTools, setMcpTools] = useState<string[]>([]);
   const [expectedMcpServers, setExpectedMcpServers] = useState<string[]>([]);
   const [mcpLoaded, setMcpLoaded] = useState(false);
+  /** SDK conversation id of the live thread — used to highlight it in the
+   *  Chats sidebar and refresh the list when it changes. */
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   /** Name of the currently-in-flight tool, or null if none. */
   const [activeTool, setActiveTool] = useState<string | null>(null);
   /** Last error from the agent server (e.g. missing API key). Shown in the UI. */
   const [error, setError] = useState<string | null>(null);
+  /** Answered `ask_question` calls, keyed by `toolCallId` → picked option. The
+   *  form's per-message tool state is unreliable here (one prompt spans several
+   *  assistant messages and `updateLastAssistant` only touches the last one), so
+   *  this durable, id-keyed record is the source of truth for "this question is
+   *  resolved" regardless of which message re-renders the form. */
+  const [answeredQuestions, setAnsweredQuestions] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     if (!params?.sessionId) return;
@@ -116,6 +127,9 @@ export function useTesteiya(params?: TesteiyaParams) {
   const reasoningStartRef = useRef<number>(0);
   const currentMsgIdRef = useRef("");
   const pendingMessageRef = useRef<{ text: string; files?: AttachedFile[] } | null>(null);
+  // A conversation the user switched to while the socket was reconnecting; sent
+  // as `open_conversation` once it opens so the next prompt resumes that thread.
+  const pendingConversationRef = useRef<string | null>(null);
   // A `skill` event arrives just before the reply's `start`; stash it so the
   // new assistant message can carry the "using skill" banner.
   const pendingSkillRef = useRef<{ name: string; description: string } | null>(null);
@@ -174,7 +188,7 @@ export function useTesteiya(params?: TesteiyaParams) {
       // the agent works — means the connection is alive, so re-arm the stall
       // detector. Disarm on terminal events (the turn ended, or we're idle).
       clearWatchdog();
-      const terminal = ["finish", "done", "error", "abort", "session_cleared"];
+      const terminal = ["finish", "done", "error", "abort", "session_cleared", "conversation_opened"];
       if (!terminal.includes(data.type as string)) armWatchdog();
 
       switch (data.type) {
@@ -183,6 +197,9 @@ export function useTesteiya(params?: TesteiyaParams) {
           setCwd(typeof data.cwd === "string" ? data.cwd : null);
           setMcpTools(Array.isArray(data.mcpTools) ? (data.mcpTools as string[]) : []);
           setMcpLoaded(true);
+          if (typeof data.conversationId === "string") {
+            setCurrentConversationId(data.conversationId);
+          }
           // If there's a pending message, send it now
           if (pendingMessageRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             const { sessionId: _, ...wsParams } = paramsRef.current || {};
@@ -325,6 +342,7 @@ export function useTesteiya(params?: TesteiyaParams) {
           setCwd(null);
           setMcpTools([]);
           setMcpLoaded(false);
+          setAnsweredQuestions({});
           setStatus("ready");
           break;
       }
@@ -346,6 +364,16 @@ export function useTesteiya(params?: TesteiyaParams) {
 
     ws.onopen = () => {
       setStatus("ready");
+      // Re-bind a conversation the user switched to while reconnecting.
+      if (pendingConversationRef.current && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "open_conversation",
+            conversationId: pendingConversationRef.current,
+          })
+        );
+        pendingConversationRef.current = null;
+      }
       // Flush a message the user sent while the socket was still connecting.
       // (Previously this only happened on `session_created`, which never
       // arrives until a prompt is sent — so the first message could be lost.)
@@ -442,6 +470,7 @@ export function useTesteiya(params?: TesteiyaParams) {
             : t
         ),
       }));
+      setAnsweredQuestions((a) => ({ ...a, [toolCallId]: value }));
       if (wsRef.current?.readyState !== WebSocket.OPEN) return;
       wsRef.current.send(JSON.stringify({ type: "answer", toolCallId, value }));
       armWatchdog();
@@ -462,11 +491,39 @@ export function useTesteiya(params?: TesteiyaParams) {
     }
     setMessages([]);
     setModel(null);
+    setCurrentConversationId(null);
     setStatus("ready");
     setError(null);
+    setAnsweredQuestions({});
     contentRef.current = "";
     reasoningRef.current = "";
   }, [clearWatchdog]);
+
+  // Switch to a past conversation: render its history and bind new prompts to
+  // it over the live socket (no reconnect). The next prompt resumes the thread.
+  const openConversation = useCallback(
+    (conversationId: string, historyMessages: ChatMessage[]) => {
+      clearWatchdog();
+      setError(null);
+      setAnsweredQuestions({});
+      pendingSkillRef.current = null;
+      pendingMessageRef.current = null;
+      contentRef.current = "";
+      reasoningRef.current = "";
+      setMessages(historyMessages);
+      setCurrentConversationId(conversationId);
+      setStatus("ready");
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({ type: "open_conversation", conversationId })
+        );
+        return;
+      }
+      pendingConversationRef.current = conversationId;
+      connect();
+    },
+    [clearWatchdog, connect]
+  );
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -480,10 +537,13 @@ export function useTesteiya(params?: TesteiyaParams) {
     mcpLoaded,
     activeTool,
     error,
+    answeredQuestions,
+    currentConversationId,
     sendMessage,
     answerQuestion,
     stop,
     clearSession,
+    openConversation,
     clearError,
   };
 }

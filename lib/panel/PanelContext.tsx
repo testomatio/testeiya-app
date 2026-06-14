@@ -22,12 +22,17 @@ interface PanelContextValue {
   setActiveSection(id: PanelSectionId | null): void;
   /** Open the panel and expand a section in one call (e.g. from the empty state). */
   openSection(id: PanelSectionId): void;
+  /** Whether the chat column is visible (toggled from the top bar). */
+  chatOpen: boolean;
+  toggleChat(): void;
+  setChatOpen(open: boolean): void;
 }
 
 const PanelContext = createContext<PanelContextValue | null>(null);
 
 const OPEN_KEY = "testeiya.sidebar.open";
 const SECTION_KEY = "testeiya.sidebar.section";
+const CHAT_OPEN_KEY = "testeiya.chat.open";
 const SECTION_IDS: PanelSectionId[] = [
   "workspace",
   "project",
@@ -57,6 +62,17 @@ function readStoredSection(): PanelSectionId | null | undefined {
   return undefined;
 }
 
+/** Read persisted chat-open state; null when nothing is stored. */
+function readStoredChatOpen(): boolean | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = window.localStorage.getItem(CHAT_OPEN_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch {}
+  return null;
+}
+
 export function PanelProvider({
   defaultOpen = false,
   defaultSection = "workspace",
@@ -73,6 +89,7 @@ export function PanelProvider({
   const [open, setOpenState] = useState<boolean>(defaultOpen);
   const [activeSection, setActiveSectionState] =
     useState<PanelSectionId | null>(defaultSection);
+  const [chatOpen, setChatOpenState] = useState<boolean>(true);
 
   // Apply persisted UI state once, after hydration. `hydrated` gates the
   // persist effects so they don't write the default over storage on the way in.
@@ -85,6 +102,8 @@ export function PanelProvider({
     if (storedOpen !== null) setOpenState(defaultOpen || storedOpen);
     const storedSection = readStoredSection();
     if (storedSection !== undefined) setActiveSectionState(storedSection);
+    const storedChatOpen = readStoredChatOpen();
+    if (storedChatOpen !== null) setChatOpenState(storedChatOpen);
     setHydrated(true);
   }, [defaultOpen]);
 
@@ -100,6 +119,12 @@ export function PanelProvider({
       window.localStorage.setItem(SECTION_KEY, activeSection ?? "none");
     } catch {}
   }, [activeSection, hydrated]);
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(CHAT_OPEN_KEY, chatOpen ? "1" : "0");
+    } catch {}
+  }, [chatOpen, hydrated]);
 
   const setOpen = useCallback((v: boolean) => setOpenState(v), []);
   const togglePanel = useCallback(() => setOpenState((v) => !v), []);
@@ -111,6 +136,8 @@ export function PanelProvider({
     setActiveSectionState(id);
     setOpenState(true);
   }, []);
+  const setChatOpen = useCallback((v: boolean) => setChatOpenState(v), []);
+  const toggleChat = useCallback(() => setChatOpenState((v) => !v), []);
 
   const value = useMemo(
     () => ({
@@ -120,8 +147,21 @@ export function PanelProvider({
       activeSection,
       setActiveSection,
       openSection,
+      chatOpen,
+      toggleChat,
+      setChatOpen,
     }),
-    [open, togglePanel, setOpen, activeSection, setActiveSection, openSection]
+    [
+      open,
+      togglePanel,
+      setOpen,
+      activeSection,
+      setActiveSection,
+      openSection,
+      chatOpen,
+      toggleChat,
+      setChatOpen,
+    ]
   );
 
   return <PanelContext.Provider value={value}>{children}</PanelContext.Provider>;
@@ -139,6 +179,9 @@ export function usePanel(): PanelContextValue {
       activeSection: null,
       setActiveSection: () => {},
       openSection: () => {},
+      chatOpen: true,
+      toggleChat: () => {},
+      setChatOpen: () => {},
     };
   }
   return ctx;

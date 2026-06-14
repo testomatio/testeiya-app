@@ -10,6 +10,7 @@ import {
   mdiPlayCircleOutline,
   mdiClipboardTextOutline,
   mdiTextBoxCheckOutline,
+  mdiRefresh,
 } from "@mdi/js";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
@@ -39,19 +40,31 @@ export const ProjectSection = observer(function ProjectSection({
     >
       {current && links ? (
         <div className="space-y-3 p-3">
-          <button
-            type="button"
-            onClick={() => project.openExternal(links.project)}
-            title="Open project in Testomat.io"
-            className="group flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:text-primary"
-          >
-            <ProjectGlyph className="size-4 shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">{current.title}</span>
-            <MdiIcon
-              path={mdiOpenInNew}
-              className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-            />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => project.openExternal(links.project)}
+              title="Open project in Testomat.io"
+              className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:text-primary"
+            >
+              <ProjectGlyph className="size-4 shrink-0 text-primary" />
+              <span className="truncate text-sm font-medium">{current.title}</span>
+              <MdiIcon
+                path={mdiOpenInNew}
+                className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+              />
+            </button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-7 shrink-0 p-0 text-muted-foreground"
+              onClick={() => project.refresh()}
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <MdiIcon path={mdiRefresh} className="size-4" />
+            </Button>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <StatTile
