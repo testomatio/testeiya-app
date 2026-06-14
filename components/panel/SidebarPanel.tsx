@@ -124,10 +124,8 @@ export const SidebarPanel = observer(function SidebarPanel({
                     onClick={() => {
                       if (!open) {
                         togglePanel();
-                        setActiveSection(def.id);
-                      } else {
-                        setActiveSection(isActive ? null : def.id);
                       }
+                      setActiveSection(def.id);
                     }}
                     aria-label={def.title}
                     aria-pressed={isActive}
