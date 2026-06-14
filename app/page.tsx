@@ -609,9 +609,6 @@ const ChatPage = observer(function ChatPage() {
                 onClose={workspace.close}
                 onSaved={() => workspace.triggerRefresh()}
                 fillHeight={fileFullHeight}
-                onToggleFullScreen={() =>
-                  workspace.setFullHeight(!workspace.openFile?.fullHeight)
-                }
                 className={fileFullHeight ? "min-w-0 flex-1" : undefined}
               />
             </div>
