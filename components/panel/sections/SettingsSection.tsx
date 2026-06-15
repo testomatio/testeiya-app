@@ -5,9 +5,13 @@ import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { FolderOpenIcon } from "@/lib/icons";
 import { SectionShell } from "../SectionShell";
-import { useWorkspaceService } from "@/lib/services/StoreProvider";
+import {
+  useWorkspaceService,
+  useDebugLogService,
+} from "@/lib/services/StoreProvider";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
 export const SettingsSection = observer(function SettingsSection({
@@ -16,6 +20,7 @@ export const SettingsSection = observer(function SettingsSection({
   initializing: _initializing,
 }: PanelSectionProps) {
   const workspace = useWorkspaceService();
+  const debug = useDebugLogService();
   const [folder, setFolder] = useState("");
   const [opening, setOpening] = useState(false);
 
@@ -69,6 +74,23 @@ export const SettingsSection = observer(function SettingsSection({
             Opens a local directory as the agent&apos;s workspace (reloads the
             session).
           </p>
+        </div>
+
+        <div className="space-y-3 border-t pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Debug panel</h3>
+              <p className="text-muted-foreground text-xs">
+                Show a Debug section in the sidebar that logs every Testomat.io
+                API request and response.
+              </p>
+            </div>
+            <Switch
+              checked={debug.enabled}
+              onCheckedChange={(checked) => debug.setEnabled(checked)}
+              aria-label="Enable debug panel"
+            />
+          </div>
         </div>
       </div>
     </SectionShell>

@@ -9,6 +9,7 @@ import {
   mdiMonitorScreenshot,
 } from "@mdi/js";
 import { ChevronDownIcon } from "lucide-react";
+import { GlobeIcon } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MdiIcon } from "@/components/icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useBrowserService } from "@/lib/services/StoreProvider";
 
@@ -27,34 +29,68 @@ import { useBrowserService } from "@/lib/services/StoreProvider";
  * status dot (green = browser running, gray = not running): Start/Stop the
  * browser, Record/Stop video, Screenshot. Self-contained — relocate as needed.
  */
-export const BrowserControls = observer(function BrowserControls() {
+export const BrowserControls = observer(function BrowserControls({
+  iconOnly = false,
+}: {
+  /** Render just a status dot + globe icon trigger (for the collapsed rail). */
+  iconOnly?: boolean;
+}) {
   const browser = useBrowserService();
   const startStopIcon = browser.browserOpen ? mdiPowerStandby : mdiPlayCircleOutline;
   const recordIcon = browser.recording ? mdiStopCircleOutline : mdiRecordCircleOutline;
+  const statusDot = (
+    <span
+      className={cn(
+        "size-2 rounded-full",
+        browser.browserOpen ? "bg-green-500" : "bg-muted-foreground/40"
+      )}
+      title={browser.browserOpen ? "Browser running" : "Browser not running"}
+    />
+  );
 
   return (
     <DropdownMenu onOpenChange={(open) => open && void browser.refreshStatus()}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={!browser.sessionId}
-            className="h-7 gap-1.5 px-2 text-muted-foreground text-xs"
+      {iconOnly && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={!browser.sessionId}
+                    aria-label="Browser"
+                    className="relative text-muted-foreground"
+                  />
+                }
+              >
+                <GlobeIcon className="size-4" />
+                <span className="absolute right-1 top-1">{statusDot}</span>
+              </DropdownMenuTrigger>
+            }
           />
-        }
-      >
-        <span
-          className={cn(
-            "size-2 rounded-full",
-            browser.browserOpen ? "bg-green-500" : "bg-muted-foreground/40"
-          )}
-          title={browser.browserOpen ? "Browser running" : "Browser not running"}
-        />
-        Browser
-        <ChevronDownIcon className="size-3.5 opacity-60" />
-      </DropdownMenuTrigger>
+          <TooltipContent side="left"><p>Browser</p></TooltipContent>
+        </Tooltip>
+      )}
+      {!iconOnly && (
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!browser.sessionId}
+              className="h-7 gap-1.5 px-2 text-muted-foreground text-xs"
+            />
+          }
+        >
+          {statusDot}
+          Browser
+          <ChevronDownIcon className="size-3.5 opacity-60" />
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem
           disabled={browser.busy}

@@ -1,6 +1,12 @@
 import type { ComponentType, ReactNode } from "react";
 
-export type PanelSectionId = "workspace" | "project" | "connections" | "pipelines" | "settings";
+export type PanelSectionId =
+  | "workspace"
+  | "project"
+  | "connections"
+  | "pipelines"
+  | "settings"
+  | "debug";
 
 /** Props every panel section receives from the SidebarPanel container. */
 export interface PanelSectionProps {

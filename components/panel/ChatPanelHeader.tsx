@@ -8,9 +8,11 @@ import {
   mdiPencilOutline,
 } from "@mdi/js";
 import { ChevronDownIcon, Trash, Trash2Icon } from "lucide-react";
-import { BrainIcon } from "@/lib/icons";
+import { BrainIcon, Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
+import { usePanel } from "@/lib/panel/PanelContext";
 import { MdiIcon } from "@/components/icons";
+import { BrowserControls } from "@/components/BrowserControls";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,16 +32,20 @@ import { useSessionsService } from "@/lib/services/StoreProvider";
 export const ChatPanelHeader = observer(function ChatPanelHeader({
   onClear,
   canClear,
+  canCollapse,
   onOpenMemory,
 }: {
   /** Clear the current chat (wired to the live agent socket by the page). */
   onClear?: () => void;
   /** Whether there is anything to clear (hides the button on an empty chat). */
   canClear?: boolean;
+  /** Whether the chat can be collapsed (only when a widget fills the row). */
+  canCollapse?: boolean;
   /** Open the project-memory dialog. */
   onOpenMemory?: () => void;
 }) {
   const sessions = useSessionsService();
+  const { setChatOpen } = usePanel();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -57,7 +63,7 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
 
   if (editing) {
     return (
-      <div className="flex shrink-0 items-center gap-1 border-b px-2">
+      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
         <input
           autoFocus
           value={draft}
@@ -74,7 +80,7 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b pr-1">
+    <div className="flex h-12 shrink-0 items-center gap-1 border-b pr-1">
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) void sessions.load();
@@ -200,6 +206,19 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
         >
           <Trash className="size-3.5" />
           <span className="hidden sm:inline">Clear</span>
+        </Button>
+      )}
+      <BrowserControls />
+      {canCollapse && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 w-6 shrink-0 p-0"
+          onClick={() => setChatOpen(false)}
+          title="Collapse chat"
+          aria-label="Collapse chat"
+        >
+          <Icon name="dock_to_right" className="size-4" />
         </Button>
       )}
     </div>

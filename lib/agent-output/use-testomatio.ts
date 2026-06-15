@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { reaction } from "mobx";
 import { useStores } from "@/lib/services/StoreProvider";
+import { loggedFetch } from "@/lib/debug/external-log";
 
 /*
  * Fetches a Testomat.io v2 resource via the `/api/testomatio/{resource}`
@@ -122,9 +123,8 @@ export function useTestomatio<T>(
       setState({ data: null, loading: true, error: null, meta: null });
     }
     const ctrl = new AbortController();
-    fetch(url, { signal: ctrl.signal })
-      .then(async (r) => {
-        const text = await r.text();
+    loggedFetch(url, { signal: ctrl.signal })
+      .then(({ res: r, text }) => {
         const json = text ? (JSON.parse(text) as unknown) : null;
         if (!r.ok) {
           const msg =
@@ -174,12 +174,11 @@ export async function mutateTestomatio<T>(
     id: String(opts.id),
   });
   const url = `/api/testomatio/${encodeURIComponent(resource)}?${params.toString()}`;
-  const r = await fetch(url, {
+  const { res: r, text } = await loggedFetch(url, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts.body),
   });
-  const text = await r.text();
   const json = text ? (JSON.parse(text) as unknown) : null;
   if (!r.ok) {
     const msg =
@@ -220,8 +219,7 @@ export async function uploadTestRunAttachment(opts: {
     init.body = body;
   }
 
-  const r = await fetch(url, init);
-  const text = await r.text();
+  const { res: r, text } = await loggedFetch(url, init);
   const json = text ? (JSON.parse(text) as unknown) : null;
   if (!r.ok) {
     const msg =

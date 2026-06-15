@@ -9,6 +9,7 @@ import { BrowserService } from "./browser-service";
 import { MemoryService } from "./memory-service";
 import { SessionsService } from "./sessions-service";
 import { WidgetService } from "./widget-service";
+import { DebugLogService } from "./debug-log-service";
 
 /**
  * Composition root for the client service layer. Owns the shared, observable
@@ -31,6 +32,7 @@ export class RootStore {
   memory: MemoryService;
   sessions: SessionsService;
   widget: WidgetService;
+  debug: DebugLogService;
 
   constructor() {
     // Only `sessionId` is observable here; service instances are assigned after
@@ -46,6 +48,7 @@ export class RootStore {
     this.memory = new MemoryService(this);
     this.sessions = new SessionsService(this);
     this.widget = new WidgetService(this);
+    this.debug = new DebugLogService(this);
   }
 
   setSessionId(id: string | null) {

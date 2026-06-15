@@ -35,6 +35,7 @@ import {
   renderRichTool,
 } from "@/components/ai-elements/tool";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
+import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
@@ -61,11 +62,13 @@ import {
   useProvidersService,
   useConnectionsService,
   useWidgetService,
+  useSessionsService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import type { TreeNode } from "@/lib/services/types";
 import { SidebarPanel } from "@/components/panel/SidebarPanel";
 import { WidgetPane } from "@/components/panel/WidgetPane";
+import { ChatColumn } from "@/components/panel/ChatColumn";
 import { ChatPanelHeader } from "@/components/panel/ChatPanelHeader";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
@@ -84,6 +87,12 @@ function isAskQuestion(tool: ToolCall): boolean {
   return tool.toolName === "ask_question";
 }
 
+// The agent rewrites its plan via repeated `todo_write` calls; they're folded
+// into a single persistent panel instead of one card each.
+function isTodoWrite(tool: ToolCall): boolean {
+  return tool.toolName === "todo_write";
+}
+
 /** Rich-view tools: `render_*` customs + MCP `*_list` auto-renders. */
 function isRenderish(tool: ToolCall): boolean {
   return !isAskQuestion(tool) && richViewMode(tool.toolName) !== null;
@@ -93,7 +102,8 @@ function isRenderish(tool: ToolCall): boolean {
 type Segment =
   | { kind: "routine-solo"; tool: ToolCall }
   | { kind: "routine-group"; tools: ToolCall[] }
-  | { kind: "render"; tool: ToolCall; isLatest: boolean };
+  | { kind: "render"; tool: ToolCall; isLatest: boolean }
+  | { kind: "todo"; tool: ToolCall; running: boolean; current: boolean };
 
 /**
  * Single in-order pass through a message's tools. Routine tools batched
@@ -101,7 +111,11 @@ type Segment =
  * so they keep their position in the narrative. `ask_question` is dropped
  * here — page.tsx renders it separately, pinned to the message bottom.
  */
-function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
+function segmentTools(
+  tools: ToolCall[],
+  isStreaming: boolean,
+  isCurrentTodo: boolean
+): Segment[] {
   // Find the index of the LAST render-ish tool so we can expand just that
   // one when the message has finished streaming.
   let lastRenderIdx = -1;
@@ -112,8 +126,25 @@ function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
     }
   }
 
+  // All todo_write calls collapse into one panel showing the latest successful
+  // state (each call's output carries the full plan); a still-running call keeps
+  // the last good list and flags "running".
+  let lastTodo: ToolCall | null = null;
+  let lastTodoWithOutput: ToolCall | null = null;
+  for (const t of tools) {
+    if (!isTodoWrite(t)) continue;
+    lastTodo = t;
+    if (t.state === "output-available") lastTodoWithOutput = t;
+  }
+  const todoTool = lastTodoWithOutput ?? lastTodo;
+  const todoRunning =
+    !!lastTodo &&
+    lastTodo.state !== "output-available" &&
+    lastTodo.state !== "output-error";
+
   const out: Segment[] = [];
   let buf: ToolCall[] = [];
+  let todoEmitted = false;
   const flush = () => {
     if (buf.length === 0) return;
     if (buf.length === 1) out.push({ kind: "routine-solo", tool: buf[0] });
@@ -122,6 +153,18 @@ function segmentTools(tools: ToolCall[], isStreaming: boolean): Segment[] {
   };
   tools.forEach((t, idx) => {
     if (isAskQuestion(t)) return; // handled at message bottom
+    if (isTodoWrite(t)) {
+      if (todoEmitted || !todoTool) return; // one persistent panel per message
+      flush();
+      out.push({
+        kind: "todo",
+        tool: todoTool,
+        running: todoRunning,
+        current: isCurrentTodo,
+      });
+      todoEmitted = true;
+      return;
+    }
     if (isRenderish(t)) {
       flush();
       out.push({
@@ -151,6 +194,19 @@ function summarizeTools(tools: ToolCall[]): string {
   return out.join(" · ");
 }
 
+// What to show next to a routine tool's name. Prefer the model's short intent
+// label `_i`; when it's absent fall back to the most identifying input field —
+// the command for bash, the file path for read/write/edit, the pattern for
+// grep/find — so the row is never just a bare tool name.
+function routineDescription(input: ToolCall["input"]): string | undefined {
+  if (typeof input._i === "string" && input._i.trim()) return input._i;
+  for (const field of ["command", "cmd", "file_path", "path", "pattern", "glob", "query", "url"]) {
+    const value = input[field];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
 function renderSegments(
   segments: Segment[],
   renderRoutine: (tool: ToolCall) => ReactNode,
@@ -159,6 +215,18 @@ function renderSegments(
   return segments.map((seg, idx) => {
     if (seg.kind === "routine-solo") return renderRoutine(seg.tool);
     if (seg.kind === "render") return renderRender(seg.tool, seg.isLatest);
+    if (seg.kind === "todo") {
+      // Stable key (one per message) so the panel updates in place rather than
+      // remounting as later todo_write calls supply newer state.
+      return (
+        <TodoWriteRenderer
+          key="todo"
+          tool={seg.tool}
+          running={seg.running}
+          current={seg.current}
+        />
+      );
+    }
     // routine-group
     const running = seg.tools.some(
       (t) => t.state !== "output-available" && t.state !== "output-error"
@@ -365,7 +433,7 @@ const ChatPage = observer(function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectIds.join(","), sessionId]);
 
-  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, sendMessage, answerQuestion, stop, clearSession, clearError } =
+  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, currentConversationId, sendMessage, answerQuestion, stop, clearSession, openConversation, clearError } =
     useTesteiya(params);
   const host = useHost();
   const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
@@ -381,6 +449,7 @@ const ChatPage = observer(function ChatPage() {
   const providers = useProvidersService();
   const connections = useConnectionsService();
   const widget = useWidgetService();
+  const sessions = useSessionsService();
   const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
 
   // Feed the running session's MCP tools into the connections service so the
@@ -415,6 +484,15 @@ const ChatPage = observer(function ChatPage() {
       output: latestRenderTool.output,
     });
   }, [latestRenderTool, widget]);
+
+  // The plan evolves across turns; only the most recent message's todo panel is
+  // still relevant, so earlier ones render collapsed.
+  const lastTodoMessageId = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      if ((messages[m].tools ?? []).some(isTodoWrite)) return messages[m].id;
+    }
+    return null;
+  }, [messages]);
 
   // Keep the header's provider/model label in sync — refresh when the Providers
   // dialog opens/closes so a new selection shows immediately. (The live session
@@ -548,6 +626,116 @@ const ChatPage = observer(function ChatPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleClear]);
 
+  useEffect(() => {
+    sessions.setHandlers(openConversation, clearSession);
+  }, [sessions, openConversation, clearSession]);
+
+  // Mirror the live conversation id (highlights the active chat) and refresh the
+  // list when it changes — a brand-new chat appears once it has output.
+  useEffect(() => {
+    sessions.setActiveId(currentConversationId ?? null);
+    void sessions.load();
+  }, [sessions, currentConversationId]);
+
+  // Refresh project counters + chat list once each AI turn finishes (the agent
+  // may have created/edited tests or runs). Only on a busy→ready edge.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status !== "ready") return;
+    if (prev !== "submitted" && prev !== "streaming") return;
+    project.refresh();
+    void sessions.load();
+  }, [status, project, sessions]);
+
+  const widgetBody = (() => {
+    const current = widget.current;
+    if (!current) return null;
+    if (current.source === "tool") {
+      const rich = renderRichTool(
+        current.toolName,
+        current.input,
+        current.output
+      );
+      if (!rich) return null;
+      return (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <span className="shrink-0 text-muted-foreground">
+              {rich.header.icon}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {rich.header.title}
+            </span>
+            {rich.header.tag && (
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                {rich.header.tag}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 p-0"
+              onClick={() => widget.clear()}
+              aria-label="Close widget"
+            >
+              <XIcon className="size-4" />
+            </Button>
+          </div>
+          <div
+            key={current.key}
+            className="min-h-0 flex-1 overflow-auto p-3"
+          >
+            {rich.body}
+          </div>
+        </div>
+      );
+    }
+    if (current.source === "resource") {
+      const url = project.currentLinks?.[current.resource];
+      return (
+        <div className="flex min-h-0 flex-1 p-2">
+          <ResourceWidgetView
+            resource={current.resource}
+            externalUrl={url}
+            onOpenExternal={() => url && project.openExternal(url)}
+            onRefresh={() => project.refresh()}
+            onClose={() => project.closeResource()}
+            className="min-w-0 flex-1"
+          />
+        </div>
+      );
+    }
+    if (current.source === "file") {
+      const file = workspace.openFile;
+      const sid = workspace.sessionId;
+      if (!file || !sid) return null;
+      return (
+        <div className="flex min-h-0 flex-1 p-2">
+          <MarkdownEditor
+            key={file.key}
+            sessionId={sid}
+            path={file.path}
+            initialContent={file.initialContent}
+            scrollToText={file.scrollToText}
+            readOnly={status === "streaming" || status === "submitted"}
+            onClose={workspace.close}
+            onSaved={() => workspace.markChanged(file.path)}
+            fillHeight
+            className="min-w-0 flex-1"
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="flex min-h-0 flex-1 p-2">
+        <SearchResults className="min-w-0 flex-1" />
+      </div>
+    );
+  })();
+  const hasWidget = widgetBody !== null;
+
   return (
     <div className="flex h-full flex-col">
       {error && (
@@ -594,96 +782,10 @@ const ChatPage = observer(function ChatPage() {
       {/* Below-header region: sidebar | widget pane | chat column. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
-        <WidgetPane fill={!panel.chatOpen}>
-          {(() => {
-            const current = widget.current;
-            if (!current) return null;
-            if (current.source === "tool") {
-              const rich = renderRichTool(
-                current.toolName,
-                current.input,
-                current.output
-              );
-              if (!rich) return null;
-              return (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="flex items-center gap-2 border-b px-3 py-2">
-                    <span className="shrink-0 text-muted-foreground">
-                      {rich.header.icon}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {rich.header.title}
-                    </span>
-                    {rich.header.tag && (
-                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                        {rich.header.tag}
-                      </span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 shrink-0 p-0"
-                      onClick={() => widget.clear()}
-                      aria-label="Close widget"
-                    >
-                      <XIcon className="size-4" />
-                    </Button>
-                  </div>
-                  <div
-                    key={current.key}
-                    className="min-h-0 flex-1 overflow-auto p-3"
-                  >
-                    {rich.body}
-                  </div>
-                </div>
-              );
-            }
-            if (current.source === "resource") {
-              const url = project.currentLinks?.[current.resource];
-              return (
-                <div className="flex min-h-0 flex-1 p-2">
-                  <ResourceWidgetView
-                    resource={current.resource}
-                    externalUrl={url}
-                    onOpenExternal={() => url && project.openExternal(url)}
-                    onRefresh={() => project.refresh()}
-                    onClose={() => project.closeResource()}
-                    className="min-w-0 flex-1"
-                  />
-                </div>
-              );
-            }
-            if (current.source === "file") {
-              const file = workspace.openFile;
-              const sid = workspace.sessionId;
-              if (!file || !sid) return null;
-              return (
-                <div className="flex min-h-0 flex-1 p-2">
-                  <MarkdownEditor
-                    key={file.key}
-                    sessionId={sid}
-                    path={file.path}
-                    initialContent={file.initialContent}
-                    scrollToText={file.scrollToText}
-                    readOnly={status === "streaming" || status === "submitted"}
-                    onClose={workspace.close}
-                    onSaved={() => workspace.markChanged(file.path)}
-                    fillHeight
-                    className="min-w-0 flex-1"
-                  />
-                </div>
-              );
-            }
-            return (
-              <div className="flex min-h-0 flex-1 p-2">
-                <SearchResults className="min-w-0 flex-1" />
-              </div>
-            );
-          })()}
-        </WidgetPane>
-        {panel.chatOpen && (
-        <div className={cn("relative flex min-w-0 flex-1 flex-col bg-muted/30", messages.length === 0 && "justify-center")}>
-          <ChatPanelHeader onOpenMemory={() => setMemoryOpen(true)} />
+        <WidgetPane fill>{widgetBody}</WidgetPane>
+        <ChatColumn hasWidget={hasWidget}>
+          <ChatPanelHeader canCollapse={hasWidget} onOpenMemory={() => setMemoryOpen(true)} />
+      <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
       {/* MCP status + Clear — shown only when there's an active chat */}
       <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", messages.length === 0 && "hidden")}>
           {isDev && cwd && (
@@ -774,12 +876,15 @@ const ChatPage = observer(function ChatPage() {
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
           {messages.length === 0 && (!canConnectTestomatio || sessionId || cwd) && (
             <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/testeiya-logo.png"
+                alt="Testeiya"
+                className="h-auto max-h-96 w-auto max-w-full shrink-0 object-contain"
+              />
               <div className="space-y-3">
-                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
-                  Test smarter, ship faster
-                </h1>
                 <p className="text-base text-muted-foreground max-w-md mx-auto">
-                  Ask anything about your tests — coverage gaps, flaky cases, quality reviews, or new test ideas.
+                  Ask anything about tests, the testing goddess will help you
                 </p>
               </div>
               <Suggestions>
@@ -894,7 +999,11 @@ const ChatPage = observer(function ChatPage() {
                 const isStreaming =
                   isLastMessage &&
                   (status === "streaming" || status === "submitted");
-                const segments = segmentTools(tools, isStreaming);
+                const segments = segmentTools(
+                  tools,
+                  isStreaming,
+                  message.id === lastTodoMessageId
+                );
 
                 const renderRoutine = (tool: ToolCall): ReactNode => (
                   <div key={tool.toolCallId}>
@@ -904,6 +1013,7 @@ const ChatPage = observer(function ChatPage() {
                         type="dynamic-tool"
                         toolName={tool.toolName}
                         state={tool.state}
+                        description={routineDescription(tool.input)}
                       />
                       <ToolContent>
                         <ToolInput input={tool.input} />
@@ -1073,8 +1183,8 @@ const ChatPage = observer(function ChatPage() {
         />
         </div>
       </div>
-        </div>
-        )}
+      </div>
+        </ChatColumn>
       </div>
     </div>
   );

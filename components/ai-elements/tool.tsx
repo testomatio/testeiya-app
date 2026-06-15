@@ -48,7 +48,7 @@ export const Tool = ({
 
   return (
     <Collapsible
-      className={cn("group not-prose mb-4 w-full rounded-md border bg-background", className)}
+      className={cn("group not-prose w-full rounded-md border bg-background", className)}
       open={effectiveOpen}
       onOpenChange={(v, details) => {
         setUserOverride(v);

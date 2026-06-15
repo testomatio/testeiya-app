@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { observer } from "mobx-react-lite";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
-import { useProjectService } from "@/lib/services/StoreProvider";
+import { useProjectService, useDebugLogService } from "@/lib/services/StoreProvider";
 import { useTheme } from "@/lib/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon, SunIcon, MoonIcon, ChevronsUpDownIcon, ExternalLinkIcon } from "@/lib/icons";
@@ -43,7 +43,12 @@ export const SidebarPanel = observer(function SidebarPanel({
 }) {
   const { open, activeSection, setActiveSection, togglePanel } = usePanel();
   const project = useProjectService();
+  const debug = useDebugLogService();
   const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
+
+  const sections = PANEL_SECTIONS.filter(
+    (def) => def.id !== "debug" || debug.enabled
+  );
 
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [initializing, setInitializing] = useState(true);
@@ -113,7 +118,7 @@ export const SidebarPanel = observer(function SidebarPanel({
 
         {/* Section icons */}
         <div className="flex flex-1 flex-col items-center gap-1 w-full px-1 pt-1">
-          {PANEL_SECTIONS.map((def) => {
+          {sections.map((def) => {
             const isActive = open && activeSection === def.id;
             return (
               <Tooltip key={def.id}>
@@ -171,8 +176,14 @@ export const SidebarPanel = observer(function SidebarPanel({
       {open && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Sidebar header: project info */}
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <span className="font-semibold text-sm shrink-0">Testeiya</span>
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b">
+            <Tooltip>
+              <TooltipTrigger render={
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/testeiya-icon.svg" alt="Testeiya" className="h-12 w-12 shrink-0" />
+              } />
+              <TooltipContent side="bottom"><p>Testeiya</p></TooltipContent>
+            </Tooltip>
             <div className="flex-1" />
             {project.currentProject && (
               <>
@@ -219,7 +230,7 @@ export const SidebarPanel = observer(function SidebarPanel({
 
           {/* Section content */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {PANEL_SECTIONS.map((def) => {
+            {sections.map((def) => {
               const isActive = activeSection === def.id;
               return (
                 <def.Section

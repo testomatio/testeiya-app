@@ -58,3 +58,4 @@ export const useBrowserService = () => useRootStore().browser;
 export const useMemoryService = () => useRootStore().memory;
 export const useSessionsService = () => useRootStore().sessions;
 export const useWidgetService = () => useRootStore().widget;
+export const useDebugLogService = () => useRootStore().debug;
