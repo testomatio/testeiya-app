@@ -85,11 +85,26 @@ Starts the UI with hot reload at **http://localhost:3050** plus the Agent server
 bun run desktop:dev      # build the static UI + launch the native window
 ```
 
-Build distributable installers (DMG / Setup.exe / AppImage etc.):
+Build distributable installers (macOS `.dmg`, Windows Setup `.zip`, Linux self-extracting `-Setup.tar.gz`):
 
 ```bash
-bun run desktop:build    # artifacts land in build/
+bun run desktop:release  # stable build → installers in artifacts/
 ```
+
+> `bun run desktop:build` is a **dev** build (`--env=dev`) used for local iteration — it
+> does **not** produce installers. Use `desktop:release` for distributables.
+> Electrobun builds for the **host platform only** (no cross-compile).
+
+### Releasing (GitHub Actions)
+
+Publishing a **GitHub Release** (tag `vX.Y.Z`) triggers
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the desktop
+app on Windows, macOS (arm64), and Linux runners and attaches the installers to the
+Release. The version is taken from the tag. Builds are **unsigned** (expect Gatekeeper /
+SmartScreen warnings on first launch).
+
+The pipeline needs a repo secret **`PRIVATE_REPOS_TOKEN`** — a PAT with read access to the
+private `testomatio/testclaw` (the `testeiya` submodule) and `testomatio/skills` deps.
 
 ### Serve the built web app (no Electrobun)
 

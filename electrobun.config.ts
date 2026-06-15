@@ -26,11 +26,13 @@
  *     command uses process.execPath = bundled Bun + the mcp bin path).
  */
 
+import pkg from "./package.json";
+
 const config = {
   app: {
     name: "Testeiya",
     identifier: "io.testomat.testeiya",
-    version: "0.1.0",
+    version: pkg.version,
   },
   build: {
     bun: {
@@ -73,9 +75,19 @@ const config = {
       // Enable once Apple Developer ID + notarization credentials are wired up.
       codesign: false,
       notarize: false,
+      // .iconset folder converted to AppIcon.icns via iconutil during the build.
+      icons: "assets/icon.iconset",
     },
-    win: {},
-    linux: {},
+    win: {
+      icon: "assets/icon.ico",
+    },
+    linux: {
+      icon: "assets/icon.png",
+    },
+  },
+  release: {
+    // CI builds are standalone; never fetch a previous version to diff against.
+    generatePatch: false,
   },
 };
 
