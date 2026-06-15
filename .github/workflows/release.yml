@@ -100,3 +100,30 @@ jobs:
         with:
           name: testeiya-${{ matrix.label }}
           path: artifacts/*
+
+  # After all installers are attached, append per-OS install instructions to the
+  # Release body (once). Idempotent: skips if the marker is already present.
+  release-notes:
+    name: Add install instructions
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Append install instructions to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          body=$(gh release view "$TAG" --json body -q .body)
+          if printf '%s' "$body" | grep -qF '<!-- install-instructions -->'; then
+            echo "Install instructions already present — skipping."
+            exit 0
+          fi
+          { printf '%s\n\n' "$body"; cat .github/release-install-notes.md; } \
+            | gh release edit "$TAG" --notes-file -
