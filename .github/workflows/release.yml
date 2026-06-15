@@ -23,17 +23,25 @@ jobs:
             label: macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout (with submodule)
+      # Main repo uses the built-in GITHUB_TOKEN (which always has access to its
+      # own repo). persist-credentials:false stops checkout from leaving that
+      # token's auth header in .git/config, where it would otherwise shadow the
+      # PAT when fetching the private submodule below.
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          token: ${{ secrets.PRIVATE_REPOS_TOKEN }}
+          persist-credentials: false
 
+      # Rewrite SSH->HTTPS+PAT so the private submodule (testclaw) and the
+      # @testomatio/skills npm dep (git+ssh) authenticate with PRIVATE_REPOS_TOKEN.
       - name: Configure git auth for private deps
         shell: bash
         run: |
           git config --global url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "git@github.com:"
           git config --global url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Initialize agent submodule
+        run: git submodule update --init --recursive
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
