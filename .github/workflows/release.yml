@@ -57,11 +57,13 @@ jobs:
         with:
           node-version: 22
 
+      # This repo is maintained with bun (bun.lock is the source of truth;
+      # package-lock.json is stale), so install with bun, not `npm ci`.
       - name: Install root dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install agent (testeiya) dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
         working-directory: testeiya
 
       - name: Sync version from release tag
@@ -70,7 +72,7 @@ jobs:
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       - name: Build desktop installer
-        run: npm run desktop:release
+        run: bun run desktop:release
 
       - name: Attach installer to the Release
         if: github.event_name == 'release'
