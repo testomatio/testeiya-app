@@ -66,6 +66,16 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: testeiya
 
+      # @testomatio/skills ships a stray dangling symlink
+      # (plugins/test-management/skills/hello -> ../../../skills/hello, which
+      # doesn't exist upstream). electrobun copies node_modules with
+      # dereference:true and aborts when it can't stat a broken link. Remove
+      # dangling symlinks only — they carry no content; valid skill symlinks
+      # still resolve and are copied normally.
+      - name: Prune dangling symlinks in agent deps
+        shell: bash
+        run: find testeiya/node_modules -type l ! -exec test -e {} \; -exec rm -fv {} \;
+
       - name: Sync version from release tag
         if: github.event_name == 'release'
         shell: bash
