@@ -34,11 +34,15 @@ jobs:
 
       # Rewrite SSH->HTTPS+PAT so the private submodule (testclaw) and the
       # @testomatio/skills npm dep (git+ssh) authenticate with PRIVATE_REPOS_TOKEN.
+      # insteadOf is multi-valued: --add so BOTH the scp-style (git@github.com:,
+      # used by the submodule) and the ssh:// form (used by the @testomatio/skills
+      # git+ssh dep) are rewritten. Without --add the second line overwrites the
+      # first, leaving the submodule URL un-rewritten -> SSH publickey failure.
       - name: Configure git auth for private deps
         shell: bash
         run: |
-          git config --global url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Initialize agent submodule
         run: git submodule update --init --recursive
