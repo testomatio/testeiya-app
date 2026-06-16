@@ -92,6 +92,13 @@ jobs:
         if: runner.os == 'Linux'
         run: bash .github/packaging/build-linux-appimage.sh
 
+      # electrobun's prebuilt macOS core ships libasar.dylib + zig-zstd with a
+      # bogus minimum-OS of 14.8.x, so macOS < 14.8 refuses to launch the app.
+      # Rewrite minos down to 11.0, ad-hoc re-sign, and rebuild the .dmg.
+      - name: Fix macOS min-version and rebuild dmg
+        if: runner.os == 'macOS'
+        run: bash .github/packaging/fix-macos-minos.sh
+
       - name: Package Windows zip
         if: runner.os == 'Windows'
         shell: pwsh
