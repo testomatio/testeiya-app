@@ -26,6 +26,10 @@ test -x "$APPDIR/Testeiya/bin/launcher"
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
+# The @oh-my-pi/pi-natives addon needs extra static-TLS surplus or it fails to
+# dlopen with "cannot allocate memory in static TLS block" (same workaround the
+# desktop:dev script uses). Inherited by the launcher's spawned bun worker.
+export GLIBC_TUNABLES="glibc.rtld.optional_static_tls=20480"
 exec "$HERE/Testeiya/bin/launcher" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
