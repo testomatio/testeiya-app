@@ -3,10 +3,15 @@
 
 > These desktop builds are **unsigned**, so each OS shows a one-time security warning on first launch. That is expected — follow the steps below.
 
-### Windows (x64)
-1. Download **`stable-win-x64-Testeiya-Setup.zip`** from the assets below and extract it.
-2. Run **`Testeiya-Setup.exe`**.
-3. If Microsoft Defender SmartScreen appears, click **More info → Run anyway**.
+### Linux (x64)
+Download **`Testeiya-x86_64.AppImage`**, then make it executable and run it:
+```bash
+chmod +x Testeiya-x86_64.AppImage && ./Testeiya-x86_64.AppImage
+```
+If your system lacks FUSE (some minimal distros), run it without mounting instead:
+```bash
+./Testeiya-x86_64.AppImage --appimage-extract-and-run
+```
 
 ### macOS (Apple Silicon)
 1. Download **`stable-macos-arm64-Testeiya.dmg`**, open it, and drag **Testeiya** into **Applications**.
@@ -16,9 +21,7 @@
    xattr -dr com.apple.quarantine /Applications/Testeiya.app
    ```
 
-### Linux (x64)
-Download **`stable-linux-x64-Testeiya-Setup.tar.gz`**, then extract and install in one line:
-```bash
-tar -xzf stable-linux-x64-Testeiya-Setup.tar.gz && ./installer
-```
-This installs the app to `~/.local/share/` and adds a desktop shortcut / menu entry.
+### Windows (x64)
+1. Download **`stable-win-x64-Testeiya.zip`** and extract it (a short path such as `C:\Testeiya` avoids Windows path-length limits).
+2. Run **`Testeiya\bin\launcher.exe`**.
+3. If Microsoft Defender SmartScreen appears, click **More info → Run anyway**.

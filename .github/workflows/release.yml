@@ -84,13 +84,34 @@ jobs:
       - name: Build desktop installer
         run: bun run desktop:release
 
+      # electrobun's self-extracting installers can't unpack this app's deep
+      # node_modules (paths > 100 chars -> TarUnsupportedFileType). Repackage
+      # into formats that can: AppImage (squashfs) on Linux, a plain zip on
+      # Windows. macOS keeps the .dmg (no tar, unaffected).
+      - name: Package Linux AppImage
+        if: runner.os == 'Linux'
+        run: bash .github/packaging/build-linux-appimage.sh
+
+      - name: Package Windows zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path winstage | Out-Null
+          tar.exe -xf artifacts/stable-win-x64-Testeiya.tar.zst -C winstage
+          tar.exe -a -cf artifacts/stable-win-x64-Testeiya.zip -C winstage Testeiya
+          Remove-Item artifacts/stable-win-x64-Testeiya-Setup.zip -Force -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force winstage
+          Get-Item artifacts/stable-win-x64-Testeiya.zip | Format-List Name,Length
+
       - name: Attach installer to the Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/*Setup*
+            artifacts/*.AppImage
             artifacts/*.dmg
+            artifacts/stable-win-x64-Testeiya.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
