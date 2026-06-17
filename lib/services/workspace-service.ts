@@ -45,6 +45,17 @@ export class WorkspaceService {
   syncing: SyncAction | null = null;
   syncError: string | null = null;
 
+  // The node awaiting delete confirmation (drives the confirm dialog), and
+  // whether its delete is in flight.
+  pendingDelete: TreeNode | null = null;
+  deleting = false;
+
+  // The node being renamed (drives the rename dialog), its edited value, and
+  // whether the rename is in flight.
+  renaming: TreeNode | null = null;
+  renameValue = "";
+  renamingBusy = false;
+
   // True while polling an empty workspace that is still pulling tests in the
   // background (drives a "loading tests" hint instead of an "empty" message).
   awaitingTests = false;
@@ -284,6 +295,101 @@ export class WorkspaceService {
     }
   }
 
+  // --- delete (file/test/folder + remote suite/test) ---
+  requestDelete(node: TreeNode) {
+    this.pendingDelete = node;
+  }
+
+  cancelDelete() {
+    this.pendingDelete = null;
+  }
+
+  /**
+   * Delete the pending node locally AND its Testomat.io counterpart (a file's
+   * suite, a test, or every suite under a folder). The server removes the remote
+   * resource first; on failure nothing is removed on disk, so we leave the tree
+   * untouched and surface the error.
+   */
+  async confirmDelete() {
+    const node = this.pendingDelete;
+    const sessionId = this.root.sessionId;
+    if (!node || !sessionId || this.deleting) return;
+    this.deleting = true;
+    try {
+      const body: { session: string; path: string; anchor?: string } = {
+        session: sessionId,
+        path: node.path,
+      };
+      if (node.kind === "test") body.anchor = node.anchor;
+      await postJson("/api/files/delete", body);
+      runInAction(() => {
+        this.afterDelete(node);
+      });
+      toast.success(`Deleted ${node.name}`);
+      await this.loadTree();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    } finally {
+      runInAction(() => {
+        this.pendingDelete = null;
+        this.deleting = false;
+      });
+    }
+  }
+
+  // --- rename (file/folder on disk; a test's heading + its Testomat.io title) ---
+  requestRename(node: TreeNode) {
+    this.renaming = node;
+    this.renameValue = node.name;
+  }
+
+  setRenameValue(value: string) {
+    this.renameValue = value;
+  }
+
+  cancelRename() {
+    this.renaming = null;
+  }
+
+  /**
+   * Rename the node: a file/folder is renamed on disk; a test's title heading is
+   * rewritten and (when the test has an id and a project is linked) pushed to
+   * Testomat.io. The server syncs the remote title first; on failure nothing
+   * changes and the error is surfaced.
+   */
+  async confirmRename() {
+    const node = this.renaming;
+    const sessionId = this.root.sessionId;
+    const newName = this.renameValue.trim();
+    if (!node || !sessionId || this.renamingBusy) return;
+    if (!newName || newName === node.name) {
+      this.cancelRename();
+      return;
+    }
+    this.renamingBusy = true;
+    try {
+      const body: { session: string; path: string; newName: string; anchor?: string } = {
+        session: sessionId,
+        path: node.path,
+        newName,
+      };
+      if (node.kind === "test") body.anchor = node.anchor;
+      const res = await postJson<{ ok: boolean; path: string }>("/api/files/rename", body);
+      runInAction(() => {
+        this.afterRename(node, res.path);
+      });
+      toast.success(`Renamed to ${newName}`);
+      await this.loadTree();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to rename");
+    } finally {
+      runInAction(() => {
+        this.renaming = null;
+        this.renamingBusy = false;
+      });
+    }
+  }
+
   /**
    * Cold-load entry for web mode: if the server has a `TESTEIYA_WORKSPACE`
    * configured, switch to its session. No-op when a session is already active
@@ -300,6 +406,42 @@ export class WorkspaceService {
   }
 
   // --- internals ---
+  // Reconcile editor + changed-file state after a node leaves the tree. A test
+  // delete keeps its file (refresh it if open); a file/folder delete drops the
+  // open editor and any changed-file markers under the removed path.
+  private afterDelete(node: TreeNode) {
+    if (node.kind === "test") {
+      if (this.openFile?.path === node.path) {
+        this.open(node.path, undefined, { fullHeight: this.openFile.fullHeight });
+      }
+      return;
+    }
+    const open = this.openFile?.path;
+    if (open && (open === node.path || open.startsWith(node.path + "/"))) this.close();
+    const next = new Map(this.changedFiles);
+    for (const key of next.keys()) {
+      if (key === node.path || key.startsWith(node.path + "/")) next.delete(key);
+    }
+    this.changedFiles = next;
+  }
+
+  // Reconcile the open editor after a node is renamed. A test rename keeps the
+  // file path (refresh it if open); a file rename moves the editor to the new
+  // path; a folder rename closes any editor opened from within it.
+  private afterRename(node: TreeNode, newPath: string) {
+    const open = this.openFile;
+    if (!open) return;
+    if (node.kind === "test") {
+      if (open.path === node.path) this.open(node.path, undefined, { fullHeight: open.fullHeight });
+      return;
+    }
+    if (open.path === node.path) {
+      this.open(newPath, undefined, { fullHeight: open.fullHeight });
+      return;
+    }
+    if (open.path.startsWith(node.path + "/")) this.close();
+  }
+
   private resetForSession() {
     this.tree = [];
     this.treeError = null;
@@ -311,6 +453,11 @@ export class WorkspaceService {
     this.project = null;
     this.syncError = null;
     this.awaitingTests = false;
+    this.pendingDelete = null;
+    this.deleting = false;
+    this.renaming = null;
+    this.renameValue = "";
+    this.renamingBusy = false;
     this.seeded = false;
     this.emptyRetries = 0;
     this.clearRetry();

@@ -170,55 +170,59 @@ const loadingFallback = (
 );
 
 const RunsListRenderer = dynamic(
-  () => import("@/components/agent-output/RunsListRenderer"),
+  () => import("@/components/widgets/RunsListRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const TestsListRenderer = dynamic(
-  () => import("@/components/agent-output/TestsListRenderer"),
+  () => import("@/components/widgets/TestsListRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const SuitesListRenderer = dynamic(
-  () => import("@/components/agent-output/SuitesListRenderer"),
+  () => import("@/components/widgets/SuitesListRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const PlansListRenderer = dynamic(
-  () => import("@/components/agent-output/PlansListRenderer"),
+  () => import("@/components/widgets/PlansListRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const TestRunsListRenderer = dynamic(
-  () => import("@/components/agent-output/TestRunsListRenderer"),
+  () => import("@/components/widgets/TestRunsListRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const TreeOutputRenderer = dynamic(
-  () => import("@/components/agent-output/TreeOutputRenderer"),
+  () => import("@/components/widgets/TreeOutputRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const ItemOutputRenderer = dynamic(
-  () => import("@/components/agent-output/ItemOutputRenderer"),
+  () => import("@/components/widgets/ItemOutputRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 const FileEditRenderer = dynamic(
-  () => import("@/components/agent-output/FileEditRenderer"),
+  () => import("@/components/widgets/FileEditRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
 
-type RichRenderer = (payload: { data: unknown; summary?: string }) => ReactNode;
+type RichRenderer = (payload: {
+  data: unknown;
+  summary?: string;
+  widgetId?: string;
+}) => ReactNode;
 
 const KIND_RENDERERS: Record<string, RichRenderer> = {
-  runs: ({ data, summary }) => (
-    <RunsListRenderer json={data} summary={summary} />
+  runs: ({ data, summary, widgetId }) => (
+    <RunsListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
-  tests: ({ data, summary }) => (
-    <TestsListRenderer json={data} summary={summary} />
+  tests: ({ data, summary, widgetId }) => (
+    <TestsListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
-  suites: ({ data, summary }) => (
-    <SuitesListRenderer json={data} summary={summary} />
+  suites: ({ data, summary, widgetId }) => (
+    <SuitesListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
-  plans: ({ data, summary }) => (
-    <PlansListRenderer json={data} summary={summary} />
+  plans: ({ data, summary, widgetId }) => (
+    <PlansListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
-  testruns: ({ data, summary }) => (
-    <TestRunsListRenderer json={data} summary={summary} />
+  testruns: ({ data, summary, widgetId }) => (
+    <TestRunsListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
 };
 
@@ -333,7 +337,8 @@ export interface RichRenderResult {
 export function renderRichTool(
   toolName: string | undefined,
   input: unknown,
-  output: unknown
+  output: unknown,
+  widgetId?: string
 ): RichRenderResult | null {
   if (!toolName) return null;
 
@@ -378,6 +383,7 @@ export function renderRichTool(
         body: (
           <ItemOutputRenderer
             json={{ kind: payload.kind, data: payload.data, summary: payload.summary }}
+            widgetId={widgetId}
           />
         ),
         header: deriveHeader(toolName, payload),
@@ -388,7 +394,7 @@ export function renderRichTool(
     const renderer = KIND_RENDERERS[payload.kind];
     if (!renderer) return null;
     return {
-      body: renderer({ data: payload.data, summary: payload.summary }),
+      body: renderer({ data: payload.data, summary: payload.summary, widgetId }),
       header: deriveHeader(toolName, payload),
     };
   }
@@ -401,7 +407,7 @@ export function renderRichTool(
   const parsed = parseMcpOutput(output);
   if (parsed === null || parsed === undefined) return null;
   return {
-    body: renderer({ data: parsed }),
+    body: renderer({ data: parsed, widgetId }),
     header: deriveHeader("render_list", { kind }),
   };
 }

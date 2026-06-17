@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import TestItemRenderer from "./items/TestItemRenderer";
-import { extractList } from "./extract-list";
+import { useListWidget } from "./use-list-widget";
 import {
   ListRow,
   ListRowCaption,
@@ -36,12 +35,18 @@ const TESTS_GRID = "minmax(0,3fr) minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
 export default function TestsListRenderer({
   json,
   summary,
+  widgetId,
 }: {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }) {
-  const { items, meta } = useMemo(() => extractList<McpTest>(json), [json]);
-  const [selected, setSelected] = useState<McpTest | null>(null);
+  const { items, meta, selected, setSelected, pager } = useListWidget<McpTest>({
+    widgetId,
+    resource: "tests",
+    json,
+    getId: (t) => (t.id != null ? String(t.id) : undefined),
+  });
 
   if (items.length === 0) {
     return (
@@ -129,12 +134,13 @@ export default function TestsListRenderer({
             </ListRow>
           );
         })}
-        {meta?.total != null && meta.total > items.length && (
+        {!pager && meta?.total != null && meta.total > items.length && (
           <ListRowCaption>
             Showing {items.length} of {meta.total} tests
           </ListRowCaption>
         )}
       </ListRowGroup>
+      {pager}
     </div>
   );
 }

@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
-import { useTestomatio } from "@/lib/agent-output/use-testomatio";
-import { useProjectService } from "@/lib/services/StoreProvider";
+import {
+  fetchTestomatioList,
+  useTestomatio,
+} from "@/lib/agent-output/use-testomatio";
+import { useProjectService, useStores } from "@/lib/services/StoreProvider";
+import { useRegisterWidget } from "@/lib/widgets/command-bus";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
 import { ListPager } from "../list-row";
@@ -21,12 +25,15 @@ const TESTRUNS_PER_PAGE = 50;
 export default function RunItemRenderer({
   data,
   onStartManualRun,
+  widgetId,
 }: {
   data: Record<string, unknown>;
   onStartManualRun?: () => void;
+  widgetId?: string;
 }) {
   const run = data as McpRunDetail;
   const project = useProjectService();
+  const store = useStores();
   const [executing, setExecuting] = useState(false);
   const title = run.title ?? run.clean_title ?? run.id ?? "(untitled run)";
   const passed = run.passed_count ?? 0;
@@ -90,9 +97,63 @@ export default function RunItemRenderer({
     testrunsPagerLabel = `${trStart}–${trEnd} of ${testrunsTotal} test runs`;
   }
 
+  // Agent control (when this run detail is the active widget). Drives the same
+  // actions the buttons/pager do; `start_manual_run` is destructive.
+  const runCommand = useCallback(
+    async (action: string, params: Record<string, unknown>) => {
+      if (action === "open_external") {
+        if (!externalUrl) throw new Error("This run has no external link.");
+        openExternalUrl(externalUrl);
+        return { opened: externalUrl };
+      }
+      if (action === "start_manual_run") {
+        if (!showManualRun) {
+          throw new Error(
+            "This run can't be started manually (not a manual run, or already finished)."
+          );
+        }
+        if (onStartManualRun) onStartManualRun();
+        else setExecuting(true);
+        return { started: true };
+      }
+      if (action === "testruns") {
+        if (!paginated) {
+          throw new Error("This run's test results came inline and aren't paginated.");
+        }
+        if (!run.id) throw new Error("Run id is missing.");
+        const sessionId = store.sessionId;
+        if (!sessionId) throw new Error("No active session.");
+        const nextPage =
+          params.page != null ? Math.max(1, Number(params.page)) : testrunsPage;
+        setTestrunsPage(nextPage);
+        const { items, meta } = await fetchTestomatioList<McpNestedTestRun>(
+          "testruns",
+          { run_id: run.id, page: nextPage, per_page: TESTRUNS_PER_PAGE },
+          sessionId
+        );
+        return {
+          page: nextPage,
+          per_page: TESTRUNS_PER_PAGE,
+          total: meta?.total ?? null,
+          count: items.length,
+          testruns: items,
+        };
+      }
+      throw new Error(`Unknown action "${action}" for this run.`);
+    },
+    [externalUrl, showManualRun, onStartManualRun, paginated, run.id, store, testrunsPage]
+  );
+  // While the manual run is showing it registers its own handler under this id,
+  // so the run-item yields to avoid clobbering it.
+  useRegisterWidget(executing ? undefined : widgetId, runCommand);
+
   if (executing) {
     return (
-      <ManualRunRenderer data={data} onExit={() => setExecuting(false)} />
+      <ManualRunRenderer
+        data={data}
+        onExit={() => setExecuting(false)}
+        widgetId={widgetId}
+      />
     );
   }
 

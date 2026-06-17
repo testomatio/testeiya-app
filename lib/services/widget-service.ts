@@ -11,11 +11,15 @@ import type { RootStore } from "./root-store";
  */
 export class WidgetService {
   current: WidgetDescriptor | null = null;
+  // A nested sub-view (e.g. the manual-run executor) can override the kind the
+  // active widget reports to the agent, since it shares the parent's id but
+  // exposes a different action set. Set on mount, cleared on unmount.
+  activeOverride: { kind: string; state?: string } | null = null;
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
       this,
-      { root: false, current: observable.ref },
+      { root: false, current: observable.ref, activeOverride: observable.ref },
       { autoBind: true }
     );
 
@@ -40,6 +44,14 @@ export class WidgetService {
 
   clear(): void {
     if (this.current) this.current = null;
+  }
+
+  setActiveOverride(override: { kind: string; state?: string }): void {
+    this.activeOverride = override;
+  }
+
+  clearActiveOverride(): void {
+    if (this.activeOverride) this.activeOverride = null;
   }
 
   private get sourceKey(): string | null {

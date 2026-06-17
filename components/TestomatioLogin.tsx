@@ -43,6 +43,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
   const project = useProjectService();
   const [phase, setPhase] = useState<Phase>("loading");
   const [token, setToken] = useState("");
+  const [host, setHost] = useState(project.baseUrl);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +101,12 @@ export const TestomatioLogin = observer(function TestomatioLogin({
     };
   }, [open, project]);
 
+  // Re-seed the host field from the service whenever the effective host changes
+  // (e.g. after a save) — never on each keystroke, so user input isn't clobbered.
+  useEffect(() => {
+    setHost(project.baseUrl);
+  }, [project.baseUrl]);
+
   const rememberedId = project.selectedProjectId;
 
   // Filter by the search query, then float the remembered project to the top.
@@ -120,10 +127,16 @@ export const TestomatioLogin = observer(function TestomatioLogin({
     return [matched[idx], ...matched.slice(0, idx), ...matched.slice(idx + 1)];
   }, [project.projects, query, rememberedId]);
 
+  const handleOpenSignIn = useCallback(async () => {
+    await project.setHost(host);
+    project.openSignIn();
+  }, [project, host]);
+
   const handleConnect = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
+      await project.setHost(host);
       const state = await project.connect(token.trim());
       if (!state.projects || state.projects.length === 0) {
         setError(
@@ -138,7 +151,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
     } finally {
       setBusy(false);
     }
-  }, [project, token]);
+  }, [project, token, host]);
 
   const handleContinue = useCallback(async () => {
     if (!selectedId) return;
@@ -190,11 +203,29 @@ export const TestomatioLogin = observer(function TestomatioLogin({
 
           {phase === "signin" && (
             <>
+              <div className="space-y-1.5">
+                <label htmlFor="tio-host" className="text-sm font-medium">
+                  Testomat.io host
+                </label>
+                <Input
+                  id="tio-host"
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="https://app.testomat.io"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Change this only for a self-hosted Testomat.io instance.
+                </p>
+              </div>
+
               <Button
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => project.openSignIn()}
+                onClick={() => void handleOpenSignIn()}
               >
                 Open Testomat.io &amp; authorize
                 <ArrowUpRightIcon className="size-4" />

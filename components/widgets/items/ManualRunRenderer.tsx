@@ -45,6 +45,7 @@ import {
   useProjectService,
   useStores,
 } from "@/lib/services/StoreProvider";
+import { useRegisterWidget } from "@/lib/widgets/command-bus";
 import { captureDisplayScreenshot } from "@/lib/screenshot";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
@@ -80,9 +81,11 @@ const STATUS_TONE: Record<string, string> = {
 function ManualRunRenderer({
   data,
   onExit,
+  widgetId,
 }: {
   data: Record<string, unknown>;
   onExit: () => void;
+  widgetId?: string;
 }) {
   const run = data as ManualRunData;
   const store = useStores();
@@ -144,6 +147,13 @@ function ManualRunRenderer({
   useEffect(() => {
     rootRef.current?.focus();
   }, []);
+
+  // While the manual-run executor is showing it shares the parent widget's id
+  // but exposes its own action set, so override the kind the agent is told.
+  useEffect(() => {
+    store.widget.setActiveOverride({ kind: "manual-run" });
+    return () => store.widget.clearActiveOverride();
+  }, [store]);
 
   // Keep the selected row visible as the user navigates with the keyboard.
   useEffect(() => {
@@ -246,6 +256,75 @@ function ManualRunRenderer({
     { skip: !currentTestId }
   );
   const stepsBody = testDetail?.description ?? undefined;
+
+  // Agent control of the manual run — each action runs the same code the
+  // buttons/shortcuts do. `save_next` and `finish_run` are destructive (writes).
+  const runCommand = (action: string, params: Record<string, unknown>) => {
+    if (action === "list") {
+      const p = Math.max(1, Number(params.page ?? page));
+      goToPage(p);
+      return { page: p };
+    }
+    if (action === "search") {
+      const q = String(params.query ?? "");
+      setSearchInput(q);
+      setAppliedSearch(q);
+      return { query: q };
+    }
+    if (action === "filter_status") {
+      const s = String(params.status ?? "all");
+      setStatusFilter(s === "all" ? null : (s as StatusBucket));
+      return { filter: s };
+    }
+    if (action === "select_test") {
+      let i = -1;
+      if (params.id != null) {
+        i = testruns.findIndex((t) => String(t.id) === String(params.id));
+      } else if (params.index != null) {
+        i = Number(params.index);
+      }
+      if (i < 0 || i >= testruns.length) {
+        throw new Error(
+          "That test isn't on the current page — use list/search/filter_status to bring it into view first."
+        );
+      }
+      setIndex(i);
+      const t = testruns[i];
+      return {
+        selected: {
+          id: t.id,
+          title: t.test_title ?? t.title,
+          suite: t.suite_title,
+          status: drafts[String(t.id)]?.status ?? t.status,
+        },
+      };
+    }
+    if (action === "set_status") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      const s = String(params.status ?? "");
+      if (!["passed", "failed", "skipped"].includes(s)) {
+        throw new Error("status must be passed, failed, or skipped.");
+      }
+      setStatus(s);
+      return { id: current.id, status: s };
+    }
+    if (action === "set_message") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      const text = String(params.text ?? "");
+      setMessage(text);
+      return { id: current.id, message: text };
+    }
+    if (action === "save_next") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      const override = params.status != null ? String(params.status) : undefined;
+      return save(true, override).then(() => ({ saved: true, id: current.id }));
+    }
+    if (action === "finish_run") {
+      return finish().then(() => ({ finished: true }));
+    }
+    throw new Error(`Unknown action "${action}" for the manual run.`);
+  };
+  useRegisterWidget(widgetId, runCommand);
 
   return (
     <div

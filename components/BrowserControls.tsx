@@ -7,6 +7,7 @@ import {
   mdiRecordCircleOutline,
   mdiStopCircleOutline,
   mdiMonitorScreenshot,
+  mdiOpenInNew,
 } from "@mdi/js";
 import { ChevronDownIcon } from "lucide-react";
 import { GlobeIcon } from "@/lib/icons";
@@ -92,6 +93,14 @@ export const BrowserControls = observer(function BrowserControls({
         </DropdownMenuTrigger>
       )}
       <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem
+          disabled={browser.busy || !browser.browserOpen}
+          onClick={() => void browser.focus()}
+        >
+          <MdiIcon path={mdiOpenInNew} className="size-4" />
+          Switch to Browser
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={browser.busy}
           onClick={() => void browser.toggleBrowser()}

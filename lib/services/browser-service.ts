@@ -73,6 +73,12 @@ export class BrowserService {
     }, "Failed to stop browser");
   }
 
+  async focus() {
+    await this.run("/api/playwright/focus", () => {
+      toast.success("Switched to browser");
+    }, "Failed to switch to browser");
+  }
+
   async record() {
     await this.run("/api/playwright/record", (data) => {
       runInAction(() => {

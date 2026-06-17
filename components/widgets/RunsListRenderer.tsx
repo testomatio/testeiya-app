@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { ListChecksIcon } from "@/lib/icons";
 import RunItemRenderer from "./items/RunItemRenderer";
 import ManualRunRenderer from "./items/ManualRunRenderer";
-import { extractList } from "./extract-list";
+import { useListWidget } from "./use-list-widget";
 import {
   ListRow,
   ListRowCaption,
@@ -53,19 +53,27 @@ const RUNS_GRID = "minmax(0,7fr) minmax(0,2fr) minmax(0,3fr) minmax(0,2fr)";
 export default function RunsListRenderer({
   json,
   summary,
+  widgetId,
 }: {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }) {
-  const { items, meta } = useMemo(() => extractList<McpRun>(json), [json]);
-  const [selected, setSelected] = useState<McpRun | null>(null);
   const [manualRun, setManualRun] = useState(false);
+  // While a manual run is showing it owns this widget id, so the list yields.
+  const { items, meta, selected, setSelected, pager } = useListWidget<McpRun>({
+    widgetId: manualRun ? undefined : widgetId,
+    resource: "runs",
+    json,
+    getId: (r) => (r.id != null ? String(r.id) : undefined),
+  });
 
   if (selected && manualRun) {
     return (
       <ManualRunRenderer
         data={selected as unknown as Record<string, unknown>}
         onExit={() => setManualRun(false)}
+        widgetId={widgetId}
       />
     );
   }
@@ -171,12 +179,13 @@ export default function RunsListRenderer({
             </ListRow>
           );
         })}
-        {meta?.total != null && meta.total > items.length && (
+        {!pager && meta?.total != null && meta.total > items.length && (
           <ListRowCaption>
             Showing {items.length} of {meta.total} runs
           </ListRowCaption>
         )}
       </ListRowGroup>
+      {pager}
     </div>
   );
 }

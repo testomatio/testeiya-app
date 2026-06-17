@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SuiteGlyph, SuiteKindIcon } from "@/components/icons";
 import { ChevronRightIcon } from "@/lib/icons";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { HTMLAttributes, ReactNode } from "react";
 import {
   createContext,
@@ -131,6 +132,7 @@ export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   name: string;
   icon?: ReactNode;
   badge?: ReactNode;
+  menu?: ReactNode;
 };
 
 export const FileTreeFolder = ({
@@ -138,6 +140,7 @@ export const FileTreeFolder = ({
   name,
   icon,
   badge,
+  menu,
   className,
   children,
   ...props
@@ -160,6 +163,35 @@ export const FileTreeFolder = ({
     [isExpanded, name, path]
   );
 
+  const header = (
+    <div
+      className={cn(
+        "flex w-full items-center gap-1 rounded px-2 py-1 text-left transition-colors hover:bg-muted/50",
+        isSelected && "bg-muted"
+      )}
+    >
+      <CollapsibleTrigger render={<button className="flex shrink-0 cursor-pointer items-center border-none bg-transparent p-0" type="button" />}><ChevronRightIcon
+                                  className={cn(
+                                    "size-4 shrink-0 text-muted-foreground transition-transform",
+                                    isExpanded && "rotate-90"
+                                  )}
+                                /></CollapsibleTrigger>
+      <button
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-left"
+        onClick={handleSelect}
+        type="button"
+      >
+        <FileTreeIcon>
+          {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
+        </FileTreeIcon>
+        <FileTreeName>{name}</FileTreeName>
+        {badge != null && (
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+        )}
+      </button>
+    </div>
+  );
+
   return (
     <FileTreeFolderContext.Provider value={folderContextValue}>
       <Collapsible onOpenChange={handleOpenChange} open={isExpanded}>
@@ -169,32 +201,12 @@ export const FileTreeFolder = ({
           tabIndex={0}
           {...props}
         >
-          <div
-            className={cn(
-              "flex w-full items-center gap-1 rounded px-2 py-1 text-left transition-colors hover:bg-muted/50",
-              isSelected && "bg-muted"
-            )}
-          >
-            <CollapsibleTrigger render={<button className="flex shrink-0 cursor-pointer items-center border-none bg-transparent p-0" type="button" />}><ChevronRightIcon
-                                        className={cn(
-                                          "size-4 shrink-0 text-muted-foreground transition-transform",
-                                          isExpanded && "rotate-90"
-                                        )}
-                                      /></CollapsibleTrigger>
-            <button
-              className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-left"
-              onClick={handleSelect}
-              type="button"
-            >
-              <FileTreeIcon>
-                {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
-              </FileTreeIcon>
-              <FileTreeName>{name}</FileTreeName>
-              {badge != null && (
-                <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
-              )}
-            </button>
-          </div>
+          {menu == null ? header : (
+            <ContextMenu>
+              <ContextMenuTrigger render={header} />
+              {menu}
+            </ContextMenu>
+          )}
           <CollapsibleContent>
             <div className="ml-4 border-l pl-1">{children}</div>
           </CollapsibleContent>
@@ -219,6 +231,7 @@ export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
   name: string;
   icon?: ReactNode;
   badge?: ReactNode;
+  menu?: ReactNode;
 };
 
 export const FileTreeFile = ({
@@ -226,6 +239,7 @@ export const FileTreeFile = ({
   name,
   icon,
   badge,
+  menu,
   className,
   children,
   ...props
@@ -248,34 +262,43 @@ export const FileTreeFile = ({
 
   const fileContextValue = useMemo(() => ({ name, path }), [name, path]);
 
+  const row = (
+    <div
+      className={cn(
+        "flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-muted/50",
+        isSelected && "bg-muted",
+        className
+      )}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role="treeitem"
+      tabIndex={0}
+      {...props}
+    >
+      {children ?? (
+        <>
+          {/* Spacer for alignment */}
+          <span className="size-4 shrink-0" />
+          <FileTreeIcon>
+            {icon ?? <SuiteGlyph className="size-4 text-muted-foreground" />}
+          </FileTreeIcon>
+          <FileTreeName>{name}</FileTreeName>
+          {badge != null && (
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+
   return (
     <FileTreeFileContext.Provider value={fileContextValue}>
-      <div
-        className={cn(
-          "flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-muted/50",
-          isSelected && "bg-muted",
-          className
-        )}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        role="treeitem"
-        tabIndex={0}
-        {...props}
-      >
-        {children ?? (
-          <>
-            {/* Spacer for alignment */}
-            <span className="size-4 shrink-0" />
-            <FileTreeIcon>
-              {icon ?? <SuiteGlyph className="size-4 text-muted-foreground" />}
-            </FileTreeIcon>
-            <FileTreeName>{name}</FileTreeName>
-            {badge != null && (
-              <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
-            )}
-          </>
-        )}
-      </div>
+      {menu == null ? row : (
+        <ContextMenu>
+          <ContextMenuTrigger render={row} />
+          {menu}
+        </ContextMenu>
+      )}
     </FileTreeFileContext.Provider>
   );
 };

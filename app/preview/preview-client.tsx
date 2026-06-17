@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { ServicesProvider } from "@/lib/services/StoreProvider";
-import PlansListRenderer from "@/components/agent-output/PlansListRenderer";
-import RequirementsListRenderer from "@/components/agent-output/RequirementsListRenderer";
-import RunsListRenderer from "@/components/agent-output/RunsListRenderer";
-import SuitesListRenderer from "@/components/agent-output/SuitesListRenderer";
-import TestRunsListRenderer from "@/components/agent-output/TestRunsListRenderer";
-import TestsListRenderer from "@/components/agent-output/TestsListRenderer";
-import PlanItemRenderer from "@/components/agent-output/items/PlanItemRenderer";
-import RunItemRenderer from "@/components/agent-output/items/RunItemRenderer";
-import SuiteItemRenderer from "@/components/agent-output/items/SuiteItemRenderer";
-import TestItemRenderer from "@/components/agent-output/items/TestItemRenderer";
-import TestRunItemRenderer from "@/components/agent-output/items/TestRunItemRenderer";
+import PlansListRenderer from "@/components/widgets/PlansListRenderer";
+import RequirementsListRenderer from "@/components/widgets/RequirementsListRenderer";
+import RunsListRenderer from "@/components/widgets/RunsListRenderer";
+import SuitesListRenderer from "@/components/widgets/SuitesListRenderer";
+import TestRunsListRenderer from "@/components/widgets/TestRunsListRenderer";
+import TestsListRenderer from "@/components/widgets/TestsListRenderer";
+import PlanItemRenderer from "@/components/widgets/items/PlanItemRenderer";
+import RunItemRenderer from "@/components/widgets/items/RunItemRenderer";
+import SuiteItemRenderer from "@/components/widgets/items/SuiteItemRenderer";
+import TestItemRenderer from "@/components/widgets/items/TestItemRenderer";
+import TestRunItemRenderer from "@/components/widgets/items/TestRunItemRenderer";
 import {
   LabelsRow,
   MetaPill,
@@ -20,11 +20,11 @@ import {
   RunStatusDot,
   StatusCount,
   StatusTriplet,
-} from "@/components/agent-output/status-pill";
+} from "@/components/widgets/status-pill";
 import {
   SuiteKindIcon,
   TypeIcon,
-} from "@/components/agent-output/type-icons";
+} from "@/components/widgets/type-icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -167,7 +167,7 @@ export default function PreviewClient() {
                 Component preview
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Development-only gallery of every agent-output renderer, seeded
+                Development-only gallery of every widget renderer, seeded
                 with fixtures sampled from the Testomat.io MCP.
               </p>
             </div>

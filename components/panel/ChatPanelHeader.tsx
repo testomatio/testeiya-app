@@ -8,7 +8,7 @@ import {
   mdiPencilOutline,
 } from "@mdi/js";
 import { ChevronDownIcon, Trash, Trash2Icon } from "lucide-react";
-import { BrainIcon, Icon } from "@/lib/icons";
+import { Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
 import { MdiIcon } from "@/components/icons";
@@ -33,7 +33,6 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   onClear,
   canClear,
   canCollapse,
-  onOpenMemory,
 }: {
   /** Clear the current chat (wired to the live agent socket by the page). */
   onClear?: () => void;
@@ -41,8 +40,6 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   canClear?: boolean;
   /** Whether the chat can be collapsed (only when a widget fills the row). */
   canCollapse?: boolean;
-  /** Open the project-memory dialog. */
-  onOpenMemory?: () => void;
 }) {
   const sessions = useSessionsService();
   const { setChatOpen } = usePanel();
@@ -183,18 +180,6 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
       >
         <MdiIcon path={mdiChatPlusOutline} className="size-3.5" />
       </Button>
-      {onOpenMemory && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 w-6 shrink-0 p-0"
-          onClick={onOpenMemory}
-          title="Project memory"
-          aria-label="Project memory"
-        >
-          <BrainIcon className="size-3.5" />
-        </Button>
-      )}
       {canClear && onClear && (
         <Button
           size="sm"

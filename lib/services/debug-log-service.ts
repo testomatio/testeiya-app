@@ -1,7 +1,7 @@
 import { makeAutoObservable, observable } from "mobx";
 import {
   setExternalLogSink,
-  type ExternalLogEntry,
+  type DebugLogEntry,
 } from "@/lib/debug/external-log";
 import type { RootStore } from "./root-store";
 
@@ -9,14 +9,15 @@ const STORAGE_KEY = "testeiya.debug-panel.enabled";
 const MAX_ENTRIES = 300;
 
 /**
- * Collects the outbound Testomat.io request log (from `lib/debug/external-log`)
- * for the sidebar Debug panel. `enabled` (persisted to localStorage) controls
- * whether the panel is shown; entries are always captured so history is present
- * the moment the panel is opened.
+ * Collects the unified activity log (from `lib/debug/external-log`) for the
+ * sidebar Debug panel: outbound Testomat.io requests, same-origin `/api/*`
+ * requests, and pi/WS agent events. `enabled` (persisted to localStorage)
+ * controls whether the panel is shown; entries are always captured so history
+ * is present the moment the panel is opened.
  */
 export class DebugLogService {
   enabled = false;
-  entries: ExternalLogEntry[] = [];
+  entries: DebugLogEntry[] = [];
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
@@ -37,7 +38,7 @@ export class DebugLogService {
     this.entries = [];
   }
 
-  record(entry: ExternalLogEntry): void {
+  record(entry: DebugLogEntry): void {
     const next = [entry, ...this.entries];
     if (next.length > MAX_ENTRIES) next.length = MAX_ENTRIES;
     this.entries = next;

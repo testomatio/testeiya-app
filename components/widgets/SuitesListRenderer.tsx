@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { FolderGlyph } from "@/components/icons";
 import SuiteItemRenderer from "./items/SuiteItemRenderer";
-import { extractList } from "./extract-list";
+import { useListWidget } from "./use-list-widget";
 import {
   ListRow,
   ListRowCaption,
@@ -43,12 +42,18 @@ const SUITES_GRID = "minmax(0,8fr) 2fr 2fr";
 export default function SuitesListRenderer({
   json,
   summary,
+  widgetId,
 }: {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }) {
-  const { items, meta } = useMemo(() => extractList<McpSuite>(json), [json]);
-  const [selected, setSelected] = useState<McpSuite | null>(null);
+  const { items, meta, selected, setSelected, pager } = useListWidget<McpSuite>({
+    widgetId,
+    resource: "suites",
+    json,
+    getId: (s) => (s.id != null ? String(s.id) : undefined),
+  });
 
   if (items.length === 0) {
     return (
@@ -119,12 +124,13 @@ export default function SuitesListRenderer({
             </ListRow>
           );
         })}
-        {meta?.total != null && meta.total > items.length && (
+        {!pager && meta?.total != null && meta.total > items.length && (
           <ListRowCaption>
             Showing {items.length} of {meta.total} suites
           </ListRowCaption>
         )}
       </ListRowGroup>
+      {pager}
     </div>
   );
 }

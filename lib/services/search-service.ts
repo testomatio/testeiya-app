@@ -51,6 +51,10 @@ export class SearchService {
     if (!sessionId || !query) return;
     this.searching = true;
     this.searchError = null;
+    // The widget pane shows one overlay at a time and ranks an open file/resource
+    // above search, so surface the results by closing whatever is open first.
+    this.root.workspace.close();
+    this.root.project.closeResource();
     this.showSearch = true;
     try {
       const data = await getJson<SearchResponse>(

@@ -3,7 +3,7 @@
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/lib/icons";
-import { FolderGlyph, SuiteGlyph } from "@/components/agent-output/type-icons";
+import { FolderGlyph, SuiteGlyph } from "@/components/widgets/type-icons";
 
 export {
   ManualGlyph,
@@ -21,7 +21,7 @@ export {
   TypeIcon,
   SuiteKindIcon,
   resolveType,
-} from "@/components/agent-output/type-icons";
+} from "@/components/widgets/type-icons";
 
 /** Material Design glyph rendered from an `@mdi/js` path string. */
 export function MdiIcon({

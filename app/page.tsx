@@ -46,12 +46,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
 import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
-import { MemoryDialog } from "@/components/MemoryDialog";
 import { useFileMentions } from "@/components/ai-elements/prompt-input-mentions";
 import type { MentionItem } from "@/components/ai-elements/prompt-input-mentions";
 import { observer } from "mobx-react-lite";
@@ -65,6 +65,8 @@ import {
   useSessionsService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
+import { WidgetCommandProvider, useWidgetBus } from "@/lib/widgets/command-bus";
+import { serializeActiveWidget } from "@/lib/widgets/widget-actions";
 import type { TreeNode } from "@/lib/services/types";
 import { SidebarPanel } from "@/components/panel/SidebarPanel";
 import { WidgetPane } from "@/components/panel/WidgetPane";
@@ -72,7 +74,7 @@ import { ChatColumn } from "@/components/panel/ChatColumn";
 import { ChatPanelHeader } from "@/components/panel/ChatPanelHeader";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
-import { ResourceWidgetView } from "@/components/agent-output/ResourceWidgetView";
+import { ResourceWidgetView } from "@/components/widgets/ResourceWidgetView";
 import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type FormEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -194,17 +196,31 @@ function summarizeTools(tools: ToolCall[]): string {
   return out.join(" · ");
 }
 
-// What to show next to a routine tool's name. Prefer the model's short intent
-// label `_i`; when it's absent fall back to the most identifying input field —
-// the command for bash, the file path for read/write/edit, the pattern for
-// grep/find — so the row is never just a bare tool name.
-function routineDescription(input: ToolCall["input"]): string | undefined {
-  if (typeof input._i === "string" && input._i.trim()) return input._i;
+// What to show next to a routine tool's name. The `task` tool spawns a subagent
+// — surface which one ("agent: explore"). Otherwise prefer the model's short
+// intent label `_i`; when it's absent fall back to the most identifying input
+// field — the command for bash, the file path for read/write/edit, the pattern
+// for grep/find — so the row is never just a bare tool name. Paths are shown
+// relative to the workspace `cwd` to keep them short and readable.
+function routineDescription(tool: ToolCall, cwd?: string | null): string | undefined {
+  const input = tool.input;
+  if (tool.toolName === "task" && typeof input.agent === "string" && input.agent.trim()) {
+    return `agent: ${input.agent}`;
+  }
+  if (typeof input._i === "string" && input._i.trim()) return relativizePath(input._i, cwd);
   for (const field of ["command", "cmd", "file_path", "path", "pattern", "glob", "query", "url"]) {
     const value = input[field];
-    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "string" && value.trim()) return relativizePath(value, cwd);
   }
   return undefined;
+}
+
+function relativizePath(value: string, cwd?: string | null): string {
+  if (!cwd) return value;
+  if (value === cwd) return ".";
+  const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
+  if (value.startsWith(prefix)) return value.slice(prefix.length);
+  return value;
 }
 
 function renderSegments(
@@ -287,20 +303,31 @@ function ChatWithWorkspace() {
   return (
     <ServicesProvider sessionId={workspaceSessionId} navigate={navigate}>
       <PanelProvider defaultOpen={openWorkspace} defaultSection="workspace">
-        <ChatPage />
+        <WidgetCommandProvider>
+          <ChatPage />
+        </WidgetCommandProvider>
       </PanelProvider>
     </ServicesProvider>
   );
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick, mentionFiles },
+  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick, mentionFiles, sessionId, voiceEnabled },
   ref
 ) {
   const [text, setText] = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<VoiceRecognition | null>(null);
   const mentions = useFileMentions({ text, setText, items: mentionFiles });
+  const { chatOpen } = usePanel();
+  const voice = useVoiceInput({
+    sessionId,
+    onSegment: (seg) =>
+      setText((prev) => (prev.trimEnd() ? `${prev.trimEnd()} ${seg}` : seg)),
+  });
+  const stopVoice = voice.stop;
+
+  useEffect(() => {
+    if (!chatOpen) stopVoice(true);
+  }, [chatOpen, stopVoice]);
 
   useImperativeHandle(
     ref,
@@ -316,42 +343,13 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     []
   );
 
-  const toggleVoice = useCallback(() => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-
-    const w = window as VoiceWindow;
-    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-
-    if (!Ctor) {
-      toast.error("Voice input is not supported in this browser");
-      return;
-    }
-
-    const recognition = new Ctor();
-    recognition.lang = navigator.language;
-    recognition.interimResults = false;
-    recognition.continuous = false;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
-    recognition.onresult = (event: VoiceRecognitionEvent) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      if (transcript) {
-        setText((prev) => (prev.trimEnd() ? `${prev.trimEnd()} ${transcript}` : transcript));
-      }
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [isListening]);
+  let micTooltip = "Voice input";
+  if (!voiceEnabled) micTooltip = "Connect a Testomat.io project to use voice input";
+  else if (voice.isListening) micTooltip = "Stop recording";
 
   return (
     <div className="relative">
-    <PromptInput onSubmit={onSubmit}>
+    <PromptInput onSubmit={(message, event) => { voice.stop(true); return onSubmit(message, event); }}>
       <PromptInputBody>
         <PromptInputTextarea
           onChange={mentions.onChange}
@@ -374,13 +372,19 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           </PromptInputButton>
         </div>
         <div className="flex items-center gap-1">
-          {isListening && (
+          {voice.isListening && (
             <span className="flex items-center gap-1.5 text-xs text-destructive animate-pulse select-none">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
                 <span className="relative inline-flex size-2 rounded-full bg-destructive" />
               </span>
               Listening...
+            </span>
+          )}
+          {!voice.isListening && voice.isTranscribing && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground select-none">
+              <Spinner className="size-3" />
+              Transcribing...
             </span>
           )}
           <Tooltip>
@@ -399,14 +403,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
             <TooltipContent side="top"><p>Change provider / model</p></TooltipContent>
           </Tooltip>
           <div className="relative">
-            {isListening && (
+            {voice.isListening && (
               <span className="absolute inset-0 rounded-md animate-ping bg-destructive/20" />
             )}
             <PromptInputButton
-              onClick={toggleVoice}
-              tooltip={isListening ? "Stop recording" : "Voice input"}
-              aria-label={isListening ? "Stop recording" : "Voice input"}
-              className={isListening ? "relative text-destructive bg-destructive/10 hover:bg-destructive/20" : undefined}
+              onClick={() => {
+                if (!voiceEnabled) {
+                  toast.error("Connect a Testomat.io project to use voice input");
+                  return;
+                }
+                voice.toggle();
+              }}
+              tooltip={micTooltip}
+              aria-label={micTooltip}
+              className={cn(
+                !voiceEnabled && "opacity-50",
+                voice.isListening && "relative text-destructive bg-destructive/10 hover:bg-destructive/20"
+              )}
             >
               <MicIcon className="size-4" />
             </PromptInputButton>
@@ -425,6 +438,18 @@ const ChatPage = observer(function ChatPage() {
   const projectIds = searchParams.getAll("projectIds");
   const sessionId = searchParams.get("session") ?? undefined;
 
+  const widget = useWidgetService();
+  // Serialize the widget the user is currently viewing (id + its declared
+  // actions) so it rides every prompt and the agent can drive it via ui_widget.
+  // A nested sub-view (manual run) can override the reported kind/actions.
+  const activeWidget =
+    serializeActiveWidget(
+      widget.current,
+      widget.activeOverride
+        ? { kind: widget.activeOverride.kind, state: widget.activeOverride.state }
+        : undefined
+    ) ?? undefined;
+
   const params = useMemo(() => {
     const p: Record<string, unknown> = {};
     if (projectIds.length > 0) p.projectIds = projectIds;
@@ -433,8 +458,14 @@ const ChatPage = observer(function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectIds.join(","), sessionId]);
 
-  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, currentConversationId, sendMessage, answerQuestion, stop, clearSession, openConversation, clearError } =
-    useTesteiya(params);
+  const paramsWithContext = useMemo(
+    () => (activeWidget ? { ...(params ?? {}), activeWidget } : params),
+    [params, activeWidget]
+  );
+
+  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, currentConversationId, sendMessage, answerQuestion, sendWidgetResult, stop, clearSession, openConversation, clearError } =
+    useTesteiya(paramsWithContext);
+  const bus = useWidgetBus();
   const host = useHost();
   const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -442,13 +473,11 @@ const ChatPage = observer(function ChatPage() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const panel = usePanel();
   const workspace = useWorkspaceService();
   const project = useProjectService();
   const providers = useProvidersService();
   const connections = useConnectionsService();
-  const widget = useWidgetService();
   const sessions = useSessionsService();
   const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
 
@@ -484,6 +513,31 @@ const ChatPage = observer(function ChatPage() {
       output: latestRenderTool.output,
     });
   }, [latestRenderTool, widget]);
+
+  // The agent's `ui_widget` tool parks its turn until the client runs the
+  // command against the active widget and ships the result back. Dispatch each
+  // new ui_widget call into the command bus (the widget's buttons go through the
+  // same handler), then return the result; dedupe so each call fires once.
+  const handledWidgetCalls = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const message of messages) {
+      for (const tool of message.tools ?? []) {
+        if (tool.toolName !== "ui_widget") continue;
+        if (tool.state !== "input-available") continue;
+        if (handledWidgetCalls.current.has(tool.toolCallId)) continue;
+        handledWidgetCalls.current.add(tool.toolCallId);
+        const input = (tool.input ?? {}) as {
+          widget_id?: string;
+          action?: string;
+          params?: Record<string, unknown>;
+        };
+        const callId = tool.toolCallId;
+        void bus
+          .dispatch(input.widget_id ?? "", input.action ?? "", input.params ?? {})
+          .then((res) => sendWidgetResult(callId, res));
+      }
+    }
+  }, [messages, bus, sendWidgetResult]);
 
   // The plan evolves across turns; only the most recent message's todo panel is
   // still relevant, so earlier ones render collapsed.
@@ -656,7 +710,8 @@ const ChatPage = observer(function ChatPage() {
       const rich = renderRichTool(
         current.toolName,
         current.input,
-        current.output
+        current.output,
+        current.key
       );
       if (!rich) return null;
       return (
@@ -698,6 +753,7 @@ const ChatPage = observer(function ChatPage() {
         <div className="flex min-h-0 flex-1 p-2">
           <ResourceWidgetView
             resource={current.resource}
+            widgetId={current.key}
             externalUrl={url}
             onOpenExternal={() => url && project.openExternal(url)}
             onRefresh={() => project.refresh()}
@@ -777,14 +833,12 @@ const ChatPage = observer(function ChatPage() {
         onAdd={addAttachments}
       />
 
-      <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
-
       {/* Below-header region: sidebar | widget pane | chat column. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
         <WidgetPane fill>{widgetBody}</WidgetPane>
         <ChatColumn hasWidget={hasWidget}>
-          <ChatPanelHeader canCollapse={hasWidget} onOpenMemory={() => setMemoryOpen(true)} />
+          <ChatPanelHeader canCollapse={hasWidget} />
       <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
       {/* MCP status + Clear — shown only when there's an active chat */}
       <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", messages.length === 0 && "hidden")}>
@@ -1013,7 +1067,7 @@ const ChatPage = observer(function ChatPage() {
                         type="dynamic-tool"
                         toolName={tool.toolName}
                         state={tool.state}
-                        description={routineDescription(tool.input)}
+                        description={routineDescription(tool, cwd)}
                       />
                       <ToolContent>
                         <ToolInput input={tool.input} />
@@ -1102,6 +1156,8 @@ const ChatPage = observer(function ChatPage() {
                 const q = tool.input as {
                   question?: string;
                   options?: string[];
+                  multiSelect?: boolean;
+                  recommended?: number[];
                 } | undefined;
                 if (!q?.question || !Array.isArray(q.options)) return null;
                 return (
@@ -1109,6 +1165,8 @@ const ChatPage = observer(function ChatPage() {
                     key={tool.toolCallId}
                     question={q.question}
                     options={q.options}
+                    multiSelect={q.multiSelect}
+                    recommended={q.recommended}
                     answered={tool.state !== "input-available"}
                     selected={tool.output}
                     onPick={(opt) => answerQuestion(tool.toolCallId, opt)}
@@ -1180,6 +1238,8 @@ const ChatPage = observer(function ChatPage() {
           modelLabel={model ? model.split("/").slice(1).join("/") || model : providers.label || "Select model"}
           onModelClick={() => setProvidersOpen(true)}
           mentionFiles={mentionFiles}
+          sessionId={sessionId ?? null}
+          voiceEnabled={project.currentProject != null}
         />
         </div>
       </div>
@@ -1233,25 +1293,7 @@ interface ChatInputProps {
   modelLabel: string;
   onModelClick: () => void;
   mentionFiles: MentionItem[];
+  sessionId: string | null;
+  voiceEnabled: boolean;
 }
 
-interface VoiceRecognitionEvent {
-  results: { [index: number]: { [index: number]: { transcript: string } } };
-}
-
-interface VoiceRecognition {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  onresult: ((event: VoiceRecognitionEvent) => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-interface VoiceWindow {
-  SpeechRecognition?: new () => VoiceRecognition;
-  webkitSpeechRecognition?: new () => VoiceRecognition;
-}

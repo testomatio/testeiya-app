@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { logAgentEvent } from "@/lib/debug/external-log";
 
 export interface ToolCall {
   toolCallId: string;
@@ -37,6 +38,9 @@ export type ChatStatus = "ready" | "connecting" | "submitted" | "streaming";
 export interface TesteiyaParams {
   projectIds?: string[];
   sessionId?: string;
+  /** Serialized `<active_widget>` block for the widget the user is viewing.
+   *  Rides every prompt (spread into `wsParams`) so the agent can drive it. */
+  activeWidget?: string;
   [key: string]: unknown;
 }
 
@@ -183,6 +187,7 @@ export function useTesteiya(params?: TesteiyaParams) {
       } catch {
         return;
       }
+      logAgentEvent(data);
 
       // Any server event — including the periodic `ping` heartbeat sent while
       // the agent works — means the connection is alive, so re-arm the stall
@@ -287,7 +292,11 @@ export function useTesteiya(params?: TesteiyaParams) {
             input: data.input as Record<string, unknown>,
             state: "input-available",
           };
-          setActiveTool(tool.toolName);
+          let activeLabel = tool.toolName;
+          if (tool.toolName === "task" && typeof tool.input.agent === "string" && tool.input.agent.trim()) {
+            activeLabel = `${tool.input.agent} agent`;
+          }
+          setActiveTool(activeLabel);
           updateLastAssistant((msg) => ({
             ...msg,
             tools: [...(msg.tools || []), tool],
@@ -478,6 +487,19 @@ export function useTesteiya(params?: TesteiyaParams) {
     [updateLastAssistant, armWatchdog]
   );
 
+  // Return the result of a `ui_widget` command back to the parked agent turn.
+  // The agent's `ui_widget` tool blocks until this `widget_result` arrives.
+  const sendWidgetResult = useCallback(
+    (toolCallId: string, result: unknown) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      wsRef.current.send(
+        JSON.stringify({ type: "widget_result", toolCallId, result })
+      );
+      armWatchdog();
+    },
+    [armWatchdog]
+  );
+
   const stop = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "abort" }));
@@ -541,6 +563,7 @@ export function useTesteiya(params?: TesteiyaParams) {
     currentConversationId,
     sendMessage,
     answerQuestion,
+    sendWidgetResult,
     stop,
     clearSession,
     openConversation,

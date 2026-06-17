@@ -12,6 +12,7 @@ type ItemKind = "test" | "suite" | "run" | "testrun" | "plan";
 interface Props {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }
 
 function parseEntity(raw: unknown): {
@@ -71,7 +72,7 @@ function parseEntity(raw: unknown): {
   return null;
 }
 
-export default function ItemOutputRenderer({ json, summary }: Props) {
+export default function ItemOutputRenderer({ json, summary, widgetId }: Props) {
   const parsed = useMemo(() => parseEntity(json), [json]);
 
   if (!parsed) {
@@ -84,7 +85,7 @@ export default function ItemOutputRenderer({ json, summary }: Props) {
   let body: ReactNode;
   switch (parsed.kind) {
     case "run":
-      body = <RunItemRenderer data={data} />;
+      body = <RunItemRenderer data={data} widgetId={widgetId} />;
       break;
     case "testrun":
       body = <TestRunItemRenderer data={data} />;

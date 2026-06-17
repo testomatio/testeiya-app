@@ -184,6 +184,18 @@ export class ProjectService {
   }
 
   /**
+   * Persist the Testomat.io host (Settings / connect dialog). Normalizes the
+   * input, saves it, then re-reads status so `baseUrl`/`signInUrl` reflect the
+   * new instance and any stored token is re-validated against it. An empty host
+   * clears the override (falls back to the env/default).
+   */
+  async setHost(host: string): Promise<void> {
+    const normalized = host.trim() ? normalizeBaseUrl(host) : "";
+    await postJson("/api/auth/testomatio/host", { host: normalized });
+    await this.refreshStatus();
+  }
+
+  /**
    * Create an agent session for a project and switch to it. Passes the current
    * session so the server can decide whether to overlay the project into the
    * user's open folder or use a dedicated per-project workspace.

@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Icon, RotateCwIcon, SearchIcon, XIcon } from "@/lib/icons";
-import { useTestomatio } from "@/lib/agent-output/use-testomatio";
+import {
+  fetchTestomatioList,
+  useTestomatio,
+} from "@/lib/agent-output/use-testomatio";
+import { useStores } from "@/lib/services/StoreProvider";
+import { useRegisterWidget } from "@/lib/widgets/command-bus";
 import type { ProjectResource } from "@/lib/services/project-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +69,7 @@ const RESOURCE_CONFIG: Record<
  */
 export function ResourceWidgetView({
   resource,
+  widgetId,
   externalUrl,
   onOpenExternal,
   onRefresh,
@@ -71,6 +77,7 @@ export function ResourceWidgetView({
   className,
 }: {
   resource: ProjectResource;
+  widgetId?: string;
   externalUrl?: string;
   onOpenExternal?: () => void;
   onRefresh?: () => void;
@@ -78,6 +85,7 @@ export function ResourceWidgetView({
   className?: string;
 }) {
   const { label, api, render, searchVar } = RESOURCE_CONFIG[resource];
+  const store = useStores();
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [filterInput, setFilterInput] = useState("");
@@ -137,6 +145,54 @@ export function ResourceWidgetView({
 
   const applyNow = () =>
     setApplied({ search: searchInput.trim(), filter: filterInput.trim() });
+
+  // Let the agent drive this browse view via `ui_widget`. `list` runs the same
+  // pagination/filter the user's pager/inputs do; `open` isn't available here
+  // (the list is shown directly — rows open on click), so it returns a hint.
+  const runCommand = useCallback(
+    async (action: string, params: Record<string, unknown>) => {
+      if (action !== "list") {
+        throw new Error(
+          `This is a browse list; only "list" is supported here (open a row by clicking, or ask me to render the item).`
+        );
+      }
+      const sessionId = store.sessionId;
+      if (!sessionId) throw new Error("No active session to load this list.");
+      const rawQuery =
+        params.query != null ? String(params.query).replace(/^=/, "").trim() : "";
+      if (params.query != null) {
+        setSearchInput("");
+        setFilterInput(rawQuery);
+        setApplied({ search: "", filter: rawQuery });
+      }
+      const nextPage =
+        params.page != null
+          ? Math.max(1, Number(params.page))
+          : params.query != null
+            ? 1
+            : page;
+      setPage(nextPage);
+      const effectiveQuery =
+        params.query != null
+          ? buildQuery(searchVar, "", rawQuery)
+          : buildQuery(searchVar, applied.search, applied.filter);
+      const { items, meta } = await fetchTestomatioList<unknown>(
+        api,
+        { page: nextPage, per_page: PER_PAGE, query: effectiveQuery || undefined },
+        sessionId
+      );
+      return {
+        page: nextPage,
+        per_page: PER_PAGE,
+        total: meta?.total ?? null,
+        count: items.length,
+        query: effectiveQuery || null,
+        items,
+      };
+    },
+    [store, api, searchVar, page, applied.search, applied.filter]
+  );
+  useRegisterWidget(widgetId, runCommand);
 
   let body;
   if (loading) {

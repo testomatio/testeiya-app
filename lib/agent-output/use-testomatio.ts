@@ -160,6 +160,35 @@ export function clearTestomatioCache(): void {
 }
 
 /**
+ * Imperatively fetch a page of a v2 list resource (outside React's render-driven
+ * `useTestomatio`). Used by widget commands so the agent gets the page's data
+ * back synchronously while the visible widget updates from the same result. The
+ * response is written into the shared cache so a subsequent `useTestomatio` for
+ * the same URL renders it without a flash.
+ */
+export async function fetchTestomatioList<T>(
+  resource: string,
+  query: Record<string, QueryValue>,
+  sessionId: string
+): Promise<{ items: T[]; meta: TestomatioMeta | null }> {
+  const url = buildUrl(resource, query, sessionId);
+  const { res, text } = await loggedFetch(url);
+  const json = text ? (JSON.parse(text) as unknown) : null;
+  if (!res.ok) {
+    const msg =
+      json && typeof json === "object" && "error" in json
+        ? String((json as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  const data = unwrap<unknown>(json);
+  const meta = extractMeta(json);
+  cache.set(url, { data, meta, tick: 0 });
+  const items = Array.isArray(data) ? (data as T[]) : [];
+  return { items, meta };
+}
+
+/**
  * Write a Testomat.io v2 resource via the proxy: `PUT /api/testomatio/{resource}?id=`.
  * Unwraps the `{data}` envelope, throws on a non-OK response, and clears the read
  * cache so subsequent `useTestomatio` reads reflect the change.
@@ -229,4 +258,36 @@ export async function uploadTestRunAttachment(opts: {
     throw new Error(msg || `HTTP ${r.status}`);
   }
   return unwrap(json);
+}
+
+/**
+ * Transcribe an audio segment via the Testomat.io `/transcriptions` proxy
+ * (`POST /api/testomatio/transcription?session=`, multipart `file` [+ `language`]).
+ * The server resolves the connected project + token. Returns the transcribed
+ * text (may be ""); throws on a non-OK response with the upstream message.
+ */
+export async function transcribeAudio(opts: {
+  sessionId: string;
+  blob: Blob;
+  filename: string;
+  language?: string;
+}): Promise<string> {
+  const url = `/api/testomatio/transcription?session=${encodeURIComponent(opts.sessionId)}`;
+  const body = new FormData();
+  body.append("file", opts.blob, opts.filename);
+  if (opts.language) body.append("language", opts.language);
+
+  const { res: r, text } = await loggedFetch(url, { method: "POST", body });
+  const json = text ? (JSON.parse(text) as unknown) : null;
+  if (!r.ok) {
+    const msg =
+      json && typeof json === "object" && "error" in json
+        ? String((json as { error: unknown }).error)
+        : `HTTP ${r.status}`;
+    throw new Error(msg || `HTTP ${r.status}`);
+  }
+  if (json && typeof json === "object" && "text" in json) {
+    return String((json as { text: unknown }).text ?? "");
+  }
+  return "";
 }

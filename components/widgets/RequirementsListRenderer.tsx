@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { ClipboardCheckIcon, ExternalLinkIcon } from "@/lib/icons";
 import { openExternalUrl } from "@/lib/testomatio-url";
-import { extractList } from "./extract-list";
+import { useListWidget } from "./use-list-widget";
 import {
   ListRow,
   ListRowCaption,
@@ -48,14 +47,22 @@ function pick<T>(...vals: (T | undefined | null)[]): T | undefined {
 export default function RequirementsListRenderer({
   json,
   summary,
+  widgetId,
 }: {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }) {
-  const { items, meta } = useMemo(
-    () => extractList<McpRequirement>(json),
-    [json]
-  );
+  const { items, meta, pager } = useListWidget<McpRequirement>({
+    widgetId,
+    resource: "issues",
+    json,
+    getId: (r) => (r.id != null ? String(r.id) : undefined),
+    onOpen: (r) => {
+      const url = pick(r.url, r.link);
+      if (url) void openExternalUrl(url);
+    },
+  });
 
   if (items.length === 0) {
     return (
@@ -120,12 +127,13 @@ export default function RequirementsListRenderer({
             </ListRow>
           );
         })}
-        {meta?.total != null && meta.total > items.length && (
+        {!pager && meta?.total != null && meta.total > items.length && (
           <ListRowCaption>
             Showing {items.length} of {meta.total} requirements
           </ListRowCaption>
         )}
       </ListRowGroup>
+      {pager}
     </div>
   );
 }

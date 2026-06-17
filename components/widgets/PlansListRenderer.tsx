@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { ClipboardListIcon } from "@/lib/icons";
 import PlanItemRenderer from "./items/PlanItemRenderer";
-import { extractList } from "./extract-list";
+import { useListWidget } from "./use-list-widget";
 import {
   ListRow,
   ListRowCaption,
@@ -34,12 +33,18 @@ const PLANS_GRID = "minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
 export default function PlansListRenderer({
   json,
   summary,
+  widgetId,
 }: {
   json: unknown;
   summary?: string;
+  widgetId?: string;
 }) {
-  const { items, meta } = useMemo(() => extractList<McpPlan>(json), [json]);
-  const [selected, setSelected] = useState<McpPlan | null>(null);
+  const { items, meta, selected, setSelected, pager } = useListWidget<McpPlan>({
+    widgetId,
+    resource: "plans",
+    json,
+    getId: (p) => (p.id != null ? String(p.id) : undefined),
+  });
 
   if (items.length === 0) {
     return (
@@ -135,12 +140,13 @@ export default function PlansListRenderer({
             </ListRow>
           );
         })}
-        {meta?.total != null && meta.total > items.length && (
+        {!pager && meta?.total != null && meta.total > items.length && (
           <ListRowCaption>
             Showing {items.length} of {meta.total} plans
           </ListRowCaption>
         )}
       </ListRowGroup>
+      {pager}
     </div>
   );
 }
