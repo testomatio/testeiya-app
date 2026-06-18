@@ -14,6 +14,10 @@
 # arm64), then rebuild the dmg from the corrected .app.
 set -euo pipefail
 
+if [ "$(uname -s)" != "Darwin" ]; then
+  exit 0
+fi
+
 DMG=artifacts/stable-macos-arm64-Testeiya.dmg
 ZST=artifacts/stable-macos-arm64-Testeiya.app.tar.zst
 WORK=macstage

@@ -62,20 +62,6 @@ jobs:
       - name: Install root dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install agent (testeiya) dependencies
-        run: bun install --frozen-lockfile
-        working-directory: testeiya
-
-      # @testomatio/skills ships a stray dangling symlink
-      # (plugins/test-management/skills/hello -> ../../../skills/hello, which
-      # doesn't exist upstream). electrobun copies node_modules with
-      # dereference:true and aborts when it can't stat a broken link. Remove
-      # dangling symlinks only — they carry no content; valid skill symlinks
-      # still resolve and are copied normally.
-      - name: Prune dangling symlinks in agent deps
-        shell: bash
-        run: find testeiya/node_modules -type l ! -exec test -e {} \; -exec rm -fv {} \;
-
       - name: Sync version from release tag
         if: github.event_name == 'release'
         shell: bash
@@ -83,6 +69,8 @@ jobs:
 
       - name: Build desktop installer
         run: bun run desktop:release
+        env:
+          CI: true
 
       # electrobun's self-extracting installers can't unpack this app's deep
       # node_modules (paths > 100 chars -> TarUnsupportedFileType). Repackage
@@ -91,13 +79,6 @@ jobs:
       - name: Package Linux AppImage
         if: runner.os == 'Linux'
         run: bash .github/packaging/build-linux-appimage.sh
-
-      # electrobun's prebuilt macOS core ships libasar.dylib + zig-zstd with a
-      # bogus minimum-OS of 14.8.x, so macOS < 14.8 refuses to launch the app.
-      # Rewrite minos down to 11.0, ad-hoc re-sign, and rebuild the .dmg.
-      - name: Fix macOS min-version and rebuild dmg
-        if: runner.os == 'macOS'
-        run: bash .github/packaging/fix-macos-minos.sh
 
       - name: Package Windows zip
         if: runner.os == 'Windows'
