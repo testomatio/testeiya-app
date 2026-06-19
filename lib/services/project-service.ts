@@ -222,6 +222,12 @@ export class ProjectService {
     });
     try {
       await this.selectProject(last);
+    } catch (err) {
+      // Best-effort restore: a stale/removed last project (or a transient
+      // failure) just falls back to the empty state + project picker. Never let
+      // it become an unhandled rejection (which throws the Next dev overlay and
+      // blocks the UI).
+      console.warn("[project] could not restore last project:", err);
     } finally {
       runInAction(() => {
         this.restoring = false;
