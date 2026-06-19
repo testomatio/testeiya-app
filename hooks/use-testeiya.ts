@@ -179,6 +179,24 @@ export function useTesteiya(params?: TesteiyaParams) {
     []
   );
 
+  const updateMessageById = useCallback(
+    (id: string, updater: (msg: ChatMessage) => ChatMessage) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === id);
+        // A delta arrived for an id with no `start` (reconnect, re-entrant
+        // agent loop, provider reordering) — lazily create the message so text
+        // is never appended to the wrong (previous) bubble.
+        if (idx === -1) {
+          return [...prev, updater({ id, role: "assistant", content: "" })];
+        }
+        const updated = [...prev];
+        updated[idx] = updater(updated[idx]);
+        return updated;
+      });
+    },
+    []
+  );
+
   const handleWsMessage = useCallback(
     (event: MessageEvent) => {
       let data: Record<string, unknown>;
@@ -246,37 +264,59 @@ export function useTesteiya(params?: TesteiyaParams) {
           setStatus("streaming");
           break;
 
-        case "text-delta":
+        case "text-delta": {
+          const id = (data.id as string) || currentMsgIdRef.current;
+          if (id !== currentMsgIdRef.current) {
+            currentMsgIdRef.current = id;
+            contentRef.current = "";
+            reasoningRef.current = "";
+          }
           contentRef.current += data.delta as string;
           const text = contentRef.current;
-          updateLastAssistant((msg) => ({ ...msg, content: text }));
+          updateMessageById(id, (msg) => ({ ...msg, content: text }));
           break;
+        }
 
         case "text-end":
           break;
 
-        case "reasoning-start":
+        case "reasoning-start": {
+          const id = (data.id as string) || currentMsgIdRef.current;
+          if (id !== currentMsgIdRef.current) {
+            currentMsgIdRef.current = id;
+            contentRef.current = "";
+            reasoningRef.current = "";
+          }
           reasoningStartRef.current = Date.now();
-          updateLastAssistant((msg) => ({
+          updateMessageById(id, (msg) => ({
             ...msg,
             reasoning: { content: "", isStreaming: true },
           }));
           break;
+        }
 
-        case "reasoning-delta":
+        case "reasoning-delta": {
+          const id = (data.id as string) || currentMsgIdRef.current;
+          if (id !== currentMsgIdRef.current) {
+            currentMsgIdRef.current = id;
+            contentRef.current = "";
+            reasoningRef.current = "";
+          }
           reasoningRef.current += data.delta as string;
           const reasoning = reasoningRef.current;
-          updateLastAssistant((msg) => ({
+          updateMessageById(id, (msg) => ({
             ...msg,
             reasoning: { content: reasoning, isStreaming: true },
           }));
           break;
+        }
 
         case "reasoning-end": {
+          const id = (data.id as string) || currentMsgIdRef.current;
           const duration = Math.round(
             (Date.now() - reasoningStartRef.current) / 1000
           );
-          updateLastAssistant((msg) => ({
+          updateMessageById(id, (msg) => ({
             ...msg,
             reasoning: msg.reasoning
               ? { ...msg.reasoning, isStreaming: false, duration }
@@ -307,6 +347,10 @@ export function useTesteiya(params?: TesteiyaParams) {
         case "tool-output-available": {
           const toolCallId = data.toolCallId as string;
           const output = data.output as string;
+          const isError =
+            typeof data.isError === "boolean"
+              ? data.isError
+              : output.startsWith("Error:");
           setActiveTool(null);
           updateLastAssistant((msg) => ({
             ...msg,
@@ -315,9 +359,7 @@ export function useTesteiya(params?: TesteiyaParams) {
                 ? {
                     ...t,
                     output,
-                    state: output.startsWith("Error:")
-                      ? "output-error"
-                      : "output-available",
+                    state: isError ? "output-error" : "output-available",
                   }
                 : t
             ),
@@ -356,7 +398,7 @@ export function useTesteiya(params?: TesteiyaParams) {
           break;
       }
     },
-    [updateLastAssistant, clearWatchdog, armWatchdog]
+    [updateLastAssistant, updateMessageById, clearWatchdog, armWatchdog]
   );
 
   const connect = useCallback(() => {

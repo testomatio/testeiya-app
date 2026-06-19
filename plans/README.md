@@ -14,23 +14,23 @@ starting, honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Repo | Depends on | Status |
 |------|-------|----------|--------|------|------------|--------|
-| 001 | Verification baseline: `bun test` + workspace-classifier tests | P1 | S | testeiya | — | TODO |
-| 002 | Propagate the real `isError` flag for tool output | P1 | S | both | — | TODO |
-| 003 | Remove four unused root dependencies | P1 | S | root | — | TODO |
-| 004 | Fix the `testeiya` build + add `typecheck` scripts | P1 | S | both | — | TODO |
-| 005 | Validate `postMessage` origin in the host bridge | P1 | S | root | — | TODO |
-| 006 | Make the session store atomic + in-memory cached | P1 | M | testeiya | — | TODO |
-| 007 | Gate `/api/*` + the agent WS behind auth; lock down `mcp/add` | P1 | M | testeiya | — | TODO |
-| 008 | Harden the path sandbox against symlink escape (+ tests) | P2 | S | testeiya | 001 | TODO |
-| 009 | Characterization tests for the SSRF proxy whitelist | P2 | S | testeiya | 001 | TODO |
-| 010 | Guard streaming deltas by message id | P2 | M | root | — | TODO |
-| 011 | Fix the stuck "Restoring…" spinner | P2 | S | root | — | TODO |
-| 012 | Investigate + fix the global `TESTOMATIO` token bleed | P2 | M | testeiya | 001 | TODO |
-| 013 | Memoize the streaming message list | P2 | M | root | 002 | TODO |
-| 014 | Pin `@testomatio/skills` to an immutable ref | P2 | S | testeiya | — | TODO |
-| 015 | Delete the dead legacy `server.ts` | P3 | S | testeiya | — | TODO |
-| 016 | Consolidate JSON read-modify-write into a shared util | P3 | M | testeiya | 006 | TODO |
-| 017 | Prune dead `ai-elements` components + orphaned deps | P3 | M | root | 003 | TODO |
+| 001 | Verification baseline: `bun test` + workspace-classifier tests | P1 | S | testeiya | — | DONE |
+| 002 | Propagate the real `isError` flag for tool output | P1 | S | both | — | DONE |
+| 003 | Remove four unused root dependencies | P1 | S | root | — | DONE |
+| 004 | Fix the `testeiya` build + add `typecheck` scripts | P1 | S | both | — | DONE |
+| 005 | Validate `postMessage` origin in the host bridge | P1 | S | root | — | DONE |
+| 006 | Make the session store atomic + in-memory cached | P1 | M | testeiya | — | DONE |
+| 007 | Gate `/api/*` + the agent WS behind auth; lock down `mcp/add` | P1 | M | testeiya | — | DONE |
+| 008 | Harden the path sandbox against symlink escape (+ tests) | P2 | S | testeiya | 001 | DONE |
+| 009 | Characterization tests for the SSRF proxy whitelist | P2 | S | testeiya | 001 | DONE |
+| 010 | Guard streaming deltas by message id | P2 | M | root | — | DONE |
+| 011 | Fix the stuck "Restoring…" spinner | P2 | S | root | — | DONE |
+| 012 | Investigate + fix the global `TESTOMATIO` token bleed | P2 | M | testeiya | 001 | BLOCKED (Branch B: no SDK per-session shell env; partial fix landed — single-token guard + documented; full isolation needs SDK feature) |
+| 013 | Memoize the streaming message list | P2 | M | root | 002 | DONE |
+| 014 | Pin `@testomatio/skills` to an immutable ref | P2 | S | testeiya | — | DONE |
+| 015 | Delete the dead legacy `server.ts` | P3 | S | testeiya | — | DONE |
+| 016 | Consolidate JSON read-modify-write into a shared util | P3 | M | testeiya | 006 | DONE |
+| 017 | Prune dead `ai-elements` components + orphaned deps | P3 | M | root | 003 | REJECTED (maintainer keeps the unused components for potential future use; prune reverted — files, the 3 deps, and tsconfig excludes restored) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

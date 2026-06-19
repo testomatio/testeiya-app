@@ -222,7 +222,7 @@ export class ProjectService {
     });
     try {
       await this.selectProject(last);
-    } catch {
+    } finally {
       runInAction(() => {
         this.restoring = false;
       });

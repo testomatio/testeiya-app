@@ -45,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
-import type { ChatStatus as TesteiyaStatus, ToolCall } from "@/hooks/use-testeiya";
+import type { ChatStatus as TesteiyaStatus, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
 import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
@@ -430,6 +430,191 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     </PromptInput>
       {mentions.dropdown}
     </div>
+  );
+});
+
+// One conversation message. Extracted + `observer`-wrapped so that during
+// streaming only the active (changing) message re-renders per delta — finished
+// messages keep the same `message` reference and `isStreaming=false`, so the
+// memo `observer` applies skips them. `observer` (not plain `React.memo`) is
+// required because the rich-tool chip reads the observable `widget.current` to
+// highlight the active widget; a plain memo would freeze that highlight.
+const MessageItem = observer(function MessageItem({
+  message,
+  isStreaming,
+  isLastTodo,
+  cwd,
+  widget,
+  onAnswer,
+}: MessageItemProps) {
+  const segments = useMemo(
+    () => segmentTools(message.tools ?? [], isStreaming, isLastTodo),
+    [message.tools, isStreaming, isLastTodo]
+  );
+
+  const renderRoutine = (tool: ToolCall): ReactNode => (
+    <div key={tool.toolCallId}>
+      <Tool>
+        <ToolHeader
+          title={tool.toolName}
+          type="dynamic-tool"
+          toolName={tool.toolName}
+          state={tool.state}
+          description={routineDescription(tool, cwd)}
+        />
+        <ToolContent>
+          <ToolInput input={tool.input} />
+          {tool.output != null && (
+            <ToolOutput
+              output={tool.output}
+              toolName={tool.toolName}
+              errorText={
+                tool.state === "output-error" ? tool.output : undefined
+              }
+            />
+          )}
+        </ToolContent>
+      </Tool>
+    </div>
+  );
+
+  // Rich renders live in the widget pane now; the chat keeps a compact chip at
+  // the narrative spot that re-opens that widget.
+  const renderRender = (tool: ToolCall): ReactNode => {
+    const rich = renderRichTool(tool.toolName, tool.input, tool.output);
+    if (!rich) return null;
+    const active =
+      widget.current?.source === "tool" &&
+      widget.current.key === tool.toolCallId;
+    return (
+      <button
+        key={tool.toolCallId}
+        type="button"
+        onClick={() =>
+          widget.show({
+            source: "tool",
+            key: tool.toolCallId,
+            toolName: tool.toolName,
+            input: tool.input,
+            output: tool.output,
+          })
+        }
+        className={cn(
+          "my-1 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors",
+          active ? "border-primary/50 bg-primary/5" : "hover:bg-muted/50"
+        )}
+      >
+        <span className="shrink-0 text-muted-foreground">
+          {rich.header.icon}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-medium">
+          {rich.header.title}
+        </span>
+        {rich.header.tag && (
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+            {rich.header.tag}
+          </span>
+        )}
+        <span className="shrink-0 text-[10px] text-muted-foreground">
+          View →
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <Message className="max-w-[85%]" from={message.role}>
+      {/* `/<skill>` command banner — shows which skill drove this reply. */}
+      {message.skill && (
+        <div className="mb-2 inline-flex max-w-full items-center gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+          <SparklesIcon className="size-4 shrink-0 text-primary" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-semibold leading-none text-primary">Using skill: {message.skill.name}</span>
+            {message.skill.description && (
+              <span className="truncate leading-none text-muted-foreground">{message.skill.description}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attached files — thumbnails for images, chips for other files. */}
+      {message.files && message.files.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {message.files.map((f, i) =>
+            f.mediaType.startsWith("image/") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={f.dataUrl}
+                alt={f.filename}
+                className="max-h-40 rounded-md border object-contain"
+              />
+            ) : (
+              <div
+                key={i}
+                className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs"
+              >
+                <FileIcon className="size-4 text-muted-foreground" />
+                <span className="max-w-[160px] truncate">
+                  {f.filename}
+                </span>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Reasoning — auto-opens and streams while the model thinks, then
+          auto-collapses ~1s after it finishes. Finished/historical reasoning
+          starts collapsed; click the trigger to expand. */}
+      {message.reasoning && (
+        <Reasoning
+          isStreaming={message.reasoning.isStreaming}
+          duration={message.reasoning.duration}
+        >
+          <ReasoningTrigger />
+          <ReasoningContent>
+            {message.reasoning.content}
+          </ReasoningContent>
+        </Reasoning>
+      )}
+
+      {/* Tools — rendered in tool-call order so the narrative stays coherent. */}
+      {renderSegments(segments, renderRoutine, renderRender)}
+
+      {/* Text content */}
+      {message.content && (
+        <MessageContent>
+          <MessageResponse>{message.content}</MessageResponse>
+          {message.role === "assistant" && (
+            <MessageActions content={message.content} className="mt-1" />
+          )}
+        </MessageContent>
+      )}
+
+      {/* `ask_question` pinned to the bottom — the only interactive tool. */}
+      {(message.tools ?? []).filter(isAskQuestion).map((tool) => {
+        const q = tool.input as {
+          question?: string;
+          options?: string[];
+          multiSelect?: boolean;
+          recommended?: number[];
+        } | undefined;
+        if (!q?.question || !Array.isArray(q.options)) return null;
+        return (
+          <AskQuestionRenderer
+            key={tool.toolCallId}
+            question={q.question}
+            options={q.options}
+            multiSelect={q.multiSelect}
+            recommended={q.recommended}
+            answered={tool.state !== "input-available"}
+            selected={tool.output}
+            onPick={(opt) => onAnswer(tool.toolCallId, opt)}
+          />
+        );
+      })}
+    </Message>
   );
 });
 
@@ -978,203 +1163,22 @@ const ChatPage = observer(function ChatPage() {
               </Button>
             </div>
           )}
-          {messages.map((message) => (
-            <Message
-              className="max-w-[85%]"
-              from={message.role}
-              key={message.id}
-            >
-              {/* `/<skill>` command banner — shows which skill drove this reply. */}
-              {message.skill && (
-                <div className="mb-2 inline-flex max-w-full items-center gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                  <SparklesIcon className="size-4 shrink-0 text-primary" />
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="font-semibold leading-none text-primary">Using skill: {message.skill.name}</span>
-                    {message.skill.description && (
-                      <span className="truncate leading-none text-muted-foreground">{message.skill.description}</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Attached files — thumbnails for images, chips for other files. */}
-              {message.files && message.files.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {message.files.map((f, i) =>
-                    f.mediaType.startsWith("image/") ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={i}
-                        src={f.dataUrl}
-                        alt={f.filename}
-                        className="max-h-40 rounded-md border object-contain"
-                      />
-                    ) : (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs"
-                      >
-                        <FileIcon className="size-4 text-muted-foreground" />
-                        <span className="max-w-[160px] truncate">
-                          {f.filename}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-
-              {/* Reasoning — auto-opens and streams while the model thinks,
-                  then auto-collapses ~1s after it finishes. Finished/historical
-                  reasoning starts collapsed; click the trigger to expand. */}
-              {message.reasoning && (
-                <Reasoning
-                  isStreaming={message.reasoning.isStreaming}
-                  duration={message.reasoning.duration}
-                >
-                  <ReasoningTrigger />
-                  <ReasoningContent>
-                    {message.reasoning.content}
-                  </ReasoningContent>
-                </Reasoning>
-              )}
-
-              {/* Tools — rendered in tool-call order so the narrative stays
-                  coherent. Routine tools (bash/read/find/…) batch into
-                  collapsible groups; rich renders (render_* + MCP auto-
-                  rendered lists) show in-place as collapsed RenderFrames,
-                  with only the LAST one auto-expanded (and only after the
-                  message has finished streaming). `ask_question` is
-                  rendered separately below the text. */}
-              {(() => {
-                const tools = message.tools ?? [];
-                const isLastMessage =
-                  messages[messages.length - 1]?.id === message.id;
-                const isStreaming =
-                  isLastMessage &&
-                  (status === "streaming" || status === "submitted");
-                const segments = segmentTools(
-                  tools,
-                  isStreaming,
-                  message.id === lastTodoMessageId
-                );
-
-                const renderRoutine = (tool: ToolCall): ReactNode => (
-                  <div key={tool.toolCallId}>
-                    <Tool>
-                      <ToolHeader
-                        title={tool.toolName}
-                        type="dynamic-tool"
-                        toolName={tool.toolName}
-                        state={tool.state}
-                        description={routineDescription(tool, cwd)}
-                      />
-                      <ToolContent>
-                        <ToolInput input={tool.input} />
-                        {tool.output != null && (
-                          <ToolOutput
-                            output={tool.output}
-                            toolName={tool.toolName}
-                            errorText={
-                              tool.state === "output-error"
-                                ? tool.output
-                                : undefined
-                            }
-                          />
-                        )}
-                      </ToolContent>
-                    </Tool>
-                  </div>
-                );
-
-                // Rich renders live in the widget pane now; the chat keeps a
-                // compact chip at the narrative spot that re-opens that widget.
-                const renderRender = (tool: ToolCall): ReactNode => {
-                  const rich = renderRichTool(
-                    tool.toolName,
-                    tool.input,
-                    tool.output
-                  );
-                  if (!rich) return null;
-                  const active =
-                    widget.current?.source === "tool" &&
-                    widget.current.key === tool.toolCallId;
-                  return (
-                    <button
-                      key={tool.toolCallId}
-                      type="button"
-                      onClick={() =>
-                        widget.show({
-                          source: "tool",
-                          key: tool.toolCallId,
-                          toolName: tool.toolName,
-                          input: tool.input,
-                          output: tool.output,
-                        })
-                      }
-                      className={cn(
-                        "my-1 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors",
-                        active
-                          ? "border-primary/50 bg-primary/5"
-                          : "hover:bg-muted/50"
-                      )}
-                    >
-                      <span className="shrink-0 text-muted-foreground">
-                        {rich.header.icon}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {rich.header.title}
-                      </span>
-                      {rich.header.tag && (
-                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                          {rich.header.tag}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        View →
-                      </span>
-                    </button>
-                  );
-                };
-
-                return renderSegments(segments, renderRoutine, renderRender);
-              })()}
-
-              {/* Text content */}
-              {message.content && (
-                <MessageContent>
-                  <MessageResponse>{message.content}</MessageResponse>
-                  {message.role === "assistant" && (
-                    <MessageActions content={message.content} className="mt-1" />
-                  )}
-                </MessageContent>
-              )}
-
-              {/* `ask_question` pinned to the bottom — it's the only
-                  interactive tool and sits below the agent's explanation. */}
-              {(message.tools ?? []).filter(isAskQuestion).map((tool) => {
-                const q = tool.input as {
-                  question?: string;
-                  options?: string[];
-                  multiSelect?: boolean;
-                  recommended?: number[];
-                } | undefined;
-                if (!q?.question || !Array.isArray(q.options)) return null;
-                return (
-                  <AskQuestionRenderer
-                    key={tool.toolCallId}
-                    question={q.question}
-                    options={q.options}
-                    multiSelect={q.multiSelect}
-                    recommended={q.recommended}
-                    answered={tool.state !== "input-available"}
-                    selected={tool.output}
-                    onPick={(opt) => answerQuestion(tool.toolCallId, opt)}
-                  />
-                );
-              })}
-            </Message>
-          ))}
+          {messages.map((message, i) => {
+            const isStreaming =
+              i === messages.length - 1 &&
+              (status === "streaming" || status === "submitted");
+            return (
+              <MessageItem
+                key={message.id}
+                message={message}
+                isStreaming={isStreaming}
+                isLastTodo={message.id === lastTodoMessageId}
+                cwd={cwd}
+                widget={widget}
+                onAnswer={answerQuestion}
+              />
+            );
+          })}
 
           {/* Loading indicator */}
           {status === "submitted" &&
@@ -1295,5 +1299,14 @@ interface ChatInputProps {
   mentionFiles: MentionItem[];
   sessionId: string | null;
   voiceEnabled: boolean;
+}
+
+interface MessageItemProps {
+  message: ChatMessage;
+  isStreaming: boolean;
+  isLastTodo: boolean;
+  cwd: string | null;
+  widget: ReturnType<typeof useWidgetService>;
+  onAnswer: (toolCallId: string, value: string) => void;
 }
 
