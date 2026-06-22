@@ -55,6 +55,8 @@ export class WidgetService {
   }
 
   private get sourceKey(): string | null {
+    const manualRun = this.root.project.activeManualRun;
+    if (manualRun) return `manual-run:${String(manualRun.id ?? "")}`;
     const resource = this.root.project.openResource;
     if (resource) return `resource:${resource}`;
     const file = this.root.workspace.openFile;
@@ -66,6 +68,10 @@ export class WidgetService {
   private syncSource(key: string | null): void {
     if (!key) {
       if (this.current && this.current.source !== "tool") this.clear();
+      return;
+    }
+    if (this.root.project.activeManualRun) {
+      this.show({ source: "manual-run", key });
       return;
     }
     const resource = this.root.project.openResource;
@@ -90,5 +96,6 @@ export type WidgetDescriptor =
       output: unknown;
     }
   | { source: "resource"; key: string; resource: ProjectResource }
+  | { source: "manual-run"; key: string }
   | { source: "file"; key: string }
   | { source: "search"; key: string };

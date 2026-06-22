@@ -221,6 +221,35 @@ export async function mutateTestomatio<T>(
 }
 
 /**
+ * Create a Testomat.io v2 resource via the proxy: `POST /api/testomatio/{resource}`
+ * (collection endpoint, no id). Unwraps the `{data}` envelope, throws on a
+ * non-OK response, and clears the read cache so subsequent reads include it.
+ */
+export async function createTestomatio<T>(
+  resource: string,
+  body: unknown,
+  sessionId: string
+): Promise<T> {
+  const params = new URLSearchParams({ session: sessionId });
+  const url = `/api/testomatio/${encodeURIComponent(resource)}?${params.toString()}`;
+  const { res: r, text } = await loggedFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = text ? (JSON.parse(text) as unknown) : null;
+  if (!r.ok) {
+    const msg =
+      json && typeof json === "object" && "error" in json
+        ? String((json as { error: unknown }).error)
+        : `HTTP ${r.status}`;
+    throw new Error(msg || `HTTP ${r.status}`);
+  }
+  clearTestomatioCache();
+  return unwrap<T>(json);
+}
+
+/**
  * Upload a screenshot/image as an attachment on the current test run. With a
  * `file` it posts multipart to `/api/testomatio/attachment` (screen/file
  * sources); without one the server captures the controlled browser itself via

@@ -24,9 +24,9 @@ export const DebugSection = observer(function DebugSection({
   const debug = useDebugLogService();
   const [filter, setFilter] = useState<Filter>("all");
 
-  const entries = debug.entries.filter(
-    (e) => filter === "all" || e.kind === filter
-  );
+  const entries = debug.entries
+    .filter((e) => filter === "all" || e.kind === filter)
+    .sort((a, b) => b.ts - a.ts);
 
   const actions = (
     <Tooltip>
@@ -50,6 +50,10 @@ export const DebugSection = observer(function DebugSection({
   return (
     <SectionShell title="Debug — activity" active={active} actions={actions}>
       <FilterBar filter={filter} onChange={setFilter} entries={debug.entries} />
+      <p className="border-b px-3 py-1.5 text-[10px] text-muted-foreground">
+        Testomat.io requests + responses are saved (re-runnable) to{" "}
+        <code className="font-mono">testeiya/log/testomatio.http</code>
+      </p>
       {entries.length === 0 && (
         <p className="p-4 text-muted-foreground text-xs">
           No activity yet. API requests, Testomat.io calls, and agent events
@@ -59,9 +63,9 @@ export const DebugSection = observer(function DebugSection({
       <div className="flex flex-col">
         {entries.map((entry) =>
           entry.kind === "event" ? (
-            <EventRow key={entry.id} entry={entry} />
+            <EventRow key={`${entry.channel}:${entry.id}`} entry={entry} />
           ) : (
-            <RequestRow key={entry.id} entry={entry} />
+            <RequestRow key={`${entry.channel}:${entry.id}`} entry={entry} />
           )
         )}
       </div>

@@ -133,6 +133,7 @@ export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   icon?: ReactNode;
   badge?: ReactNode;
   menu?: ReactNode;
+  nameClassName?: string;
 };
 
 export const FileTreeFolder = ({
@@ -141,6 +142,7 @@ export const FileTreeFolder = ({
   icon,
   badge,
   menu,
+  nameClassName,
   className,
   children,
   ...props
@@ -184,7 +186,7 @@ export const FileTreeFolder = ({
         <FileTreeIcon>
           {icon ?? <SuiteKindIcon fileType="folder" className="size-4" />}
         </FileTreeIcon>
-        <FileTreeName>{name}</FileTreeName>
+        <FileTreeName className={nameClassName}>{name}</FileTreeName>
         {badge != null && (
           <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
         )}
@@ -232,6 +234,7 @@ export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
   icon?: ReactNode;
   badge?: ReactNode;
   menu?: ReactNode;
+  nameClassName?: string;
 };
 
 export const FileTreeFile = ({
@@ -240,6 +243,7 @@ export const FileTreeFile = ({
   icon,
   badge,
   menu,
+  nameClassName,
   className,
   children,
   ...props
@@ -282,7 +286,7 @@ export const FileTreeFile = ({
           <FileTreeIcon>
             {icon ?? <SuiteGlyph className="size-4 text-muted-foreground" />}
           </FileTreeIcon>
-          <FileTreeName>{name}</FileTreeName>
+          <FileTreeName className={nameClassName}>{name}</FileTreeName>
           {badge != null && (
             <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
           )}

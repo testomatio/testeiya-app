@@ -75,6 +75,7 @@ import { ChatPanelHeader } from "@/components/panel/ChatPanelHeader";
 import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
 import { ResourceWidgetView } from "@/components/widgets/ResourceWidgetView";
+import ManualRunRenderer from "@/components/widgets/items/ManualRunRenderer";
 import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type FormEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -932,6 +933,19 @@ const ChatPage = observer(function ChatPage() {
         </div>
       );
     }
+    if (current.source === "manual-run") {
+      const run = project.activeManualRun;
+      if (!run) return null;
+      return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-3">
+          <ManualRunRenderer
+            data={run}
+            onExit={() => project.closeManualRun()}
+            widgetId={current.key}
+          />
+        </div>
+      );
+    }
     if (current.source === "resource") {
       const url = project.currentLinks?.[current.resource];
       return (
@@ -1157,7 +1171,7 @@ const ChatPage = observer(function ChatPage() {
                   tests — or just start chatting below.
                 </p>
               </div>
-              <Button onClick={() => panel.openSection("project")}>
+              <Button onClick={() => setSwitchProjectOpen(true)}>
                 <KeyRoundIcon className="size-4" />
                 Connect Testomat.io
               </Button>

@@ -14,11 +14,15 @@ export interface OpenFile {
   scrollToText?: string;
 }
 
+export type FileStatus = "created" | "changed";
+
 export interface TreeNode {
   name: string;
   kind: "folder" | "file" | "test";
   path: string;
   anchor?: string;
+  /** Set when the file differs from the last Testomat.io sync (un-pushed). */
+  status?: FileStatus;
   children?: TreeNode[];
 }
 
@@ -33,6 +37,8 @@ export interface WorkspaceProjectMeta {
 export interface WorkspaceTree {
   cwd: string;
   nodes: TreeNode[];
+  /** Manual-test files changed since the last Testomat.io sync. */
+  changedCount?: number;
   /** `""` (root), `".testeiya/manual-tests"`, or `null` when nothing is loaded. */
   manualTestsDir: string | null;
   isProject: boolean;

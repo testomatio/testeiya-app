@@ -196,6 +196,7 @@ export const WIDGET_DEFS: Record<string, WidgetDef> = {
 export function widgetKindFor(descriptor: WidgetDescriptor | null): string | null {
   if (!descriptor) return null;
   if (descriptor.source === "resource") return `${descriptor.resource}-list`;
+  if (descriptor.source === "manual-run") return "manual-run";
   if (descriptor.source === "file") return "file-edit";
   if (descriptor.source === "search") return null;
   const listKind = listKindForTool(descriptor.toolName, descriptor.input);

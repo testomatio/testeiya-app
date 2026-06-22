@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { CreateRunDialog } from "./CreateRunDialog";
 import { ListPager } from "./list-row";
 import PlansListRenderer from "./PlansListRenderer";
 import RequirementsListRenderer from "./RequirementsListRenderer";
@@ -86,6 +87,7 @@ export function ResourceWidgetView({
 }) {
   const { label, api, render, searchVar } = RESOURCE_CONFIG[resource];
   const store = useStores();
+  const [newRunOpen, setNewRunOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [filterInput, setFilterInput] = useState("");
@@ -261,6 +263,16 @@ export function ResourceWidgetView({
           </div>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {resource === "runs" && (
+            <Button
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => setNewRunOpen(true)}
+            >
+              <Icon name="add" className="size-3.5" />
+              <span className="hidden sm:inline">New run</span>
+            </Button>
+          )}
           {onRefresh && (
             <Button
               size="sm"
@@ -298,6 +310,9 @@ export function ResourceWidgetView({
           onPage={setPage}
           className="border-t px-3 py-2"
         />
+      )}
+      {resource === "runs" && (
+        <CreateRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       )}
     </div>
   );

@@ -38,9 +38,18 @@ export class ProjectService {
   // test/run counts. Drives the Project sidebar section.
   currentProject: CurrentProject | null = null;
 
+  // True while the current project's counts are being fetched after a session
+  // switch — drives a loading placeholder instead of a "—" flash.
+  countsLoading = false;
+
   // Which project resource (if any) is open as a full-height widget in the main
   // content area. Mutually exclusive with the workspace's open file.
   openResource: ProjectResource | null = null;
+
+  // A manual run open in the guided executor (e.g. just launched from a plan or
+  // the New-run form). Takes over the widget pane; exiting falls back to the
+  // Runs list. Null when no manual run is being executed this way.
+  activeManualRun: Record<string, unknown> | null = null;
 
   // Bumped to make open resource widgets revalidate (stale-while-revalidate)
   // and to re-read the counters after the agent, a click, or a refocus.
@@ -68,6 +77,7 @@ export class ProjectService {
       () => this.root.sessionId,
       () => {
         this.openResource = null;
+        this.activeManualRun = null;
         void this.loadCurrentProject();
       }
     );
@@ -76,7 +86,9 @@ export class ProjectService {
     reaction(
       () => this.root.workspace.openFile,
       (file) => {
-        if (file) this.openResource = null;
+        if (!file) return;
+        this.openResource = null;
+        this.activeManualRun = null;
       }
     );
     // Re-read data when the user returns to the app (edits may have happened
@@ -249,7 +261,26 @@ export class ProjectService {
   showResource(resource: ProjectResource): void {
     // Closing any open file hands the main area to the widget view.
     this.root.workspace.close();
+    this.activeManualRun = null;
     this.openResource = resource;
+    this.refresh();
+  }
+
+  /**
+   * Open a run in the guided manual executor (full widget pane). Anchors the
+   * Runs list behind it so exiting the executor returns there. Used after a
+   * manual run is created from the New-run form / a plan launch.
+   */
+  startManualRun(run: Record<string, unknown>): void {
+    this.root.workspace.close();
+    this.openResource = "runs";
+    this.activeManualRun = run;
+    this.refresh();
+  }
+
+  /** Leave the manual executor; the widget pane falls back to the Runs list. */
+  closeManualRun(): void {
+    this.activeManualRun = null;
     this.refresh();
   }
 
@@ -277,6 +308,7 @@ export class ProjectService {
     if (!sessionId) {
       runInAction(() => {
         this.currentProject = null;
+        this.countsLoading = false;
       });
       return;
     }
@@ -290,6 +322,7 @@ export class ProjectService {
     if (!project) {
       runInAction(() => {
         this.currentProject = null;
+        this.countsLoading = false;
       });
       return;
     }
@@ -304,6 +337,7 @@ export class ProjectService {
         plansCount: null,
         requirementsCount: null,
       };
+      this.countsLoading = true;
     });
     const [tests, runs, plans, requirements] = await Promise.all([
       fetchTotal(sessionId, "tests"),
@@ -317,6 +351,7 @@ export class ProjectService {
       this.currentProject.runsCount = runs;
       this.currentProject.plansCount = plans;
       this.currentProject.requirementsCount = requirements;
+      this.countsLoading = false;
     });
   }
 

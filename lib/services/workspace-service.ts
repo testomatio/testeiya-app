@@ -8,6 +8,7 @@ import type {
   WorkspaceProjectMeta,
   SyncAction,
   SyncResult,
+  FileStatus,
 } from "./types";
 import type { RootStore } from "./root-store";
 
@@ -29,9 +30,14 @@ export class WorkspaceService {
   treeError: string | null = null;
   expanded = new Set<string>();
 
-  // Files written this session (agent write/edit or manual editor saves).
-  // "created" (new file) stays sticky over later edits; "changed" otherwise.
-  changedFiles = new Map<string, "created" | "changed">();
+  // Manual-test files that differ from the last Testomat.io sync (i.e. not yet
+  // pushed). Rebuilt on each tree load by merging the server's snapshot diff with
+  // `sessionEdits` (files this client just wrote), so a save shows instantly even
+  // before the server can confirm it.
+  changedFiles = new Map<string, FileStatus>();
+  // Files written by this client since the last sync. Kept across tree reloads
+  // (which the server may not yet reflect) and cleared on pull/push.
+  sessionEdits = new Map<string, FileStatus>();
   // When true, the tree is pruned to only changed/created files.
   changedOnly = false;
 
@@ -76,6 +82,7 @@ export class WorkspaceService {
         emptyRetries: false,
         retryTimer: false,
         seeded: false,
+        sessionEdits: false,
       },
       { autoBind: true }
     );
@@ -151,16 +158,16 @@ export class WorkspaceService {
   }
 
   /**
-   * Record a file written this session (agent or manual save) and refresh the
-   * tree. Status is derived from the pre-refresh tree: a path not yet present
-   * is "created", an existing one is "changed". "created" is sticky.
+   * Flag a just-written file (agent or manual save) optimistically and refresh
+   * the tree. The reload reconciles against the server's snapshot diff, which is
+   * authoritative — a new path shows "created", an existing one "changed".
    */
   markChanged(path: string) {
-    if (!this.changedFiles.has(path)) {
-      const next = new Map(this.changedFiles);
-      next.set(path, treeHasPath(this.tree, path) ? "changed" : "created");
-      this.changedFiles = next;
-    }
+    const status: FileStatus = treeHasPath(this.tree, path) ? "changed" : "created";
+    this.sessionEdits.set(path, status);
+    const next = new Map(this.changedFiles);
+    if (!next.has(path)) next.set(path, status);
+    this.changedFiles = next;
     void this.loadTree();
   }
 
@@ -189,6 +196,7 @@ export class WorkspaceService {
       );
       runInAction(() => {
         this.tree = data.nodes ?? [];
+        this.changedFiles = this.mergedStatuses();
         this.manualTestsDir = data.manualTestsDir ?? null;
         this.isProject = data.isProject ?? false;
         this.project = data.project ?? null;
@@ -276,12 +284,13 @@ export class WorkspaceService {
       let message = "Pushed tests to Testomat.io";
       if (action === "pull") message = "Pulled tests from Testomat.io";
       toast.success(message);
-      if (action === "pull") {
-        runInAction(() => {
-          this.seeded = false;
-        });
-        await this.loadTree();
-      }
+      // Both directions re-baseline the server snapshot, so local == remote: drop
+      // the session edits and reload to clear the changed markers.
+      runInAction(() => {
+        this.sessionEdits.clear();
+        if (action === "pull") this.seeded = false;
+      });
+      await this.loadTree();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       runInAction(() => {
@@ -406,6 +415,19 @@ export class WorkspaceService {
   }
 
   // --- internals ---
+  // Merge the server's snapshot diff with this client's session edits. The
+  // server wins on type; session edits are kept only while their file still
+  // exists in the tree (a deleted file drops out).
+  private mergedStatuses(): Map<string, FileStatus> {
+    const merged = new Map<string, FileStatus>();
+    const paths = this.filePaths;
+    for (const [path, status] of this.sessionEdits) {
+      if (paths.has(path)) merged.set(path, status);
+    }
+    for (const [path, status] of collectStatuses(this.tree)) merged.set(path, status);
+    return merged;
+  }
+
   // Reconcile editor + changed-file state after a node leaves the tree. A test
   // delete keeps its file (refresh it if open); a file/folder delete drops the
   // open editor and any changed-file markers under the removed path.
@@ -447,6 +469,7 @@ export class WorkspaceService {
     this.treeError = null;
     this.expanded = new Set();
     this.changedFiles = new Map();
+    this.sessionEdits = new Map();
     this.changedOnly = false;
     this.manualTestsDir = null;
     this.isProject = false;
@@ -522,6 +545,19 @@ function collectFilePaths(nodes: TreeNode[], set: Set<string>): void {
   for (const n of nodes) {
     if (n.kind === "file") set.add(n.path);
     if (n.children) collectFilePaths(n.children, set);
+  }
+}
+
+function collectStatuses(nodes: TreeNode[]): Map<string, FileStatus> {
+  const map = new Map<string, FileStatus>();
+  walk(nodes);
+  return map;
+
+  function walk(items: TreeNode[]): void {
+    for (const n of items) {
+      if (n.status) map.set(n.path, n.status);
+      if (n.children) walk(n.children);
+    }
   }
 }
 

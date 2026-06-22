@@ -47,7 +47,7 @@ export default function AskQuestionRenderer({
         <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
           <CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" />
           <span className="whitespace-pre-wrap break-words text-foreground">
-            You answered: {selected || "Answered"}
+            You answered: {answerText(selected)}
           </span>
         </div>
       </div>
@@ -167,4 +167,22 @@ function AskChecklist({
       </Button>
     </div>
   );
+}
+
+function answerText(value?: string): string {
+  if (!value) return "Answered";
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return value;
+  try {
+    const obj = JSON.parse(trimmed) as {
+      content?: Array<{ type?: string; text?: string }>;
+    };
+    const text = obj.content
+      ?.filter((c) => c?.type === "text" && c.text)
+      .map((c) => c.text)
+      .join("\n");
+    return text || value;
+  } catch {
+    return value;
+  }
 }

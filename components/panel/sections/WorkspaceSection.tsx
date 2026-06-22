@@ -34,7 +34,7 @@ import {
   useWorkspaceService,
   useSearchService,
 } from "@/lib/services/StoreProvider";
-import type { TreeNode } from "@/lib/services/types";
+import type { FileStatus, TreeNode } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
 // `@tag` tokens in a test title — Testomat.io's TAG_ALLOWED_SYMBOLS, anchored to
@@ -60,7 +60,13 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
   if (node.kind === "folder") {
     const count = countTests(node);
     return (
-      <FileTreeFolder path={node.path} name={node.name} badge={count || undefined} menu={menu}>
+      <FileTreeFolder
+        path={node.path}
+        name={node.name}
+        nameClassName={statusClass(subtreeStatus(node, ws.changedFiles))}
+        badge={count || undefined}
+        menu={menu}
+      >
         {(node.children ?? []).map((child) => (
           <NodeRow key={child.anchor ?? child.path} node={child} />
         ))}
@@ -100,6 +106,7 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
       <FileTreeFolder
         path={node.path}
         name={node.name}
+        nameClassName={statusClass(ws.changedFiles.get(node.path))}
         icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
         badge={count || undefined}
         menu={menu}
@@ -110,20 +117,40 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
       </FileTreeFolder>
     );
   }
-  const status = ws.changedFiles.get(node.path);
   return (
     <FileTreeFile
       path={node.path}
       name={node.name}
-      className={cn(
-        status === "created" && "font-medium text-status-success-foreground",
-        status === "changed" && "font-medium text-status-warning-foreground"
-      )}
+      nameClassName={statusClass(ws.changedFiles.get(node.path))}
       icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
       menu={menu}
     />
   );
 });
+
+function statusClass(status: FileStatus | undefined): string | undefined {
+  if (status === "created") return "font-medium text-status-success-foreground";
+  if (status === "changed") return "font-medium text-status-warning-foreground";
+  return undefined;
+}
+
+// Aggregate status for a node: its own change, else the strongest change in its
+// subtree ("changed" wins over "created"), so a collapsed folder on the path to
+// an edited file is still highlighted.
+function subtreeStatus(
+  node: TreeNode,
+  changed: Map<string, FileStatus>
+): FileStatus | undefined {
+  const own = changed.get(node.path);
+  if (own) return own;
+  let result: FileStatus | undefined;
+  for (const child of node.children ?? []) {
+    const status = subtreeStatus(child, changed);
+    if (status === "changed") return "changed";
+    if (status === "created") result = "created";
+  }
+  return result;
+}
 
 function countTests(node: TreeNode): number {
   if (node.kind === "test") return 1;
@@ -182,16 +209,26 @@ export const WorkspaceSection = observer(function WorkspaceSection({
               <Button
                 size="sm"
                 variant="ghost"
-                className={cn("h-7 w-7 p-0", ws.changedOnly && "text-primary")}
+                className={cn(
+                  "h-7",
+                  ws.changedFiles.size === 0 && "w-7 p-0",
+                  ws.changedFiles.size > 0 && "gap-1 px-1.5",
+                  ws.changedOnly && "text-primary"
+                )}
                 disabled={ws.changedFiles.size === 0}
                 onClick={() => ws.toggleChangedOnly()}
                 aria-pressed={ws.changedOnly}
                 aria-label="Show changed files only"
               >
                 <Icon name="filter_list" className="size-4" />
+                {ws.changedFiles.size > 0 && (
+                  <span className="text-[11px] font-medium tabular-nums">
+                    {ws.changedFiles.size}
+                  </span>
+                )}
               </Button>
             } />
-            <TooltipContent side="bottom"><p>Show changed files only</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Show changed (un-pushed) files only</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={

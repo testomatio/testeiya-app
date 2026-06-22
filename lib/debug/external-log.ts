@@ -1,9 +1,11 @@
 /*
- * Instrumentation bus for the sidebar Debug panel. Three producers feed one sink
- * (the DebugLogService): `loggedFetch` wraps outbound Testomat.io calls,
- * `logApiRequest` records same-origin `/api/*` calls (from `lib/services/http`),
- * and `logAgentEvent` records pi-coding-agent events streamed over the WebSocket.
- * Every entry is also printed (truncated) to the console.
+ * Instrumentation bus for the sidebar Debug panel. Producers feed one sink
+ * (the DebugLogService): `loggedFetch` and `logApiRequest` record same-origin
+ * `/api/*` calls (the `api` channel — including the `/api/testomatio/*` proxy
+ * hops), and `logAgentEvent` records pi-coding-agent events streamed over the
+ * WebSocket. The real outbound Testomat.io API calls happen server-side and
+ * arrive in the panel as the `testomatio` channel via the `/api/debug/stream`
+ * SSE feed (see `DebugLogService`). Every entry is also printed to the console.
  */
 
 const MAX_BODY = 2000;
@@ -29,7 +31,7 @@ export async function loggedFetch(
     const res = await fetch(url, init);
     const text = await res.text();
     recordRequest({
-      channel: "testomatio",
+      channel: "api",
       method,
       url,
       requestBody,
@@ -43,7 +45,7 @@ export async function loggedFetch(
   } catch (e) {
     if ((e as { name?: string })?.name === "AbortError") throw e;
     recordRequest({
-      channel: "testomatio",
+      channel: "api",
       method,
       url,
       requestBody,

@@ -18,20 +18,33 @@ const MAX_ENTRIES = 300;
 export class DebugLogService {
   enabled = false;
   entries: DebugLogEntry[] = [];
+  stream: EventSource | null = null;
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
       this,
-      { root: false, entries: observable.shallow },
+      { root: false, entries: observable.shallow, stream: false },
       { autoBind: true }
     );
-    this.enabled = loadEnabled();
     setExternalLogSink(this.record);
+  }
+
+  /**
+   * Apply the persisted `enabled` flag. Called once after mount (not in the
+   * constructor, which runs during the first client render) so the server HTML
+   * and the first client render agree — reading localStorage at construction
+   * makes the Debug section appear client-only and throws a hydration mismatch.
+   */
+  hydrate(): void {
+    this.enabled = loadEnabled();
+    if (this.enabled) this.connectStream();
   }
 
   setEnabled(value: boolean): void {
     this.enabled = value;
     saveEnabled(value);
+    if (value) this.connectStream();
+    else this.disconnectStream();
   }
 
   clear(): void {
@@ -42,6 +55,30 @@ export class DebugLogService {
     const next = [entry, ...this.entries];
     if (next.length > MAX_ENTRIES) next.length = MAX_ENTRIES;
     this.entries = next;
+  }
+
+  /**
+   * Subscribe to server-side Testomat.io requests over SSE and feed them into
+   * the same log. Idempotent and a no-op on the server / where EventSource is
+   * unavailable. The endpoint replays its recent ring buffer on connect.
+   */
+  connectStream(): void {
+    if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+    if (this.stream) return;
+    const es = new EventSource("/api/debug/stream");
+    es.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        this.record(JSON.parse(event.data) as DebugLogEntry);
+      } catch {}
+    };
+    this.stream = es;
+  }
+
+  disconnectStream(): void {
+    if (!this.stream) return;
+    this.stream.close();
+    this.stream = null;
   }
 }
 

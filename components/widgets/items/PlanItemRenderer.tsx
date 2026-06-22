@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import { ClipboardListIcon } from "@/lib/icons";
+import { ClipboardListIcon, Icon } from "@/lib/icons";
+import { Button } from "@/components/ui/button";
+import { CreateRunDialog } from "../CreateRunDialog";
 import { LabelsRow, MetaPill } from "../status-pill";
 import SuitesListRenderer from "../SuitesListRenderer";
 import TestsListRenderer from "../TestsListRenderer";
@@ -36,6 +39,7 @@ export default function PlanItemRenderer({
   const title = p.title ?? p.id ?? "(untitled plan)";
   const tests = Array.isArray(p.tests) ? p.tests : [];
   const suites = Array.isArray(p.suites) ? p.suites : [];
+  const [launchOpen, setLaunchOpen] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -50,6 +54,16 @@ export default function PlanItemRenderer({
             );
           })()}
           <div className="text-base font-semibold">{title}</div>
+          {p.id && (
+            <Button
+              size="sm"
+              className="ml-auto h-7 gap-1 px-2 text-xs"
+              onClick={() => setLaunchOpen(true)}
+            >
+              <Icon name="rocket_launch" className="size-3.5" />
+              Launch run
+            </Button>
+          )}
         </div>
         <div className="mt-1 flex flex-wrap gap-1 text-xs">
           {p.hidden && (
@@ -95,6 +109,12 @@ export default function PlanItemRenderer({
           This plan has no tests or suites attached.
         </p>
       )}
+
+      <CreateRunDialog
+        open={launchOpen}
+        onOpenChange={setLaunchOpen}
+        plan={{ id: p.id, title: p.title, kind: p.kind }}
+      />
     </div>
   );
 }

@@ -62,32 +62,33 @@ export const ProjectSection = observer(function ProjectSection({
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <StatTile
               icon="science"
               label="Tests"
               count={current.testsCount}
+              loading={project.countsLoading}
               onClick={() => project.showResource("tests")}
             />
             <StatTile
               icon="play_circle"
               label="Runs"
               count={current.runsCount}
+              loading={project.countsLoading}
               onClick={() => project.showResource("runs")}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
             <StatTile
               icon="assignment"
               label="Plans"
               count={current.plansCount}
+              loading={project.countsLoading}
               onClick={() => project.showResource("plans")}
             />
             <StatTile
               icon="rule"
               label="Requirements"
               count={current.requirementsCount}
+              loading={project.countsLoading}
               onClick={() => project.showResource("requirements")}
             />
           </div>
@@ -133,22 +134,20 @@ export const ProjectSection = observer(function ProjectSection({
 function ProjectSkeleton() {
   return (
     <div className="space-y-3 px-4 py-3">
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+      <div className="grid grid-cols-1 gap-2">
+        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2.5">
           <Skeleton className="h-3 w-10" />
           <Skeleton className="h-6 w-8" />
         </div>
-        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2.5">
           <Skeleton className="h-3 w-8" />
           <Skeleton className="h-6 w-6" />
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2.5">
           <Skeleton className="h-3 w-10" />
           <Skeleton className="h-6 w-6" />
         </div>
-        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 px-3 py-2">
+        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2.5">
           <Skeleton className="h-3 w-16" />
           <Skeleton className="h-6 w-4" />
         </div>
@@ -162,11 +161,13 @@ function StatTile({
   icon,
   label,
   count,
+  loading,
   onClick,
 }: {
   icon: string;
   label: string;
   count: number | null;
+  loading: boolean;
   onClick: () => void;
 }) {
   return (
@@ -174,18 +175,24 @@ function StatTile({
       type="button"
       onClick={onClick}
       title={`Open ${label.toLowerCase()} in Testomat.io`}
-      className="group flex flex-col gap-1 rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
+      className="group flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
     >
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon name={icon} className="size-3.5" />
         {label}
+      </span>
+      <span className="flex items-center gap-1.5">
         <Icon
           name="open_in_new"
-          className="ml-auto size-3 opacity-0 transition-opacity group-hover:opacity-100"
+          className="size-3 opacity-0 transition-opacity group-hover:opacity-100"
         />
-      </span>
-      <span className="text-lg font-semibold tabular-nums">
-        {count === null ? "—" : count.toLocaleString()}
+        {loading && count === null ? (
+          <Skeleton className="h-6 w-10" />
+        ) : (
+          <span className="text-lg font-semibold tabular-nums">
+            {count === null ? "—" : count.toLocaleString()}
+          </span>
+        )}
       </span>
     </button>
   );

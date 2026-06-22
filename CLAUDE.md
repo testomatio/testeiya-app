@@ -95,6 +95,14 @@ Server → client: `session_created`, `start`, `text-start|delta|end`, `reasonin
 
 The hook has a **stall watchdog**: if no event arrives for 45s after a send it surfaces a visible error (no more silent "nothing happened"). The agent session is created on the first prompt of a connection.
 
+## Verifying the Testomat.io REST API
+
+**When you need to check how the Testomat.io REST API actually behaves** — real URLs, query params, status codes, or response shapes — **read `testeiya/log/testomatio.http`** instead of guessing. While debug mode is on, every outbound Testomat.io call (the v2 proxy, attachment upload, transcription) is appended there as a re-runnable `.http` block with the **response captured as trailing `#` comments** (see `testeiya/src/debug-bus.ts`).
+
+- **Populated when debug mode is on:** the sidebar Debug panel is open (an `/api/debug/stream` SSE subscriber is connected) **or** the server runs with `TESTEIYA_DEBUG=1`. To capture a specific call, turn the panel on (or set the env var) and trigger it from the UI.
+- The file is **gitignored** (`log/` in the submodule), append-only, and re-runnable in the VS Code REST Client / JetBrains HTTP client.
+- It contains the live `Authorization: Bearer` token — treat it as a credential; never commit or paste it.
+
 ## Key files
 
 **Frontend**

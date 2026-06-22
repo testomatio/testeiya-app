@@ -28,6 +28,12 @@ export function ServicesProvider({
 }) {
   const [store] = useState(() => new RootStore());
 
+  // Apply localStorage-backed state after mount only — reading it during the
+  // first render would diverge from the server HTML (hydration mismatch).
+  useEffect(() => {
+    store.debug.hydrate();
+  }, [store]);
+
   useEffect(() => {
     store.setSessionId(sessionId ?? null);
   }, [store, sessionId]);
