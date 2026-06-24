@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { ClientErrorLogger } from "@/components/client-error-logger";
 import { ThemedToaster } from "@/components/themed-toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HostProvider } from "@/lib/host-bridge";
@@ -55,6 +56,7 @@ export default function RootLayout({
       </head>
       <body className="h-full flex flex-col" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <ClientErrorLogger />
         <HostProvider>
           <ThemeProvider>
             <TooltipProvider>
