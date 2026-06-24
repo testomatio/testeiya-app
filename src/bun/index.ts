@@ -14,12 +14,16 @@ import { BrowserWindow } from "electrobun/bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { startAppServer } from "../../testeiya/src/app-server";
+import { installApplicationMenu } from "./app-menu";
 
 // Mark this process as the desktop (Electrobun) runtime. The app-server uses
 // this to decide whether it may import `electrobun/bun` to open external URLs —
 // in web/`bun src/app-server.ts` mode that import has heavy side effects
 // (boots an Electrobun server, fails an Updater) and must be skipped.
 process.env.TESTEIYA_RUNTIME = "desktop";
+
+// support shortcut menu on macOS
+installApplicationMenu("Testeiya");
 
 /**
  * Locate the static Next export (`out/`) inside the bundle. `electrobun.config`
