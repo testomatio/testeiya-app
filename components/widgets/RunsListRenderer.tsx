@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
+import { useStores } from "@/lib/services/StoreProvider";
 import { ListChecksIcon } from "@/lib/icons";
 import RunItemRenderer from "./items/RunItemRenderer";
 import ManualRunRenderer from "./items/ManualRunRenderer";
@@ -60,6 +61,7 @@ export default function RunsListRenderer({
   widgetId?: string;
 }) {
   const [manualRun, setManualRun] = useState(false);
+  const store = useStores();
   // While a manual run is showing it owns this widget id, so the list yields.
   const { items, meta, selected, setSelected, pager } = useListWidget<McpRun>({
     widgetId: manualRun ? undefined : widgetId,
@@ -67,6 +69,29 @@ export default function RunsListRenderer({
     json,
     getId: (r) => (r.id != null ? String(r.id) : undefined),
   });
+
+  // When a run is opened from the list, tell the agent + the chat context chip
+  // which run it is — the widget id stays the list (runs-list), so override the
+  // reported kind to run-item with this run's identity. Yields while the manual
+  // run executes (ManualRunRenderer sets its own override).
+  const opened = manualRun ? null : selected;
+  const openedId = opened?.id;
+  const openedTitle = opened?.title ?? opened?.clean_title ?? undefined;
+  const openedStatus = opened?.status;
+  const openedTests = opened?.tests_count;
+  useEffect(() => {
+    if (!opened) return;
+    const parts: string[] = [];
+    if (openedStatus) parts.push(String(openedStatus));
+    if (openedTests != null) parts.push(`${openedTests} tests`);
+    store.widget.setActiveOverride({
+      kind: "run-item",
+      id: openedId,
+      title: openedTitle,
+      state: parts.length > 0 ? parts.join(" · ") : undefined,
+    });
+    return () => store.widget.clearActiveOverride();
+  }, [opened, openedId, openedTitle, openedStatus, openedTests, store]);
 
   if (selected && manualRun) {
     return (
@@ -109,7 +134,7 @@ export default function RunsListRenderer({
       {summary && (
         <p className="text-sm text-muted-foreground">{summary}</p>
       )}
-      <ListRowGroup>
+      <ListRowGroup gridCols={RUNS_GRID}>
         <ListRowHeader gridCols={RUNS_GRID}>
           <div className="min-w-0 truncate">Run</div>
           <div className="min-w-0 truncate">Status</div>

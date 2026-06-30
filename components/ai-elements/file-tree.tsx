@@ -133,6 +133,7 @@ export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
   icon?: ReactNode;
   badge?: ReactNode;
   menu?: ReactNode;
+  actions?: ReactNode;
   nameClassName?: string;
 };
 
@@ -142,6 +143,7 @@ export const FileTreeFolder = ({
   icon,
   badge,
   menu,
+  actions,
   nameClassName,
   className,
   children,
@@ -168,7 +170,7 @@ export const FileTreeFolder = ({
   const header = (
     <div
       className={cn(
-        "flex w-full items-center gap-1 rounded px-2 py-1 text-left transition-colors hover:bg-muted/50",
+        "group flex w-full items-center gap-1 rounded px-2 py-1 text-left transition-colors hover:bg-muted/50",
         isSelected && "bg-muted"
       )}
     >
@@ -191,6 +193,7 @@ export const FileTreeFolder = ({
           <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
         )}
       </button>
+      {actions}
     </div>
   );
 
@@ -234,6 +237,7 @@ export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
   icon?: ReactNode;
   badge?: ReactNode;
   menu?: ReactNode;
+  actions?: ReactNode;
   nameClassName?: string;
 };
 
@@ -243,6 +247,7 @@ export const FileTreeFile = ({
   icon,
   badge,
   menu,
+  actions,
   nameClassName,
   className,
   children,
@@ -269,7 +274,7 @@ export const FileTreeFile = ({
   const row = (
     <div
       className={cn(
-        "flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-muted/50",
+        "group flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-muted/50",
         isSelected && "bg-muted",
         className
       )}
@@ -290,6 +295,7 @@ export const FileTreeFile = ({
           {badge != null && (
             <span className="ml-auto shrink-0 text-xs text-muted-foreground/60">{badge}</span>
           )}
+          {actions}
         </>
       )}
     </div>

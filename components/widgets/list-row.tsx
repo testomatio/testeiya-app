@@ -3,12 +3,21 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Children,
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 import type {
   CSSProperties,
   HTMLAttributes,
   KeyboardEvent,
   MouseEvent,
   ReactNode,
+  RefObject,
 } from "react";
 
 /*
@@ -31,24 +40,36 @@ type BaseProps = {
   selected?: boolean;
 };
 
-export type ListRowGroupProps = HTMLAttributes<HTMLDivElement>;
+const ResizableColumnsContext = createContext<ResizableColumns | null>(null);
+
+export type ListRowGroupProps = HTMLAttributes<HTMLDivElement> & {
+  /**
+   * Shared `grid-template-columns` for the header + rows inside this group.
+   * When set, the columns become user-resizable (drag the header dividers).
+   */
+  gridCols?: string;
+};
 
 /** Wrapper + subtle border around a stack of <ListRow>s. */
 export function ListRowGroup({
   className,
   children,
+  gridCols,
   ...props
 }: ListRowGroupProps) {
+  const columns = useResizableColumns(gridCols);
   return (
-    <div
-      className={cn(
-        "list-row-group overflow-hidden",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </div>
+    <ResizableColumnsContext.Provider value={columns}>
+      <div
+        className={cn(
+          "list-row-group overflow-hidden",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    </ResizableColumnsContext.Provider>
   );
 }
 
@@ -79,8 +100,10 @@ export function ListRow({
   onKeyDown,
   ...props
 }: ListRowProps) {
-  const gridStyle: CSSProperties | undefined = gridCols
-    ? { gridTemplateColumns: gridCols, ...(style ?? {}) }
+  const columns = useContext(ResizableColumnsContext);
+  const template = columns?.template ?? gridCols;
+  const gridStyle: CSSProperties | undefined = template
+    ? { gridTemplateColumns: template, ...(style ?? {}) }
     : style;
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -118,7 +141,7 @@ export function ListRow({
       onKeyDown={handleKeyDown}
       className={cn(
         "list-row-divider flex h-9 items-center px-1.5 py-1 text-sm",
-        gridCols && "grid",
+        template && "grid",
         gapClass,
         interactive && "transition-colors hover:bg-muted/50",
         clickable && "cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -147,21 +170,45 @@ export function ListRowHeader({
   style,
   ...props
 }: ListRowHeaderProps) {
-  const gridStyle: CSSProperties | undefined = gridCols
-    ? { gridTemplateColumns: gridCols, ...(style ?? {}) }
+  const columns = useContext(ResizableColumnsContext);
+  const template = columns?.template ?? gridCols;
+  const gridStyle: CSSProperties | undefined = template
+    ? { gridTemplateColumns: template, ...(style ?? {}) }
     : style;
+  const cells = columns?.enabled ? Children.toArray(children) : null;
   return (
     <div
+      ref={columns?.headerRef}
       className={cn(
         "sticky top-0 z-10 flex h-9 items-center border-b px-1.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
-        gridCols && "grid",
+        template && "grid",
         gapClass,
         className
       )}
       style={gridStyle}
       {...props}
     >
-      {children}
+      {!cells && children}
+      {cells &&
+        cells.map((cell, i) => (
+          <div key={i} className="relative flex min-w-0 items-center">
+            {cell}
+            {i < cells.length - 1 && (
+              <span
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize column"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  columns?.startResize(i, e.clientX);
+                }}
+                className="group/resize absolute top-1/2 right-0 z-20 flex h-9 w-3 -translate-y-1/2 translate-x-1/2 cursor-col-resize touch-none select-none items-stretch justify-center"
+              >
+                <span className="w-0.5 rounded-full bg-transparent transition-colors group-hover/resize:bg-primary" />
+              </span>
+            )}
+          </div>
+        ))}
     </div>
   );
 }
@@ -279,3 +326,61 @@ function pageRange(current: number, total: number): (number | "ellipsis")[] {
   if (total > 1) pages.push(total);
   return pages;
 }
+
+const MIN_COLUMN_PX = 48;
+
+/**
+ * Shared, user-resizable `grid-template-columns` for a ListRowGroup. The header
+ * and rows read `template`; dragging a header divider reads the live pixel
+ * widths of the header tracks and shifts the dragged column against its right
+ * neighbour, keeping the total width constant.
+ */
+function useResizableColumns(initialTemplate?: string): ResizableColumns {
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [widths, setWidths] = useState<number[] | null>(null);
+
+  const startResize = useCallback((index: number, clientX: number) => {
+    const header = headerRef.current;
+    if (!header) return;
+    const tracks = getComputedStyle(header)
+      .gridTemplateColumns.split(" ")
+      .map((value) => parseFloat(value));
+    if (tracks.length < 2) return;
+    if (index < 0 || index + 1 >= tracks.length) return;
+    if (tracks.some((n) => Number.isNaN(n))) return;
+
+    const startX = clientX;
+    const start = [...tracks];
+    const onMove = (event: PointerEvent) => {
+      const delta = event.clientX - startX;
+      const left = start[index] + delta;
+      const right = start[index + 1] - delta;
+      if (left < MIN_COLUMN_PX || right < MIN_COLUMN_PX) return;
+      const next = [...start];
+      next[index] = left;
+      next[index + 1] = right;
+      setWidths(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+
+  let template = initialTemplate;
+  if (widths) template = widths.map((w) => `${w}px`).join(" ");
+  return { template, startResize, headerRef, enabled: !!initialTemplate };
+}
+
+type ResizableColumns = {
+  template?: string;
+  startResize: (index: number, clientX: number) => void;
+  headerRef: RefObject<HTMLDivElement | null>;
+  enabled: boolean;
+};

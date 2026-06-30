@@ -34,6 +34,7 @@ import {
   richViewMode,
   renderRichTool,
 } from "@/components/ai-elements/tool";
+import { extractList } from "@/components/widgets/extract-list";
 import { ToolGroup } from "@/components/ai-elements/tool-group";
 import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
@@ -48,7 +49,7 @@ import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon } from "@/lib/icons";
+import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
@@ -66,7 +67,8 @@ import {
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import { WidgetCommandProvider, useWidgetBus } from "@/lib/widgets/command-bus";
-import { serializeActiveWidget } from "@/lib/widgets/widget-actions";
+import { serializeActiveWidget, widgetContextLabel } from "@/lib/widgets/widget-actions";
+import type { WidgetDescriptor } from "@/lib/services/widget-service";
 import type { TreeNode } from "@/lib/services/types";
 import { SidebarPanel } from "@/components/panel/SidebarPanel";
 import { WidgetPane } from "@/components/panel/WidgetPane";
@@ -626,15 +628,26 @@ const ChatPage = observer(function ChatPage() {
 
   const widget = useWidgetService();
   // Serialize the widget the user is currently viewing (id + its declared
-  // actions) so it rides every prompt and the agent can drive it via ui_widget.
-  // A nested sub-view (manual run) can override the reported kind/actions.
-  const activeWidget =
-    serializeActiveWidget(
-      widget.current,
-      widget.activeOverride
-        ? { kind: widget.activeOverride.kind, state: widget.activeOverride.state }
-        : undefined
-    ) ?? undefined;
+  // actions + title) so it rides every prompt and the agent can drive it via
+  // ui_widget. A drilled-in detail (a single run, the manual-run executor)
+  // overrides the reported kind/title via activeOverride, so the agent and the
+  // chat context chip name the specific item — not the list it came from. The
+  // user can remove it from context (the chip's X) — then nothing is sent.
+  const widgetTitle = widget.activeOverride?.title ?? widgetTitleFor(widget.current);
+  const widgetExtra = {
+    kind: widget.activeOverride?.kind,
+    state: widget.activeOverride?.state,
+    title: widgetTitle,
+    id: widget.activeOverride?.id,
+  };
+  const activeWidget = widget.contextDismissed
+    ? undefined
+    : serializeActiveWidget(widget.current, widgetExtra) ?? undefined;
+  const contextLabel = widget.contextDismissed
+    ? null
+    : widgetContextLabel(widget.current, widgetExtra);
+  let ContextIcon = ListChecksIcon;
+  if (contextLabel && /^(run|manual run)/i.test(contextLabel)) ContextIcon = PlayIcon;
 
   const params = useMemo(() => {
     const p: Record<string, unknown> = {};
@@ -675,7 +688,9 @@ const ChatPage = observer(function ChatPage() {
 
   // The agent's rich renders move out of the chat stream into the widget pane:
   // find the latest completed renderish tool and show it (deduped by toolCallId
-  // so a finished render replaces the previous one without churning).
+  // so a finished render replaces the previous one without churning). Empty list
+  // renders are skipped so a no-match agent query never replaces what the user
+  // is looking at with a "Nothing matched" dummy.
   const latestRenderTool = useMemo(() => {
     for (let m = messages.length - 1; m >= 0; m--) {
       const tools = messages[m].tools ?? [];
@@ -684,6 +699,7 @@ const ChatPage = observer(function ChatPage() {
         if (t.toolName === "ask_question") continue;
         if (t.state !== "output-available") continue;
         if (richViewMode(t.toolName) === null) continue;
+        if (isEmptyListRender(t.toolName, t.input, t.output)) continue;
         return t;
       }
     }
@@ -691,6 +707,10 @@ const ChatPage = observer(function ChatPage() {
   }, [messages]);
   useEffect(() => {
     if (!latestRenderTool) return;
+    // Don't let an agent render hijack a widget the user explicitly opened
+    // (a resource view, the file editor, a manual run, search) — those stay put;
+    // the render is still reachable as a chat stub with its "View →" action.
+    if (widget.current && widget.current.source !== "tool") return;
     widget.show({
       source: "tool",
       key: latestRenderTool.toolCallId,
@@ -718,12 +738,25 @@ const ChatPage = observer(function ChatPage() {
           params?: Record<string, unknown>;
         };
         const callId = tool.toolCallId;
+        // `get` is read-only: hand back the snapshot the active widget published
+        // (the rows the user sees) directly, so the agent doesn't re-query the API
+        // for on-screen data and a stale command handler can't get in the way.
+        if (input.action === "get") {
+          const data = widget.snapshot;
+          sendWidgetResult(
+            callId,
+            data == null
+              ? { ok: false, error: "This widget exposes no readable contents." }
+              : { ok: true, result: data }
+          );
+          continue;
+        }
         void bus
           .dispatch(input.widget_id ?? "", input.action ?? "", input.params ?? {})
           .then((res) => sendWidgetResult(callId, res));
       }
     }
-  }, [messages, bus, sendWidgetResult]);
+  }, [messages, bus, sendWidgetResult, widget]);
 
   // The plan evolves across turns; only the most recent message's todo panel is
   // still relevant, so earlier ones render collapsed.
@@ -1211,6 +1244,30 @@ const ChatPage = observer(function ChatPage() {
         <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
+        {contextLabel && status !== "streaming" && status !== "submitted" && (
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 py-1 pr-1 pl-2 text-xs">
+              <ContextIcon className="size-3.5 text-muted-foreground" />
+              <span className="max-w-[220px] truncate">{contextLabel}</span>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => widget.dismissContext()}
+                      className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Remove widget from context"
+                    >
+                      <XIcon className="size-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent><p>Remove from context</p></TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
+
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {attachments.map((a) => (
@@ -1284,6 +1341,30 @@ function flattenTree(nodes: TreeNode[]): MentionItem[] {
     if (node.children) out.push(...flattenTree(node.children));
   }
   return out;
+}
+
+function isEmptyListRender(
+  toolName: string | undefined,
+  input: unknown,
+  output: unknown
+): boolean {
+  const isList = richViewMode(toolName) === "below" || toolName === "render_list";
+  if (!isList) return false;
+  const count = Math.max(
+    extractList(input).items.length,
+    extractList(output).items.length
+  );
+  return count === 0;
+}
+
+function widgetTitleFor(descriptor: WidgetDescriptor | null): string | undefined {
+  if (descriptor?.source !== "tool") return undefined;
+  return titleOf(descriptor.output) ?? titleOf(descriptor.input);
+}
+
+function titleOf(data: unknown): string | undefined {
+  const obj = data as { clean_title?: string; title?: string } | null;
+  return obj?.clean_title ?? obj?.title;
 }
 
 interface PendingAttachment {

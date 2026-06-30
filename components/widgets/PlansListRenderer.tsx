@@ -71,7 +71,7 @@ export default function PlansListRenderer({
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup>
+      <ListRowGroup gridCols={PLANS_GRID}>
         <ListRowHeader gridCols={PLANS_GRID}>
           <div className="min-w-0 truncate">Plan</div>
           <div className="min-w-0 truncate">Labels</div>

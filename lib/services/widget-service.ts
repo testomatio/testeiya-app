@@ -14,12 +14,25 @@ export class WidgetService {
   // A nested sub-view (e.g. the manual-run executor) can override the kind the
   // active widget reports to the agent, since it shares the parent's id but
   // exposes a different action set. Set on mount, cleared on unmount.
-  activeOverride: { kind: string; state?: string } | null = null;
+  activeOverride: { kind: string; state?: string; title?: string; id?: string } | null = null;
+  // The widget key the user removed from prompt context. While it matches the
+  // current widget, its <active_widget> block is not sent. Reset whenever a
+  // different widget is shown, so navigating re-references by default.
+  contextDismissedKey: string | null = null;
+  // The full structured contents of the visible widget (the rows the user sees),
+  // published by the active renderer. The agent reads it in one shot via the
+  // `get` widget action instead of re-querying the API for what's on screen.
+  snapshot: unknown = null;
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
       this,
-      { root: false, current: observable.ref, activeOverride: observable.ref },
+      {
+        root: false,
+        current: observable.ref,
+        activeOverride: observable.ref,
+        snapshot: false,
+      },
       { autoBind: true }
     );
 
@@ -37,16 +50,36 @@ export class WidgetService {
     return !!this.current;
   }
 
+  get contextDismissed(): boolean {
+    return !!this.current && this.contextDismissedKey === this.current.key;
+  }
+
   show(widget: WidgetDescriptor): void {
     if (this.current?.key === widget.key) return;
+    this.contextDismissedKey = null;
+    this.snapshot = null;
     this.current = widget;
   }
 
   clear(): void {
+    this.contextDismissedKey = null;
+    this.snapshot = null;
     if (this.current) this.current = null;
   }
 
-  setActiveOverride(override: { kind: string; state?: string }): void {
+  setSnapshot(data: unknown): void {
+    this.snapshot = data;
+  }
+
+  clearSnapshot(): void {
+    if (this.snapshot) this.snapshot = null;
+  }
+
+  dismissContext(): void {
+    this.contextDismissedKey = this.current?.key ?? null;
+  }
+
+  setActiveOverride(override: { kind: string; state?: string; title?: string; id?: string }): void {
     this.activeOverride = override;
   }
 

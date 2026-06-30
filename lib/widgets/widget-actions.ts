@@ -224,7 +224,7 @@ export function widgetResourceForKind(kind: string | null): string | undefined {
 /** Build the `<active_widget>` context block for the active widget (or null). */
 export function serializeActiveWidget(
   descriptor: WidgetDescriptor | null,
-  extra?: { title?: string; state?: string; kind?: string }
+  extra?: { title?: string; state?: string; kind?: string; id?: string }
 ): string | null {
   const kind = extra?.kind ?? widgetKindFor(descriptor);
   if (!kind || !descriptor) return null;
@@ -232,14 +232,43 @@ export function serializeActiveWidget(
   if (!def) return null;
 
   const lines = [`id: ${descriptor.key}`, `kind: ${kind} — ${def.description}`];
+  if (extra?.id) lines.push(`item id: ${extra.id}`);
   if (extra?.title) lines.push(`title: ${extra.title}`);
   if (extra?.state) lines.push(`state: ${extra.state}`);
   lines.push("actions:");
+  lines.push(
+    "- get() — Return this widget's full current contents as structured JSON (exactly the rows the user sees on screen). Call this FIRST to read what's displayed instead of re-querying the API."
+  );
   for (const action of def.actions) {
     lines.push(`- ${formatAction(action)}`);
   }
   return `<active_widget>\n${lines.join("\n")}\n</active_widget>`;
 }
+
+/** Short, human label for the active-widget context chip (or null when the
+ *  widget carries no agent context — same gating as serializeActiveWidget). */
+export function widgetContextLabel(
+  descriptor: WidgetDescriptor | null,
+  extra?: { title?: string; kind?: string; id?: string }
+): string | null {
+  const kind = extra?.kind ?? widgetKindFor(descriptor);
+  if (!kind || !descriptor || !WIDGET_DEFS[kind]) return null;
+  let label = CONTEXT_LABELS[kind] ?? WIDGET_DEFS[kind].description;
+  if (extra?.id) label += ` #${extra.id}`;
+  if (extra?.title) label += `: ${extra.title}`;
+  return label;
+}
+
+const CONTEXT_LABELS: Record<string, string> = {
+  "runs-list": "Runs",
+  "tests-list": "Tests",
+  "testruns-list": "Test results",
+  "plans-list": "Plans",
+  "suites-list": "Suites",
+  "requirements-list": "Requirements",
+  "run-item": "Run",
+  "manual-run": "Manual run",
+};
 
 function formatAction(action: WidgetActionDef): string {
   const sig = (action.params ?? [])

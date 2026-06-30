@@ -80,7 +80,7 @@ export default function SuitesListRenderer({
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup>
+      <ListRowGroup gridCols={SUITES_GRID}>
         <ListRowHeader gridCols={SUITES_GRID}>
           <div className="min-w-0 truncate">Suite</div>
           <div className="min-w-0 truncate">Tests</div>

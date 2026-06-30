@@ -18,6 +18,10 @@ import type { RootStore } from "./root-store";
 const MAX_EMPTY_RETRIES = 24;
 const EMPTY_RETRY_MS = 2500;
 
+// Suite files; and how long a burst of saves coalesces before an auto-push.
+const TEST_MD_RE = /\.test\.md$/i;
+const AUTO_PUSH_DEBOUNCE_MS = 1500;
+
 /**
  * Workspace business logic: the open-file editor state, the project file tree
  * (load + auto-poll-while-empty + expansion), and opening a local folder as the
@@ -72,6 +76,10 @@ export class WorkspaceService {
   emptyRetries = 0;
   retryTimer: ReturnType<typeof setTimeout> | null = null;
   seeded = false;
+  // Suite files saved since the last auto-push, and the debounce timer that
+  // coalesces a burst of saves into one background push.
+  autoPushPending = new Set<string>();
+  autoPushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
@@ -83,6 +91,8 @@ export class WorkspaceService {
         retryTimer: false,
         seeded: false,
         sessionEdits: false,
+        autoPushPending: false,
+        autoPushTimer: false,
       },
       { autoBind: true }
     );
@@ -168,6 +178,7 @@ export class WorkspaceService {
     const next = new Map(this.changedFiles);
     if (!next.has(path)) next.set(path, status);
     this.changedFiles = next;
+    this.queueAutoPush(path);
     void this.loadTree();
   }
 
@@ -270,24 +281,34 @@ export class WorkspaceService {
   }
 
   /**
-   * Run check-tests for the workspace's manual tests. Pull refreshes the tree
-   * once it lands; push uploads local edits. The server resolves the project
-   * token (connected account, else the folder's .env).
+   * Run check-tests for the workspace's manual tests. A bare push uploads only
+   * the changed files (partial push); a bare pull fetches every suite (with
+   * automated tests). `opts.files`/`opts.suiteIds` narrow it to a single suite.
+   * The server resolves the project token (connected account, else the .env).
    */
-  async sync(action: SyncAction) {
+  async sync(action: SyncAction, opts?: SyncOptions) {
     const sessionId = this.root.sessionId;
     if (!sessionId || this.syncing) return;
     this.syncing = action;
     this.syncError = null;
     try {
-      await postJson<SyncResult>("/api/workspace/sync", { session: sessionId, action });
-      let message = "Pushed tests to Testomat.io";
-      if (action === "pull") message = "Pulled tests from Testomat.io";
-      toast.success(message);
-      // Both directions re-baseline the server snapshot, so local == remote: drop
-      // the session edits and reload to clear the changed markers.
+      const body: {
+        session: string;
+        action: SyncAction;
+        files?: string[];
+        suiteIds?: string[];
+      } = { session: sessionId, action };
+      if (opts?.files?.length) body.files = opts.files;
+      if (opts?.suiteIds?.length) body.suiteIds = opts.suiteIds;
+      await postJson<SyncResult>("/api/workspace/sync", body);
+      toast.success(opts?.label || syncMessage(action));
+      // A targeted sync re-baselines only its files; a full sync re-baselines all.
       runInAction(() => {
-        this.sessionEdits.clear();
+        if (opts?.files?.length) {
+          for (const file of opts.files) this.sessionEdits.delete(file);
+        } else {
+          this.sessionEdits.clear();
+        }
         if (action === "pull") this.seeded = false;
       });
       await this.loadTree();
@@ -302,6 +323,27 @@ export class WorkspaceService {
         this.syncing = null;
       });
     }
+  }
+
+  /** Push a single suite (its file) to Testomat.io. */
+  pushSuite(node: TreeNode) {
+    return this.sync("push", {
+      files: [node.path],
+      label: `Pushed ${suiteLabel(node)} to Testomat.io`,
+    });
+  }
+
+  /** Pull a single suite from Testomat.io (needs the suite's `@S` id). */
+  pullSuite(node: TreeNode) {
+    if (!node.suiteId) {
+      toast.error("This suite hasn't been pushed yet — nothing to pull.");
+      return;
+    }
+    return this.sync("pull", {
+      files: [node.path],
+      suiteIds: [node.suiteId],
+      label: `Pulled ${suiteLabel(node)} from Testomat.io`,
+    });
   }
 
   // --- delete (file/test/folder + remote suite/test) ---
@@ -484,6 +526,55 @@ export class WorkspaceService {
     this.seeded = false;
     this.emptyRetries = 0;
     this.clearRetry();
+    this.autoPushPending.clear();
+    if (this.autoPushTimer) {
+      clearTimeout(this.autoPushTimer);
+      this.autoPushTimer = null;
+    }
+  }
+
+  // Auto push-on-save: queue the saved suite and (re)arm a debounce so a burst of
+  // saves coalesces into one background push. The server only pushes suites that
+  // already exist on Testomat.io (carry an `@S` id); local-only drafts are skipped.
+  private queueAutoPush(path: string) {
+    if (!TEST_MD_RE.test(path)) return;
+    this.autoPushPending.add(path);
+    this.scheduleAutoPush();
+  }
+
+  private scheduleAutoPush() {
+    if (this.autoPushTimer) clearTimeout(this.autoPushTimer);
+    this.autoPushTimer = setTimeout(() => void this.flushAutoPush(), AUTO_PUSH_DEBOUNCE_MS);
+  }
+
+  private async flushAutoPush() {
+    this.autoPushTimer = null;
+    const sessionId = this.root.sessionId;
+    if (!sessionId || this.autoPushPending.size === 0) return;
+    // Don't race a manual pull/push; retry once it finishes.
+    if (this.syncing) {
+      this.scheduleAutoPush();
+      return;
+    }
+    const files = [...this.autoPushPending];
+    this.autoPushPending.clear();
+    try {
+      const res = await postJson<SyncResult>("/api/workspace/sync", {
+        session: sessionId,
+        action: "push",
+        files,
+        auto: true,
+      });
+      if (res.skipped) return;
+      runInAction(() => {
+        for (const file of files) this.sessionEdits.delete(file);
+      });
+      await this.loadTree();
+      const count = files.length === 1 ? "1 suite" : `${files.length} suites`;
+      toast.success(`Pushed ${count} to Testomat.io`);
+    } catch {
+      // Best-effort background push — the file stays flagged for a manual retry.
+    }
   }
 
   private clearRetry() {
@@ -607,4 +698,23 @@ function expandAncestors(set: Set<string>, dir: string | null): void {
     acc = acc ? `${acc}/${segment}` : segment;
     set.add(acc);
   }
+}
+
+function syncMessage(action: SyncAction): string {
+  if (action === "pull") return "Pulled tests from Testomat.io";
+  return "Pushed tests to Testomat.io";
+}
+
+function suiteLabel(node: TreeNode): string {
+  const base = node.path.split("/").pop();
+  return base || node.name;
+}
+
+interface SyncOptions {
+  /** Restrict the sync to these files (cwd-relative). */
+  files?: string[];
+  /** Pull only these suites (`@S…`). */
+  suiteIds?: string[];
+  /** Override the success toast. */
+  label?: string;
 }

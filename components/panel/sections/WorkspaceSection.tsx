@@ -3,6 +3,7 @@
 import { observer } from "mobx-react-lite";
 import {
   FileTree,
+  FileTreeActions,
   FileTreeFile,
   FileTreeFolder,
 } from "@/components/ai-elements/file-tree";
@@ -40,12 +41,51 @@ import type { PanelSectionProps } from "@/lib/panel/types";
 // `@tag` tokens in a test title — Testomat.io's TAG_ALLOWED_SYMBOLS, anchored to
 // a word boundary so emails (`a@b.com`) aren't mistaken for tags.
 const TAG_RE = /(^|\s)(@[\w=().:&-]*[\w)])/g;
+const TEST_MD_RE = /\.test\.md$/i;
 
 const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
   const ws = useWorkspaceService();
   const isMarkdown = /\.md$/i.test(node.name);
+  const isSuite = node.kind === "test" || (node.kind === "file" && TEST_MD_RE.test(node.name));
+  const isSuiteFile = node.kind === "file" && TEST_MD_RE.test(node.name);
+  const syncBusy = !ws.sessionId || !!ws.syncing;
+  // A suite that lives on Testomat.io can be re-synced; on row hover the sync
+  // button takes the place of the test-count badge.
+  const canPull = isSuiteFile && !!node.suiteId;
+  // A bare button (no Tooltip): the trigger toggles `display`, and a tooltip
+  // anchored to a `display:none` element renders at (0,0) and flickers.
+  const refreshAction = canPull ? (
+    <FileTreeActions>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="hidden size-5 p-0 group-hover:inline-flex"
+        disabled={syncBusy}
+        onClick={() => void ws.pullSuite(node)}
+        aria-label="Sync latest changes from Testomat.io"
+      >
+        <Icon name="sync" className="size-3.5" />
+      </Button>
+    </FileTreeActions>
+  ) : undefined;
   const menu = (
     <ContextMenuContent>
+      {isSuite && (
+        <>
+          <ContextMenuItem disabled={syncBusy} onClick={() => void ws.pushSuite(node)}>
+            <Icon name="cloud_upload" className="size-4" />
+            Push suite
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={syncBusy || !node.suiteId}
+            onClick={() => void ws.pullSuite(node)}
+          >
+            <Icon name="cloud_download" className="size-4" />
+            Pull suite
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
       <ContextMenuItem onClick={() => ws.requestRename(node)}>
         <Icon name="edit" className="size-4" />
         Rename
@@ -108,8 +148,9 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
         name={node.name}
         nameClassName={statusClass(ws.changedFiles.get(node.path))}
         icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
-        badge={count || undefined}
+        badge={count ? <span className={canPull ? "group-hover:hidden" : undefined}>{count}</span> : undefined}
         menu={menu}
+        actions={refreshAction}
       >
         {node.children.map((child) => (
           <NodeRow key={child.anchor ?? child.path} node={child} />
@@ -124,6 +165,7 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
       nameClassName={statusClass(ws.changedFiles.get(node.path))}
       icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
       menu={menu}
+      actions={refreshAction}
     />
   );
 });
@@ -270,7 +312,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 className="h-7 w-7 p-0"
                 disabled={!ws.sessionId || !!ws.syncing || ws.manualTestsDir === null}
                 onClick={() => void ws.sync("push")}
-                aria-label="Push manual tests to Testomat.io"
+                aria-label="Push changed tests to Testomat.io"
               >
                 <Icon
                   name="cloud_upload"
@@ -278,7 +320,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 />
               </Button>
             } />
-            <TooltipContent side="bottom"><p>Push manual tests to Testomat.io</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Push changed tests to Testomat.io</p></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={
@@ -300,7 +342,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         {search.searchOpen && (
           <div className="mb-2 flex flex-col gap-1.5 px-4">
             <Input
@@ -328,10 +370,10 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </div>
         )}
         {ws.syncing && (
-          <div className="mx-3 my-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary/90">
+          <div className="absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/90 px-3 py-2 text-xs text-primary-foreground shadow-lg backdrop-blur-sm dark:border-primary/40 dark:bg-primary/80">
             <Icon name={ws.syncing === "pull" ? "cloud_download" : "cloud_upload"} className="size-3.5 shrink-0 animate-pulse" />
             <span className="flex-1">{ws.syncing === "pull" ? "Pulling tests from Testomat.io…" : "Pushing tests to Testomat.io…"}</span>
-            <Icon name="refresh" className="size-3 shrink-0 animate-spin opacity-60" />
+            <Icon name="refresh" className="size-3 shrink-0 animate-spin opacity-80" />
           </div>
         )}
         {ws.treeError && (

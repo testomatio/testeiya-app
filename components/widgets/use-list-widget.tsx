@@ -7,6 +7,7 @@ import {
   type TestomatioMeta,
 } from "@/lib/agent-output/use-testomatio";
 import { useRegisterWidget } from "@/lib/widgets/command-bus";
+import { useWidgetSnapshot } from "./use-widget-snapshot";
 import { extractList } from "./extract-list";
 import { ListPager } from "./list-row";
 
@@ -107,6 +108,10 @@ export function useListWidget<T>(opts: {
   );
 
   useRegisterWidget(widgetId, run);
+
+  // Expose the rows on screen to the agent's `get` action. While a row's detail
+  // is open it owns the snapshot, so the list yields (active = no selection).
+  useWidgetSnapshot({ kind: resource, items, meta }, !selected);
 
   const total = meta?.total;
   const hasPrev = page > 1;

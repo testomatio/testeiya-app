@@ -46,6 +46,7 @@ import {
   useStores,
 } from "@/lib/services/StoreProvider";
 import { useRegisterWidget } from "@/lib/widgets/command-bus";
+import { useWidgetSnapshot } from "../use-widget-snapshot";
 import { captureDisplayScreenshot } from "@/lib/screenshot";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,9 @@ function ManualRunRenderer({
   );
   const testruns = useMemo(() => fetched ?? [], [fetched]);
 
+  // Expose the run and its per-test rows to the agent's `get` action.
+  useWidgetSnapshot({ kind: "manual-run", run, testruns, total: meta?.total });
+
   const [index, setIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [statusFilter, setStatusFilter] = useState<StatusBucket | null>(null);
@@ -151,9 +155,9 @@ function ManualRunRenderer({
   // While the manual-run executor is showing it shares the parent widget's id
   // but exposes its own action set, so override the kind the agent is told.
   useEffect(() => {
-    store.widget.setActiveOverride({ kind: "manual-run" });
+    store.widget.setActiveOverride({ kind: "manual-run", id: runId, title });
     return () => store.widget.clearActiveOverride();
-  }, [store]);
+  }, [store, runId, title]);
 
   // Keep the selected row visible as the user navigates with the keyboard.
   useEffect(() => {

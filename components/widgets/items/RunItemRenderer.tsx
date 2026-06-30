@@ -1,6 +1,19 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { Streamdown } from "streamdown";
+import { cjk } from "@streamdown/cjk";
+import { code } from "@streamdown/code";
+import { math } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
+import {
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 import { Icon } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
@@ -10,12 +23,20 @@ import {
 } from "@/lib/agent-output/use-testomatio";
 import { useProjectService, useStores } from "@/lib/services/StoreProvider";
 import { useRegisterWidget } from "@/lib/widgets/command-bus";
+import { useWidgetSnapshot } from "../use-widget-snapshot";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
 import { ListPager } from "../list-row";
-import { formatDuration, LabelsRow, MetaPill, RunStatusDot } from "../status-pill";
+import {
+  formatDuration,
+  LabelsRow,
+  MetaPill,
+  RunStatusDot,
+} from "../status-pill";
 import { resolveType, TypeIcon } from "../type-icons";
 import ManualRunRenderer from "./ManualRunRenderer";
+
+const streamdownPlugins = { cjk, code, math, mermaid };
 
 const GRID =
   "grid grid-cols-[1.5rem_minmax(90px,1fr)_minmax(140px,2fr)_minmax(0,2fr)_auto] items-center gap-x-3";
@@ -36,15 +57,6 @@ export default function RunItemRenderer({
   const store = useStores();
   const [executing, setExecuting] = useState(false);
   const title = run.title ?? run.clean_title ?? run.id ?? "(untitled run)";
-  const passed = run.passed_count ?? 0;
-  const failed = run.failed_count ?? 0;
-  const skipped = run.skipped_count ?? 0;
-  const total =
-    run.tests_count ?? passed + failed + skipped + (run.pending_count ?? 0);
-  const pending =
-    run.pending_count ?? Math.max(0, total - passed - failed - skipped);
-  const completed = Math.max(0, total - pending);
-  const percentCompleted = total > 0 ? Math.round((completed / total) * 100) : 0;
   const env = run.environment ?? run.env ?? undefined;
   const branch =
     typeof run.branch === "string" ? run.branch : run.branch?.title ?? undefined;
@@ -57,6 +69,21 @@ export default function RunItemRenderer({
     (run.status ?? "").toLowerCase()
   );
   const showManualRun = isManual && !isFinished && Boolean(run.id);
+
+  // The v2 Run carries only `rungroup_id` — resolve the group's title via the
+  // rungroups detail endpoint (skipped when the run isn't grouped).
+  const rungroupId =
+    run.rungroup_id ?? (typeof run.rungroup === "object" ? run.rungroup?.id : undefined);
+  const { data: rungroup } = useTestomatio<{ title?: string; name?: string }>(
+    "rungroups",
+    { id: rungroupId },
+    { skip: !rungroupId }
+  );
+  const rungroupLabel =
+    rungroup?.title ??
+    rungroup?.name ??
+    (typeof run.rungroup === "object" ? run.rungroup?.title : undefined) ??
+    rungroupId;
 
   // Enrichment: the v2 Run schema doesn't nest testruns, so when the caller
   // didn't hand us any we fetch them via the proxy. If a WorkspaceProvider
@@ -97,10 +124,39 @@ export default function RunItemRenderer({
     testrunsPagerLabel = `${trStart}–${trEnd} of ${testrunsTotal} test runs`;
   }
 
+  // The v2 Run carries no counts, so derive the total from the testruns meta
+  // and the pass/fail/skip breakdown from the loaded results (only trustworthy
+  // once every result is in hand — i.e. a single, fully-loaded page).
+  const testsTotal = run.tests_count ?? testrunsTotal ?? (nested.length || undefined);
+  const hasRunCounts =
+    run.tests_count != null ||
+    run.passed_count != null ||
+    run.failed_count != null ||
+    run.skipped_count != null;
+  const fullyLoaded = testrunsTotal == null || nested.length >= testrunsTotal;
+  const tally = { passed: 0, failed: 0, skipped: 0 };
+  for (const t of nested) {
+    const s = (t.status ?? "").toLowerCase();
+    if (s === "passed") tally.passed++;
+    else if (s === "failed") tally.failed++;
+    else if (s === "skipped") tally.skipped++;
+  }
+  let passedCount = run.passed_count;
+  let failedCount = run.failed_count;
+  let skippedCount = run.skipped_count;
+  if (!hasRunCounts && fullyLoaded && nested.length > 0) {
+    passedCount = tally.passed;
+    failedCount = tally.failed;
+    skippedCount = tally.skipped;
+  }
+  const showStatusTriplet =
+    passedCount != null || failedCount != null || skippedCount != null;
+
   // Agent control (when this run detail is the active widget). Drives the same
-  // actions the buttons/pager do; `start_manual_run` is destructive.
-  const runCommand = useCallback(
-    async (action: string, params: Record<string, unknown>) => {
+  // actions the buttons/pager do; `start_manual_run` is destructive. Not memoized
+  // — useRegisterWidget reads it through a ref, so a fresh closure each render is
+  // fine and lets React Compiler own the memoization.
+  const runCommand = async (action: string, params: Record<string, unknown>) => {
       if (action === "open_external") {
         if (!externalUrl) throw new Error("This run has no external link.");
         openExternalUrl(externalUrl);
@@ -140,12 +196,17 @@ export default function RunItemRenderer({
         };
       }
       throw new Error(`Unknown action "${action}" for this run.`);
-    },
-    [externalUrl, showManualRun, onStartManualRun, paginated, run.id, store, testrunsPage]
-  );
+  };
   // While the manual run is showing it registers its own handler under this id,
   // so the run-item yields to avoid clobbering it.
   useRegisterWidget(executing ? undefined : widgetId, runCommand);
+
+  // Publish what's on screen so the agent can read it in one `get` call (the run
+  // plus its currently-loaded per-test results) instead of re-querying the API.
+  useWidgetSnapshot(
+    { kind: "run-item", run, testruns: nested, total: testrunsMeta?.total ?? nested.length },
+    !executing
+  );
 
   if (executing) {
     return (
@@ -182,8 +243,18 @@ export default function RunItemRenderer({
                 size="sm"
                 variant="ghost"
                 className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                onClick={() => openExternalUrl(externalUrl)}
                 title="Open in Testomat.io"
+                render={
+                  <a
+                    href={externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openExternalUrl(externalUrl);
+                    }}
+                  />
+                }
               >
                 <Icon name="open_in_new" className="size-3.5" />
                 <span className="hidden sm:inline">Open in Testomat.io</span>
@@ -198,45 +269,93 @@ export default function RunItemRenderer({
           <LabelsRow labels={run.labels} />
         </div>
 
+        <div
+          className={cn(
+            "pt-1",
+            showStatusTriplet && "grid grid-cols-2 items-center gap-6"
+          )}
+        >
+          {showStatusTriplet && (
+            <div className="min-w-0">
+              <RunStatsPie
+                passed={passedCount ?? 0}
+                failed={failedCount ?? 0}
+                skipped={skippedCount ?? 0}
+              />
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-md border">
+            <table className="w-full text-sm">
+              <tbody className="divide-y [&_td]:w-full [&_td]:px-3 [&_td]:py-1.5 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:align-top [&_th]:font-normal [&_th]:text-muted-foreground [&_tr:nth-child(even)]:bg-muted/30">
+                {run.id && (
+                  <tr>
+                    <th scope="row">Run ID</th>
+                    <td className="font-mono text-xs">{run.id}</td>
+                  </tr>
+                )}
+
+                {rungroupLabel && (
+                  <tr>
+                    <th scope="row">Run group</th>
+                    <td>{rungroupLabel}</td>
+                  </tr>
+                )}
+
+                <tr>
+                  <th scope="row">Status</th>
+                  <td>
+                    <span className="flex items-center gap-1.5">
+                      <RunStatusDot status={run.status} title={run.status} />
+                      <span className="capitalize">{run.status ?? "unknown"}</span>
+                    </span>
+                  </td>
+                </tr>
+
+                <tr>
+                  <th scope="row">Tests</th>
+                  <td>
+                    {testsTotal == null && testrunsLoading ? (
+                      <Shimmer as="span">Loading…</Shimmer>
+                    ) : (
+                      testsTotal ?? 0
+                    )}
+                  </td>
+                </tr>
+
+                {startedAt && (
+                  <tr>
+                    <th scope="row">Started</th>
+                    <td>{formatDateTime(startedAt)}</td>
+                  </tr>
+                )}
+
+                {run.assigned_to && (
+                  <tr>
+                    <th scope="row">Assigned to</th>
+                    <td>{run.assigned_to}</td>
+                  </tr>
+                )}
+
+                {createdBy && (
+                  <tr>
+                    <th scope="row">Created by</th>
+                    <td>{createdBy}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {run.description && (
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-            {run.description}
-          </p>
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none"
+            style={{ fontSize: "75%" }}
+          >
+            <Streamdown plugins={streamdownPlugins}>{run.description}</Streamdown>
+          </div>
         )}
-
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5 pt-1 text-sm">
-          <dt className="text-muted-foreground">Status</dt>
-          <dd className="flex items-center gap-1.5">
-            <RunStatusDot status={run.status} title={run.status} />
-            <span className="capitalize">{run.status ?? "unknown"}</span>
-          </dd>
-
-          <dt className="text-muted-foreground">Tests</dt>
-          <dd>
-            {total} ({percentCompleted}% completed)
-          </dd>
-
-          {startedAt && (
-            <>
-              <dt className="text-muted-foreground">Started</dt>
-              <dd>{formatDateTime(startedAt)}</dd>
-            </>
-          )}
-
-          {run.assigned_to && (
-            <>
-              <dt className="text-muted-foreground">Assigned to</dt>
-              <dd>{run.assigned_to}</dd>
-            </>
-          )}
-
-          {createdBy && (
-            <>
-              <dt className="text-muted-foreground">Created by</dt>
-              <dd>{createdBy}</dd>
-            </>
-          )}
-        </dl>
 
         {testrunsLoading && (
           <div className="text-xs">
@@ -321,6 +440,73 @@ export default function RunItemRenderer({
   );
 }
 
+function RunStatsPie({
+  passed,
+  failed,
+  skipped,
+}: {
+  passed: number;
+  failed: number;
+  skipped: number;
+}) {
+  const total = passed + failed + skipped;
+  if (total <= 0) return null;
+  const data = [
+    { name: "Passed", value: passed, fill: "var(--run-passed)" },
+    { name: "Failed", value: failed, fill: "var(--run-failed)" },
+    { name: "Skipped", value: skipped, fill: "var(--run-skipped)" },
+  ];
+  return (
+    <ResponsiveContainer width="100%" height={190}>
+      <PieChart>
+        <Tooltip
+          cursor={false}
+          contentStyle={{
+            background: "var(--popover)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            color: "var(--popover-foreground)",
+            fontSize: 12,
+            padding: "4px 8px",
+          }}
+          itemStyle={{ color: "var(--popover-foreground)" }}
+        />
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={52}
+          outerRadius={76}
+          paddingAngle={2}
+          stroke="var(--background)"
+          strokeWidth={2}
+          isAnimationActive={false}
+        >
+          {data.map((d) => (
+            <Cell key={d.name} fill={d.fill} />
+          ))}
+        </Pie>
+        <Legend
+          verticalAlign="bottom"
+          height={28}
+          iconType="circle"
+          iconSize={9}
+          formatter={(value, entry) => (
+            <span className="text-xs text-muted-foreground">
+              {String(value)}{" "}
+              <span className="font-medium tabular-nums text-foreground">
+                {(entry as { payload?: { value?: number } })?.payload?.value ?? 0}
+              </span>
+            </span>
+          )}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -349,6 +535,8 @@ interface McpRunDetail {
   clean_title?: string;
   status?: string;
   kind?: string;
+  rungroup_id?: string;
+  rungroup?: { id?: string; title?: string } | null;
   environment?: string | null;
   env?: string | null;
   assigned_to?: string | null;

@@ -21,6 +21,8 @@ export interface TreeNode {
   kind: "folder" | "file" | "test";
   path: string;
   anchor?: string;
+  /** `@S…` when the file/test belongs to a suite that exists on Testomat.io. */
+  suiteId?: string;
   /** Set when the file differs from the last Testomat.io sync (un-pushed). */
   status?: FileStatus;
   children?: TreeNode[];
@@ -81,7 +83,9 @@ export type SyncAction = "pull" | "push";
 export interface SyncResult {
   ok: boolean;
   action: SyncAction;
-  dir: string;
+  dir?: string;
+  /** True when the server had nothing to push (no creds, no changes, or local-only). */
+  skipped?: boolean;
   output?: string;
 }
 

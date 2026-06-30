@@ -77,7 +77,7 @@ export default function RequirementsListRenderer({
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup>
+      <ListRowGroup gridCols={REQS_GRID}>
         <ListRowHeader gridCols={REQS_GRID}>
           <div className="min-w-0 truncate">Requirement</div>
           <div className="min-w-0 truncate">Status</div>

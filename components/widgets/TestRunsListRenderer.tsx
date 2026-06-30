@@ -80,7 +80,7 @@ export default function TestRunsListRenderer({
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup>
+      <ListRowGroup gridCols={TESTRUNS_GRID}>
         <ListRowHeader gridCols={TESTRUNS_GRID}>
           <div className="min-w-0 truncate">Test</div>
           <div className="min-w-0 truncate">Duration</div>
