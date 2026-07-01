@@ -297,10 +297,23 @@ function ChatWithWorkspace() {
   // `ws=1` is set when a Testomat.io project is opened, so the just-loaded
   // markdown is shown straight away instead of behind a closed sidebar.
   const openWorkspace = searchParams.get("ws") === "1";
-  // Services switch sessions through the app router (no full reload).
+  // Services switch sessions through the app router (no full reload). Cold-load
+  // services (openDefault / restoreLast) can call this from mount effects that
+  // fire before the App Router's action queue is initialized — router.replace()
+  // then throws "Router action dispatched before initialization". Catch that and
+  // retry on the next frame, by which point the router is ready.
   const navigate = useCallback(
-    (sessionId: string) =>
-      router.replace(`/?session=${encodeURIComponent(sessionId)}&ws=1`),
+    (sessionId: string) => {
+      const url = `/?session=${encodeURIComponent(sessionId)}&ws=1`;
+      const run = () => {
+        try {
+          router.replace(url);
+        } catch {
+          requestAnimationFrame(run);
+        }
+      };
+      run();
+    },
     [router]
   );
   return (
