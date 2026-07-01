@@ -26,6 +26,7 @@ import {
   UploadIcon,
 } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -531,7 +532,10 @@ function ManualRunRenderer({
                 )}
                 {!stepsLoading && stepsBody && (
                   <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border bg-muted/20 p-3">
-                    <Streamdown plugins={STREAMDOWN_PLUGINS}>
+                    <Streamdown
+                      plugins={STREAMDOWN_PLUGINS}
+                      components={resizableTableComponents}
+                    >
                       {stepsBody}
                     </Streamdown>
                   </div>

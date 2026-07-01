@@ -1,0 +1,14 @@
+{
+  "provider": {
+    "name": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "model": "minimax/minimax-m2.7",
+    "contextWindow": 200000,
+    "maxTokens": 16384
+  },
+  "permissions": {
+    "autoAllowRead": true,
+    "blockWrites": false,
+    "blockBash": false
+  }
+}

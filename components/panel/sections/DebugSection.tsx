@@ -52,7 +52,7 @@ export const DebugSection = observer(function DebugSection({
       <FilterBar filter={filter} onChange={setFilter} entries={debug.entries} />
       <p className="border-b px-3 py-1.5 text-[10px] text-muted-foreground">
         Testomat.io requests + responses are saved (re-runnable) to{" "}
-        <code className="font-mono">testeiya/log/testomatio.http</code>
+        <code className="font-mono">cli/log/testomatio.http</code>
       </p>
       {entries.length === 0 && (
         <p className="p-4 text-muted-foreground text-xs">

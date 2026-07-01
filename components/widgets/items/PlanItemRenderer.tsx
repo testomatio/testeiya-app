@@ -6,6 +6,7 @@ import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
+import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import { ClipboardListIcon, Icon } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { CreateRunDialog } from "../CreateRunDialog";
@@ -82,7 +83,12 @@ export default function PlanItemRenderer({
 
       {p.description && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <Streamdown plugins={streamdownPlugins}>{p.description}</Streamdown>
+          <Streamdown
+            plugins={streamdownPlugins}
+            components={resizableTableComponents}
+          >
+            {p.description}
+          </Streamdown>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
+import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import { LabelsRow, MetaPill } from "../status-pill";
 import { SuiteKindIcon } from "../type-icons";
 import TestsListRenderer from "../TestsListRenderer";
@@ -61,7 +62,12 @@ export default function SuiteItemRenderer({
 
       {s.description && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <Streamdown plugins={streamdownPlugins}>{s.description}</Streamdown>
+          <Streamdown
+            plugins={streamdownPlugins}
+            components={resizableTableComponents}
+          >
+            {s.description}
+          </Streamdown>
         </div>
       )}
 

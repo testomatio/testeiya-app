@@ -1,6 +1,6 @@
 /**
  * Frontend presentation for the predefined MCP services. Keyed by the same
- * `id` as the backend catalog (`testeiya/src/mcp-catalog.ts`). The installable
+ * `id` as the backend catalog (`cli/src/mcp-catalog.ts`). The installable
  * set + config come from `GET /api/mcp/catalog`; this only adds logos/blurbs so
  * config and presentation can't drift.
  *

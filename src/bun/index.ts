@@ -13,7 +13,7 @@
 import { BrowserWindow } from "electrobun/bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { startAppServer } from "../../testeiya/src/app-server";
+import { startAppServer } from "../../cli/src/app-server";
 
 // Mark this process as the desktop (Electrobun) runtime. The app-server uses
 // this to decide whether it may import `electrobun/bun` to open external URLs —

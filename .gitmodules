@@ -1,4 +1,0 @@
-[submodule "testeiya"]
-	path = testeiya
-	url = git@github.com:testomatio/testclaw.git
-	branch = master

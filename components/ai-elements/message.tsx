@@ -31,6 +31,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import { resizableTableComponents } from "./resizable-table";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -369,7 +370,10 @@ const InlineFileCode = observer(function InlineFileCode({
   );
 });
 
-const streamdownComponents = { inlineCode: InlineFileCode };
+const streamdownComponents = {
+  inlineCode: InlineFileCode,
+  ...resizableTableComponents,
+};
 
 export const MessageResponse = memo(
   ({ className, components, ...props }: MessageResponseProps) => (

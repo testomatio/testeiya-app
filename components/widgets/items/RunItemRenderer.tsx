@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { Icon } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import { Button } from "@/components/ui/button";
 import {
   fetchTestomatioList,
@@ -90,6 +91,7 @@ export default function RunItemRenderer({
   // isn't wrapping us (e.g. /preview without ?session) the hook is a no-op.
   const preloaded = run.testruns ?? run.tests ?? [];
   const [testrunsPage, setTestrunsPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<TestrunStatus | null>(null);
   const {
     data: fetched,
     loading: testrunsLoading,
@@ -97,7 +99,12 @@ export default function RunItemRenderer({
     meta: testrunsMeta,
   } = useTestomatio<McpNestedTestRun[]>(
     "testruns",
-    { run_id: run.id, page: testrunsPage, per_page: TESTRUNS_PER_PAGE },
+    {
+      run_id: run.id,
+      page: testrunsPage,
+      per_page: TESTRUNS_PER_PAGE,
+      "filter[status]": statusFilter ?? undefined,
+    },
     { skip: !run.id || preloaded.length > 0 }
   );
   const nested: McpNestedTestRun[] =
@@ -124,15 +131,14 @@ export default function RunItemRenderer({
     testrunsPagerLabel = `${trStart}–${trEnd} of ${testrunsTotal} test runs`;
   }
 
-  // The v2 Run carries no counts, so derive the total from the testruns meta
-  // and the pass/fail/skip breakdown from the loaded results (only trustworthy
-  // once every result is in hand — i.e. a single, fully-loaded page).
-  const testsTotal = run.tests_count ?? testrunsTotal ?? (nested.length || undefined);
-  const hasRunCounts =
-    run.tests_count != null ||
-    run.passed_count != null ||
-    run.failed_count != null ||
-    run.skipped_count != null;
+  // The v2 Run carries no counts, but the app API exposes them in a single
+  // request (the run-stats endpoint). Fall back to tallying the loaded page only
+  // when those aren't available (e.g. not signed in) and a small run is whole.
+  const { data: runStats } = useTestomatio<RunStats>(
+    "run-stats",
+    { run_id: run.id },
+    { skip: !run.id }
+  );
   const fullyLoaded = testrunsTotal == null || nested.length >= testrunsTotal;
   const tally = { passed: 0, failed: 0, skipped: 0 };
   for (const t of nested) {
@@ -141,16 +147,34 @@ export default function RunItemRenderer({
     else if (s === "failed") tally.failed++;
     else if (s === "skipped") tally.skipped++;
   }
-  let passedCount = run.passed_count;
-  let failedCount = run.failed_count;
-  let skippedCount = run.skipped_count;
-  if (!hasRunCounts && fullyLoaded && nested.length > 0) {
+  let passedCount = run.passed_count ?? runStats?.passed;
+  let failedCount = run.failed_count ?? runStats?.failed;
+  let skippedCount = run.skipped_count ?? runStats?.skipped;
+  // Only trust the page tally when nothing is filtering it and it's the whole run.
+  if (
+    passedCount == null &&
+    failedCount == null &&
+    skippedCount == null &&
+    !statusFilter &&
+    fullyLoaded &&
+    nested.length > 0
+  ) {
     passedCount = tally.passed;
     failedCount = tally.failed;
     skippedCount = tally.skipped;
   }
+  const testsTotal =
+    run.tests_count ??
+    runStats?.tests_count ??
+    (statusFilter ? undefined : testrunsTotal) ??
+    (nested.length || undefined);
   const showStatusTriplet =
     passedCount != null || failedCount != null || skippedCount != null;
+
+  const toggleStatusFilter = (status: TestrunStatus) => {
+    setStatusFilter((cur) => (cur === status ? null : status));
+    setTestrunsPage(1);
+  };
 
   // Agent control (when this run detail is the active widget). Drives the same
   // actions the buttons/pager do; `start_manual_run` is destructive. Not memoized
@@ -353,7 +377,12 @@ export default function RunItemRenderer({
             className="prose prose-sm dark:prose-invert max-w-none"
             style={{ fontSize: "75%" }}
           >
-            <Streamdown plugins={streamdownPlugins}>{run.description}</Streamdown>
+            <Streamdown
+              plugins={streamdownPlugins}
+              components={resizableTableComponents}
+            >
+              {run.description}
+            </Streamdown>
           </div>
         )}
 
@@ -368,6 +397,38 @@ export default function RunItemRenderer({
           </p>
         )}
       </div>
+
+      {paginated && showStatusTriplet && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusFilterChip
+            label="Passed"
+            color="var(--run-passed)"
+            count={passedCount}
+            active={statusFilter === "passed"}
+            onClick={() => toggleStatusFilter("passed")}
+          />
+          <StatusFilterChip
+            label="Failed"
+            color="var(--run-failed)"
+            count={failedCount}
+            active={statusFilter === "failed"}
+            onClick={() => toggleStatusFilter("failed")}
+          />
+          <StatusFilterChip
+            label="Skipped"
+            color="var(--run-skipped)"
+            count={skippedCount}
+            active={statusFilter === "skipped"}
+            onClick={() => toggleStatusFilter("skipped")}
+          />
+        </div>
+      )}
+
+      {statusFilter && nested.length === 0 && !testrunsLoading && (
+        <p className="text-xs text-muted-foreground">
+          No {statusFilter} tests in this run.
+        </p>
+      )}
 
       {nested.length > 0 && (
         <div className="overflow-hidden rounded-md border">
@@ -437,6 +498,42 @@ export default function RunItemRenderer({
         />
       )}
     </div>
+  );
+}
+
+function StatusFilterChip({
+  label,
+  color,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-transparent text-white"
+          : "border-border bg-background hover:bg-muted"
+      )}
+      style={active ? { background: color } : undefined}
+    >
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: active ? "#fff" : color }}
+      />
+      {label}
+      {count != null && <span className="tabular-nums opacity-80">{count}</span>}
+    </button>
   );
 }
 
@@ -527,6 +624,16 @@ function personName(v: unknown): string | undefined {
   if (typeof v === "string") return v;
   const o = v as { name?: string; title?: string; email?: string };
   return o.name ?? o.title ?? o.email ?? undefined;
+}
+
+type TestrunStatus = "passed" | "failed" | "skipped";
+
+interface RunStats {
+  tests_count?: number;
+  passed?: number;
+  failed?: number;
+  skipped?: number;
+  status?: string;
 }
 
 interface McpRunDetail {

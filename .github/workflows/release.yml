@@ -1,4 +1,10 @@
-name: Release Desktop Apps
+name: Release
+
+# One GitHub Release drives two independent pipelines in parallel:
+#   • desktop     — builds the Electrobun installers (web/desktop app, root package.json)
+#   • publish-cli — publishes the `testeiya` CLI to npm (cli/package.json)
+# Both take their version from the release tag, so the two packages ship in lockstep
+# while remaining separately versioned artifacts.
 
 on:
   release:
@@ -9,8 +15,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build (${{ matrix.label }})
+  # ---- Desktop app → installers attached to the release --------------------
+  desktop:
+    name: Desktop (${{ matrix.label }})
     strategy:
       fail-fast: false
       matrix:
@@ -23,29 +30,8 @@ jobs:
             label: macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      # Main repo uses the built-in GITHUB_TOKEN (which always has access to its
-      # own repo). persist-credentials:false stops checkout from leaving that
-      # token's auth header in .git/config, where it would otherwise shadow the
-      # PAT when fetching the private submodule below.
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      # Rewrite SSH->HTTPS+PAT so the private submodule (testclaw) and the
-      # @testomatio/skills npm dep (git+ssh) authenticate with PRIVATE_REPOS_TOKEN.
-      # insteadOf is multi-valued: --add so BOTH the scp-style (git@github.com:,
-      # used by the submodule) and the ssh:// form (used by the @testomatio/skills
-      # git+ssh dep) are rewritten. Without --add the second line overwrites the
-      # first, leaving the submodule URL un-rewritten -> SSH publickey failure.
-      - name: Configure git auth for private deps
-        shell: bash
-        run: |
-          git config --global --add url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://x-access-token:${{ secrets.PRIVATE_REPOS_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
-
-      - name: Initialize agent submodule
-        run: git submodule update --init --recursive
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -58,7 +44,8 @@ jobs:
           node-version: 22
 
       # This repo is maintained with bun (bun.lock is the source of truth;
-      # package-lock.json is stale), so install with bun, not `npm ci`.
+      # package-lock.json is stale), so install with bun, not `npm ci`. The root
+      # postinstall installs the cli/ package deps that the app-server needs.
       - name: Install root dependencies
         run: bun install --frozen-lockfile
 
@@ -110,17 +97,57 @@ jobs:
           name: testeiya-${{ matrix.label }}
           path: artifacts/*
 
-  # After all installers are attached, append per-OS install instructions to the
-  # Release body (once). Idempotent: skips if the marker is already present.
+  # ---- CLI → published to the npm registry ---------------------------------
+  publish-cli:
+    name: Publish CLI to npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # registry-url wires NODE_AUTH_TOKEN into ~/.npmrc for `npm publish`.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install CLI dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sync version from release tag
+        if: github.event_name == 'release'
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - name: Publish to npm
+        if: github.event_name == 'release'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Manual runs never publish — just validate what the tarball would contain.
+      - name: Dry-run pack (manual runs)
+        if: github.event_name != 'release'
+        run: npm pack --dry-run
+
+  # After the desktop installers are attached, append per-OS install
+  # instructions to the Release body (once). Idempotent: skips if already present.
   release-notes:
     name: Add install instructions
-    needs: build
+    needs: desktop
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
       - name: Append install instructions to the release
         env:

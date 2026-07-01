@@ -1,0 +1,56 @@
+{
+  "name": "testeiya",
+  "version": "0.2.0",
+  "description": "AI Testing Agent - QA and testing focused AI assistant",
+  "type": "module",
+  "bin": {
+    "testeiya": "src/cli.ts"
+  },
+  "files": [
+    "src",
+    "testeiya.config.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "start": "bun src/cli.ts",
+    "dev": "bun src/cli.ts",
+    "serve:app": "bun src/app-server.ts",
+    "serve:app:watch": "bun --watch src/app-server.ts"
+  },
+  "keywords": [
+    "testing",
+    "qa",
+    "ai",
+    "agent"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langfuse/otel": "^5.4.1",
+    "@langfuse/tracing": "^5.4.1",
+    "@oh-my-pi/pi-ai": "^13.19.0",
+    "@oh-my-pi/pi-coding-agent": "^13.19.0",
+    "@oh-my-pi/pi-natives": "^13.19.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-node": "^0.218.0",
+    "@playwright/cli": "^0.1.13",
+    "@testomatio/mcp": "^2.1.1",
+    "@testomatio/skills": "github:testomatio/skills#821d51b05c52888bda7bf5a812aa63dca251cd67",
+    "check-tests": "^0.20.0",
+    "dedent": "^1.7.2",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "bun-types": "^1.3.14",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "bun": ">=1.3.5"
+  }
+}

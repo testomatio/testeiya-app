@@ -6,6 +6,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { CodeBlock } from "@/components/ai-elements/code-block";
+import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import type { BundledLanguage } from "shiki";
 import { LabelsRow, MetaPill } from "../status-pill";
 import { resolveType, TypeIcon } from "../type-icons";
@@ -90,7 +91,12 @@ export default function TestItemRenderer({
 
       {t.description && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <Streamdown plugins={streamdownPlugins}>{t.description}</Streamdown>
+          <Streamdown
+            plugins={streamdownPlugins}
+            components={resizableTableComponents}
+          >
+            {t.description}
+          </Streamdown>
         </div>
       )}
 

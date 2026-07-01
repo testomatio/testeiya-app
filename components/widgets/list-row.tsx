@@ -3,6 +3,7 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { startColumnDrag } from "@/lib/resizable-columns";
 import {
   Children,
   createContext,
@@ -327,8 +328,6 @@ function pageRange(current: number, total: number): (number | "ellipsis")[] {
   return pages;
 }
 
-const MIN_COLUMN_PX = 48;
-
 /**
  * Shared, user-resizable `grid-template-columns` for a ListRowGroup. The header
  * and rows read `template`; dragging a header divider reads the live pixel
@@ -345,32 +344,8 @@ function useResizableColumns(initialTemplate?: string): ResizableColumns {
     const tracks = getComputedStyle(header)
       .gridTemplateColumns.split(" ")
       .map((value) => parseFloat(value));
-    if (tracks.length < 2) return;
-    if (index < 0 || index + 1 >= tracks.length) return;
-    if (tracks.some((n) => Number.isNaN(n))) return;
-
-    const startX = clientX;
-    const start = [...tracks];
-    const onMove = (event: PointerEvent) => {
-      const delta = event.clientX - startX;
-      const left = start[index] + delta;
-      const right = start[index + 1] - delta;
-      if (left < MIN_COLUMN_PX || right < MIN_COLUMN_PX) return;
-      const next = [...start];
-      next[index] = left;
-      next[index + 1] = right;
-      setWidths(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    if (tracks.length < 2 || tracks.some((n) => Number.isNaN(n))) return;
+    startColumnDrag(tracks, index, clientX, setWidths);
   }, []);
 
   let template = initialTemplate;

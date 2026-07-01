@@ -24,6 +24,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import { resizableTableComponents } from "./resizable-table";
 
 import { Shimmer } from "./shimmer";
 
@@ -218,7 +219,9 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown plugins={streamdownPlugins}>{children}</Streamdown>
+      <Streamdown plugins={streamdownPlugins} components={resizableTableComponents}>
+        {children}
+      </Streamdown>
     </CollapsibleContent>
   )
 );

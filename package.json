@@ -3,16 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "postinstall": "git submodule update --init --recursive",
-    "update": "git pull origin main && bun install && git submodule update --remote --init testeiya && cd testeiya && bun install",
-    "dev": "concurrently -n web,agent -c cyan,magenta \"next dev -p 3050\" \"cd testeiya && PORT=3210 bun run serve:app:watch\"",
+    "postinstall": "cd cli && bun install",
+    "dev": "concurrently -n web,agent -c cyan,magenta \"next dev -p 3050\" \"cd cli && PORT=3210 bun run serve:app:watch\"",
     "build": "NEXT_EXPORT=1 next build",
     "desktop:dev": "NEXT_EXPORT=1 next build && GLIBC_TUNABLES=glibc.rtld.optional_static_tls=20480 electrobun dev",
     "desktop:build": "bash .github/packaging/pre-desktop-build.sh && NEXT_EXPORT=1 next build && electrobun build",
     "desktop:release": "bash .github/packaging/pre-desktop-build.sh && NEXT_EXPORT=1 next build && electrobun build --env=stable && bash .github/packaging/fix-macos-minos.sh",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "update:agent": "git submodule update --remote testeiya && git add testeiya && git commit -m \"chore: bump Testeiya Agent\""
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=22",

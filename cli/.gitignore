@@ -1,0 +1,29 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts.map
+
+.env
+# Agent data
+.testeiya/
+
+# Debug request/response log (re-runnable .http; contains live tokens)
+log/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+# ...but keep the committed template (root .gitignore's broad `.env*` hides it)
+!.env.example
+
+# Testeiya context data
+# .testeiya-context/

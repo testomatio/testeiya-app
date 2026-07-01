@@ -61,15 +61,15 @@ const config = {
     // Paths are <source on disk> : <destination in bundle>.
     copy: {
       out: "out",
-      // Ship testeiya's full node_modules so the externalized imports above
-      // resolve, and so the agent's dynamic require()/readFile/subprocess loads
-      // (@testomatio/skills SKILL.md files, @testomatio/mcp bin, check-tests)
-      // find their packages at runtime.
-      "testeiya/node_modules": "node_modules",
+      // Ship the cli package's full node_modules so the externalized imports
+      // above resolve, and so the agent's dynamic require()/readFile/subprocess
+      // loads (@testomatio/skills SKILL.md files, @testomatio/mcp bin,
+      // check-tests) find their packages at runtime.
+      "cli/node_modules": "node_modules",
       // @oh-my-pi/pi-natives is bundled INTO index.js (not externalized), so its
       // loader resolves the prebuilt addon at import.meta.dir/../native i.e.
       // Resources/app/native/. Ship the .node files there so the loader finds them.
-      "testeiya/node_modules/@oh-my-pi/pi-natives/native": "native",
+      "cli/node_modules/@oh-my-pi/pi-natives/native": "native",
     },
     mac: {
       // Enable once Apple Developer ID + notarization credentials are wired up.

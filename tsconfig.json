@@ -32,7 +32,7 @@
   ],
   "exclude": [
     "node_modules",
-    "testeiya",
+    "cli",
     "src/bun",
     "electrobun.config.ts",
     "out",

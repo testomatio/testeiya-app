@@ -2,13 +2,13 @@
 set -euo pipefail
 
 if [ "${CI:-}" = "true" ]; then
-  (cd testeiya && bun install --frozen-lockfile)
+  (cd cli && bun install --frozen-lockfile)
 else
   if command -v bun >/dev/null 2>&1; then
-    (cd testeiya && bun install)
+    (cd cli && bun install)
   else
-    (cd testeiya && npm install)
+    (cd cli && npm install)
   fi
 fi
 
-find testeiya/node_modules -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+find cli/node_modules -type l ! -exec test -e {} \; -delete 2>/dev/null || true

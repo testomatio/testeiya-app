@@ -6,18 +6,18 @@ It runs as a **desktop app** (Windows, macOS, Linux) and as a **web app** from t
 
 ![Testeiya](docs/screenshot.png)
 
-## Two repos: the App and the Agent
+## One repo, two packages
 
-Testeiya is split into two repositories:
+Testeiya ships two independently versioned packages from this single repository:
 
-| | Repo | What it is |
+| | Location | What it is |
 |---|---|---|
-| **Testeiya App** | this repo (`testomatio/testeiya-app`) | The chat UI and the desktop/web shell — what you see and click. |
-| **Testeiya Agent** | [`testomatio/testclaw`](https://github.com/testomatio/testclaw) | The agent brain (LLM, MCP servers, QA skills). Lives here as the `testeiya/` **git submodule**. |
+| **Testeiya App** | repo root (`testeiya-app`) | The chat UI and the desktop/web shell — what you see and click. Released as the desktop installers. |
+| **Testeiya CLI** | [`cli/`](cli/) (`testeiya` on npm) | The agent brain (LLM, MCP servers, QA skills) plus the unified Bun app-server. Published to npm; the App imports its `app-server.ts` as the backend. |
 
-> **Internal note:** **TestClaw** is the Agent's working codename — for internal use only. **Never use "TestClaw" in anything public.** Publicly the product is **Testeiya** (App + Agent).
+> **Internal note:** **TestClaw** was the Agent's working codename — for internal use only. **Never use "TestClaw" in anything public.** Publicly the product is **Testeiya** (App + CLI).
 
-The App can't run without the Agent, so the steps below pull both for you.
+The App's whole backend is the `cli/` package's `app-server.ts`, so the two are always built together.
 
 ## Quick start
 
@@ -32,18 +32,15 @@ That's all — Bun is the only runtime you need.
 
 ### 2. Get the code
 
-Clone with `--recursive` so the Agent comes along:
-
 ```bash
-git clone --recursive git@github.com:testomatio/testeiya-app.git
+git clone git@github.com:testomatio/testeiya-app.git
 cd testeiya-app
 ```
 
 ### 3. Install
 
 ```bash
-bun install                       # also fetches the Agent (submodule) automatically
-bun run update                    # install everything
+bun install                       # App deps + the cli/ package deps (via postinstall)
 ```
 
 ### 4. Start the app
@@ -98,19 +95,22 @@ bun run desktop:release  # stable build → installers in artifacts/
 ### Releasing (GitHub Actions)
 
 Publishing a **GitHub Release** (tag `vX.Y.Z`) triggers
-[`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the desktop
-app on Windows, macOS (arm64), and Linux runners and attaches the installers to the
-Release. The version is taken from the tag. Builds are **unsigned** (expect Gatekeeper /
-SmartScreen warnings on first launch).
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which runs **two pipelines
+in parallel**, both taking their version from the tag:
 
-The pipeline needs a repo secret **`PRIVATE_REPOS_TOKEN`** — a PAT with read access to the
-private `testomatio/testclaw` (the `testeiya` submodule) and `testomatio/skills` deps.
+- **desktop** — builds the desktop app on Windows, macOS (arm64), and Linux runners and
+  attaches the installers to the Release. Builds are **unsigned** (expect Gatekeeper /
+  SmartScreen warnings on first launch).
+- **publish-cli** — publishes the [`cli/`](cli/) package (`testeiya`) to npm.
+
+The CLI publish step needs a repo secret **`NPM_TOKEN`** (an npm automation token with
+publish rights for the `testeiya` package).
 
 ### Serve the built web app (no Electrobun)
 
 ```bash
-bun run build                       # static export → out/
-cd testeiya && bun run serve:app    # serve out/ + API + WS on one port
+bun run build                   # static export → out/
+cd cli && bun run serve:app     # serve out/ + API + WS on one port
 ```
 
 ## Configure with `.env`
@@ -147,7 +147,7 @@ See [All environment variables](#all-environment-variables) for the full list.
 
 ## How it works
 
-One Bun server (`testeiya/src/app-server.ts`, from the Agent submodule) is the whole backend — it serves the UI, the HTTP API, and the agent WebSocket on a single origin:
+One Bun server (`cli/src/app-server.ts`, from the CLI package) is the whole backend — it serves the UI, the HTTP API, and the agent WebSocket on a single origin:
 
 ```
 ┌─────────────────────────── Bun app-server (one origin) ───────────────────────────┐
@@ -160,20 +160,12 @@ One Bun server (`testeiya/src/app-server.ts`, from the Agent submodule) is the w
 - **Desktop:** an Electrobun window points at the server running on a local port.
 - **Web:** the same UI in a browser (or embedded as an iframe in Testomat.io).
 
-### Updating the Agent
+### The Agent lives under `cli/`
 
-The Agent (`testeiya/` submodule) ships fixes, new skills, and model updates on its own schedule. **Run this regularly to keep your Agent current:**
-
-```bash
-bun run update
-```
-
-It pulls the latest Agent from [`testomatio/testclaw`](https://github.com/testomatio/testclaw) (`master`) and refreshes its dependencies. Make a habit of running it — at least whenever you `git pull` the App.
-
-To pin the App to the updated Agent for everyone else, commit the bumped pointer:
+The Agent (the `cli/` package — LLM wiring, MCP servers, QA skills, and the app-server) is part of this repo, so a plain `git pull` keeps it current. After pulling, refresh its dependencies:
 
 ```bash
-git add testeiya && git commit -m "chore: bump Testeiya Agent"
+bun install            # postinstall reinstalls the cli/ package deps too
 ```
 
 ## Workspaces and projects
@@ -225,7 +217,7 @@ curl http://localhost:3050/api/agent/<sessionId>
 
 ### LLM provider
 
-Choose your provider and model in the app's **Settings**, or set defaults in `testeiya/testeiya.config.json` (or `~/.testeiya/config.json`):
+Choose your provider and model in the app's **Settings**, or set defaults in `cli/testeiya.config.json` (or `~/.testeiya/config.json`):
 
 ```json
 {
