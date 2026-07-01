@@ -33,12 +33,19 @@ state: ~/.testeiya/{sessions.json, auth.json, config.json}, os.tmpdir()/testeiya
 
 ## Run modes
 
+Testeiya has **three runnable surfaces**, all driven by the same `cli/` agent core:
+
+- **Desktop** — Electrobun native window (`npm run desktop:dev`). Boots `app-server.ts` on a random free localhost port and opens a `BrowserWindow` at it.
+- **Web** — the same UI in a browser. Dev: `npm run dev` (UI :3050 + agent server :3210). Production: build the static UI, then `cd cli && bun run serve:app` serves UI + API + WS on one origin (`PORT`, default 3050).
+- **CLI** — a standalone **terminal agent** (`cd cli && bun src/cli.ts`; published to npm as `testeiya`). No GUI, no HTTP server — it runs the agent in the current working directory.
+
 | Command | What it does | Use for |
 |---|---|---|
-| `npm run dev` | `next dev` (UI :3050, **hot reload**) + the unified `app-server.ts` on :3210 (`/api/*` + WS); `/api` proxied, WS direct | **Fast day-to-day UI/feature work** |
-| `npm run build` | `NEXT_EXPORT=1 next build` → static UI in `out/` | Produce the static UI (serve with `cd cli && npm run serve:app`) |
+| `npm run dev` | `next dev` (UI :3050, **hot reload**) + the unified `app-server.ts` on :3210 (`/api/*` + WS); `/api` proxied, WS direct | **Fast day-to-day UI/feature work** (web) |
+| `npm run build` | `NEXT_EXPORT=1 next build` → static UI in `out/` | Produce the static UI (serve with `cd cli && bun run serve:app`) |
 | `npm run desktop:dev` | `NEXT_EXPORT=1 next build` → `electrobun dev` (native window) | Testing the real desktop shell |
-| `npm run desktop:build` | `NEXT_EXPORT=1 next build` → `electrobun build` (installers) | Shipping |
+| `npm run desktop:build` | `NEXT_EXPORT=1 next build` → `electrobun build` (installers) | Shipping the desktop app |
+| `cd cli && bun src/cli.ts` | The standalone **terminal CLI** agent (no UI/server); reads a provider key from env and runs in the cwd | Terminal / CI agent use |
 
 > The agent server **must** be `app-server.ts` (`testeiya`'s `serve:app`) — it serves `/api/*` + the WS upgrade. The old `server.ts` was WS-only and answered every REST call with `426 Upgrade Required`; its `serve` script has been removed. `npm run dev` wires the correct pair.
 

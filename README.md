@@ -2,7 +2,7 @@
 
 **Testeiya** is an AI assistant for QA. Chat with it to analyze your test suites, find coverage gaps, review test quality, and create or improve test cases — across your Testomat.io projects or any local folder.
 
-It runs as a **desktop app** (Windows, macOS, Linux) and as a **web app** from the same codebase.
+It runs **three ways** from one codebase — a **desktop app** (Windows, macOS, Linux), a **web app** in the browser, and a **terminal CLI** (`testeiya`).
 
 ![Testeiya](docs/screenshot.png)
 
@@ -57,14 +57,26 @@ Or run the **desktop app** (a native window):
 bun run desktop:dev
 ```
 
-On first launch, open **Settings (⚙️)** and paste your AI provider key — Testeiya works with OpenAI, Anthropic, OpenRouter, and more. Then start chatting about your tests.
+Or the **CLI** (a terminal agent — no browser):
 
-## Web app vs desktop app
+```bash
+export OPENROUTER_API_KEY=sk-or-...   # any provider key works
+cd cli && bun src/cli.ts
+```
 
-Same UI either way — the difference is how Testeiya reaches your files:
+On first launch of the desktop/web app, open **Settings (⚙️)** and paste your AI provider key — Testeiya works with OpenAI, Anthropic, OpenRouter, and more. Then start chatting about your tests.
 
-- **Desktop app** — has **native filesystem access**. Use the in-app **Open folder** dialog to point Testeiya at any directory; it reads and writes files directly. Best for working against a local repo.
-- **Web app** — runs in a browser, so there's **no native folder picker**. Give it a folder up front via the `TESTEIYA_WORKSPACE` setting (see below), or connect a Testomat.io project from the UI (which creates its own workspace).
+## Desktop, web, or CLI
+
+Three ways to run Testeiya, all from this repo:
+
+| Mode | What it is | Best for |
+|---|---|---|
+| **Desktop** | Native window (Electrobun) with **native filesystem access** — the in-app **Open folder** dialog points Testeiya at any directory and it reads/writes files directly. | Working against a local repo on your machine. |
+| **Web** | The same chat UI in a browser. No native folder picker — give it a folder via `TESTEIYA_WORKSPACE`, or connect a Testomat.io project from the UI (which creates its own workspace). | Fast dev-loop, or embedding the UI (iframe) in Testomat.io. |
+| **CLI** | A **terminal agent** (`testeiya`) — the same agent brain with no GUI, running in the current directory. | Terminal / CI workflows and quick one-off analysis. |
+
+Desktop and Web share the exact same UI and backend (`cli/`'s `app-server.ts`); the CLI is that same agent brain driven straight from the terminal.
 
 ## Run modes
 
@@ -91,6 +103,24 @@ bun run desktop:release  # stable build → installers in artifacts/
 > `bun run desktop:build` is a **dev** build (`--env=dev`) used for local iteration — it
 > does **not** produce installers. Use `desktop:release` for distributables.
 > Electrobun builds for the **host platform only** (no cross-compile).
+
+### CLI (terminal agent)
+
+Run the agent straight from the terminal — no browser, no window. It works in the directory you launch it from:
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...   # or any provider key you configured
+cd cli && bun src/cli.ts              # or: bun run start
+```
+
+Or install it globally from npm (requires [Bun](https://bun.sh) on your PATH):
+
+```bash
+npm install -g testeiya
+testeiya                              # runs in the current directory
+```
+
+See [`cli/README.md`](cli/README.md) for provider/config options.
 
 ### Releasing (GitHub Actions)
 
