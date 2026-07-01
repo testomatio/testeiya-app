@@ -54,6 +54,7 @@ import {
   sessionDelete,
 } from "./api/sessions.js";
 import { openExternal } from "./api/open-external.js";
+import { clientLog } from "./api/client-log.js";
 import { debugStream } from "./api/debug-stream.js";
 import {
   playwrightOpen,
@@ -299,6 +300,9 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   }
   if (pathname === "/api/playwright/incognito" && method === "POST") {
     return playwrightIncognito(req);
+  }
+  if (pathname === "/api/client-log" && method === "POST") {
+    return clientLog(req);
   }
 
   return notFound("Unknown API route");

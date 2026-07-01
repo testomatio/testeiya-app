@@ -10,6 +10,7 @@
  * static-dir resolution and bundled-dependency layout below are best-effort
  * and may need adjustment once the real bundle layout is confirmed.
  */
+import { logPath } from "./logger";
 import { BrowserWindow } from "electrobun/bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -46,6 +47,8 @@ function resolveStaticDir(): string {
   return candidates[candidates.length - 1];
 }
 
+console.log(`[electrobun] logging to ${logPath}`);
+
 const server = startAppServer({ port: 0, staticDir: resolveStaticDir() });
 const url = `http://127.0.0.1:${server.port}/`;
 console.log(`[electrobun] app-server ready at ${url}`);
@@ -60,5 +63,10 @@ const win = new BrowserWindow({
     y: 0,
   },
 });
+
+if (process.env.TESTEIYA_DEVTOOLS === "1") {
+  console.log("[electrobun] opening webview DevTools (TESTEIYA_DEVTOOLS=1)");
+  win.webview?.openDevTools();
+}
 
 export { win };
