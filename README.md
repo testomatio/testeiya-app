@@ -101,10 +101,14 @@ in parallel**, both taking their version from the tag:
 - **desktop** — builds the desktop app on Windows, macOS (arm64), and Linux runners and
   attaches the installers to the Release. Builds are **unsigned** (expect Gatekeeper /
   SmartScreen warnings on first launch).
-- **publish-cli** — publishes the [`cli/`](cli/) package (`testeiya`) to npm.
+- **publish-cli** — publishes the [`cli/`](cli/) package (`testeiya`) to npm with
+  `npm publish --provenance`.
 
-The CLI publish step needs a repo secret **`NPM_TOKEN`** (an npm automation token with
-publish rights for the `testeiya` package).
+No `NPM_TOKEN` is needed: the CLI publishes via **npm Trusted Publishing** (OIDC), so the
+job authenticates with the GitHub `id-token` and attaches build provenance. This requires a
+one-time setup on npmjs.com — configure `testeiya` with a trusted publisher pointing at this
+repo's `release.yml` workflow. The dist-tag is derived from the release tag
+(`alpha`/`beta`/`rc`, or `latest` for a normal release).
 
 ### Serve the built web app (no Electrobun)
 
