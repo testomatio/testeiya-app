@@ -23,6 +23,8 @@ export interface TreeNode {
   anchor?: string;
   /** `@S…` when the file/test belongs to a suite that exists on Testomat.io. */
   suiteId?: string;
+  /** Emoji from the `<!-- suite` block, shown as the suite's tree icon. */
+  emoji?: string;
   /** Set when the file differs from the last Testomat.io sync (un-pushed). */
   status?: FileStatus;
   children?: TreeNode[];
@@ -35,6 +37,14 @@ export interface WorkspaceProjectMeta {
   title?: string;
 }
 
+export type WorkspaceType = "manual" | "automated" | "mixed" | "code" | "files";
+
+/** One selectable tree view: a type mapped to its dir (`""` = root, else `.testeiya/<sub>`). */
+export interface WorkspaceTypeEntry {
+  type: WorkspaceType;
+  dir: string;
+}
+
 /** GET /api/files/tree response: the tree plus workspace classification. */
 export interface WorkspaceTree {
   cwd: string;
@@ -45,6 +55,12 @@ export interface WorkspaceTree {
   manualTestsDir: string | null;
   isProject: boolean;
   project: WorkspaceProjectMeta | null;
+  /** Root workspace classification. */
+  type?: WorkspaceType;
+  /** Selectable tree views; a toggle is shown when more than one. */
+  types?: WorkspaceTypeEntry[];
+  /** The view the server actually applied (may differ from a stale request). */
+  activeType?: WorkspaceType;
 }
 
 export type SearchScope = "manual" | "all";
@@ -105,6 +121,23 @@ export interface CurrentProject {
   runsCount: number | null;
   plansCount: number | null;
   requirementsCount: number | null;
+}
+
+/** Project configuration from `GET /api/v2/{project_id}/info` (raw API shape). */
+export interface ProjectInfo {
+  title: string;
+  project_id: string;
+  framework: string | null;
+  language: string | null;
+  status: string | null;
+  repository_url: string | null;
+  artifacts_storage_enabled: boolean;
+  environments: string[];
+  labels: { title: string; slug: string }[];
+  tags: string[];
+  subscription: string | null;
+  features: string[];
+  ci_profiles: unknown[];
 }
 
 export interface TestomatioAuthState {
@@ -206,8 +239,10 @@ export interface LoginState {
   error?: string | null;
 }
 
-/** A bundled agent skill, as listed by `GET /api/skills`. */
+/** An agent skill, as listed by `GET /api/skills`. */
 export interface SkillInfo {
   name: string;
   description: string;
+  source?: string;
+  category?: string;
 }

@@ -57,6 +57,7 @@ export async function workspaceOpen(req: Request): Promise<Response> {
     cwd: abs,
     promptContext: `The workspace is a local directory: ${abs}. Explore it with read/find/grep/ls to understand the project, and edit files there when asked.`,
     projects: [],
+    trusted: true,
   });
 
   return Response.json({ sessionId, cwd: abs });
@@ -95,6 +96,7 @@ export async function workspaceDefault(): Promise<Response> {
     cwd: abs,
     promptContext: `The workspace is a local directory: ${abs}. Explore it with read/find/grep/ls to understand the project, and edit files there when asked.`,
     projects: [],
+    trusted: true,
   });
   return Response.json({ sessionId, cwd: abs });
 }

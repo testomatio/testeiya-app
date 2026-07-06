@@ -69,6 +69,7 @@ export async function main(_args: string[]): Promise<void> {
       mode: "tui",
       tokens: sessionTokens,
       backendUrl: sessionBackendUrl,
+      trusted: true,
     });
   } catch (err: any) {
     console.error(chalk.red(`Error: ${err.message}`));

@@ -72,11 +72,16 @@ function isReadOnlyBash(command: string): boolean {
   return false;
 }
 
-export function createPermissionExtension(config: TesteiyaConfig, cwd: string): ExtensionFactory {
-  // Managed per-project workspaces (~/.testeiya/workspaces/*) are Testeiya-owned
-  // pulled markdown, not the user's source — grant full access there and keep the
-  // read-only gating only for folders the user opened.
-  const fullAccess = isManagedWorkspace(cwd);
+export function createPermissionExtension(
+  config: TesteiyaConfig,
+  cwd: string,
+  trusted = false
+): ExtensionFactory {
+  // Grant full access when the workspace is Testeiya-owned pulled markdown
+  // (~/.testeiya/workspaces/*) OR the user explicitly opened this folder (the
+  // folder picker, TESTEIYA_WORKSPACE, or the terminal CLI's own cwd). The
+  // read-only gating only guards folders the user did not deliberately choose.
+  const fullAccess = trusted || isManagedWorkspace(cwd);
   return (pi) => {
     pi.on("tool_call", async (event: any, _ctx: any) => {
       if (fullAccess) {

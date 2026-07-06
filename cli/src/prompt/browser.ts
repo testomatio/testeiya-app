@@ -7,6 +7,7 @@ You can start and drive a real browser yourself via the **playwright-cli** skill
 
 Use the browser to:
 
+- **Investigate the target page before writing browser automation** — open the exact page/feature under test, walk the flow, and read the real selectors/texts/URLs from the live DOM. Automation written from reading code or manual docs alone is guesswork; verify against the running app first.
 - **Execute manual \`*.test.md\` cases** live — perform each step and confirm the expected result before marking anything passed.
 - Assist user passing manual runs by navigating to the desired page and capture browser state
 - **Reproduce and investigate bugs**, capturing screenshots/snapshots as evidence.

@@ -1,6 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
+@import "katex/dist/katex.min.css";
+
+/* Streamdown renders its markdown (code, mermaid, math, tables) with Tailwind
+ * utility classes shipped inside its own dist — Tailwind must scan those files
+ * or block-only classes like `pointer-events-auto` (the mermaid/code toolbars)
+ * and `min-h-28` (the diagram body) are never generated, leaving the toolbar
+ * click-through and the diagram cramped. */
+@source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@streamdown/code/dist/*.js";
+@source "../node_modules/@streamdown/cjk/dist/*.js";
+@source "../node_modules/@streamdown/math/dist/*.js";
+@source "../node_modules/@streamdown/mermaid/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -353,6 +366,16 @@
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
+}
+
+/* Streamdown mermaid diagrams render small and centered by default (mermaid
+ * caps the SVG at its intrinsic width). Let them fill the message width so the
+ * initial render is legible; the toolbar's zoom / fullscreen handle anything
+ * larger. Non-fullscreen only — the fullscreen portal sizes itself. */
+[data-streamdown="mermaid-block"] svg {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
 }
 
 /* Map Tailwind size-* to font-size for icon spans */

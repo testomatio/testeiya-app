@@ -13,6 +13,9 @@
   },
   "files": [
     "src",
+    "skills",
+    "skills.yaml",
+    "skills.lock.json",
     "testeiya.config.json",
     "README.md"
   ],
@@ -25,7 +28,10 @@
     "start": "bun src/cli.ts",
     "dev": "bun src/cli.ts",
     "serve:app": "bun src/app-server.ts",
-    "serve:app:watch": "bun --watch src/app-server.ts"
+    "serve:app:watch": "bun --watch src/app-server.ts",
+    "setup:env": "bun scripts/setup-env.ts",
+    "debug:trace": "bun scripts/langfuse-trace.ts",
+    "debug:snapshot": "bun scripts/debug-snapshot.ts"
   },
   "keywords": [
     "testing",
@@ -45,7 +51,6 @@
     "@opentelemetry/sdk-node": "^0.218.0",
     "@playwright/cli": "^0.1.13",
     "@testomatio/mcp": "^2.1.1",
-    "@testomatio/skills": "github:testomatio/skills#821d51b05c52888bda7bf5a812aa63dca251cd67",
     "check-tests": "^0.20.0",
     "dedent": "^1.7.2",
     "yaml": "^2.9.0"

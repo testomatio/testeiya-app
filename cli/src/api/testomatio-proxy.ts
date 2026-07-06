@@ -25,6 +25,7 @@ const ALLOWED_RESOURCES = new Set([
   "testruns",
   "rungroups",
   "issues", // backs the UI "Requirements" view
+  "info", // project configuration (subscription, features, framework, …)
 ]);
 
 const WRITABLE_RESOURCES = new Set(["testruns", "runs"]);

@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { InputGroupButton } from "@/components/ui/input-group";
 import {
   DropdownMenu,
@@ -10,6 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSkillsService } from "@/lib/services/StoreProvider";
+import type { SkillInfo } from "@/lib/services/types";
+import { Icon } from "@/lib/icons";
+import { cn } from "@/lib/utils";
 import { observer } from "mobx-react-lite";
 
 export const SkillsMenu = observer(function SkillsMenu({
@@ -45,19 +49,72 @@ export const SkillsMenu = observer(function SkillsMenu({
             {skillsService.loading ? "Loading…" : "No skills available"}
           </div>
         )}
-        {skillsService.skills.map((skill) => (
-          <DropdownMenuItem
-            key={skill.name}
-            onClick={() => onInsert(skill.name)}
-            className="flex flex-col items-start gap-0.5"
-          >
-            <span className="font-medium">{skill.name}</span>
-            <span className="line-clamp-2 text-muted-foreground text-xs">
-              {skill.description}
-            </span>
-          </DropdownMenuItem>
+        {groupByCategory(skillsService.skills).map((group) => (
+          <Fragment key={group.category}>
+            <DropdownMenuLabel className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              {group.category}
+            </DropdownMenuLabel>
+            {group.skills.map((skill) => (
+              <DropdownMenuItem
+                key={skill.name}
+                onClick={() => onInsert(skill.name)}
+                className="flex flex-col items-start gap-0.5"
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="font-medium">{skill.name}</span>
+                  {skill.source === "custom" && (
+                    <span className="rounded bg-muted px-1 py-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+                      custom
+                    </span>
+                  )}
+                </span>
+                <span className="line-clamp-2 text-muted-foreground text-xs">
+                  {skill.description}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </Fragment>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => void skillsService.openFolder()}>
+          <Icon name="folder_open" className="size-4" />
+          Open skills folder
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          closeOnClick={false}
+          onClick={() => void skillsService.refresh()}
+        >
+          <Icon
+            name="refresh"
+            className={cn("size-4", skillsService.loading && "animate-spin")}
+          />
+          Refresh
+        </DropdownMenuItem>
+        <div className="px-1.5 py-1 text-muted-foreground text-xs">
+          Drop or symlink a skill folder here, then Refresh.
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 });
+
+function groupByCategory(skills: SkillInfo[]): { category: string; skills: SkillInfo[] }[] {
+  const order: string[] = [];
+  const byCategory = new Map<string, SkillInfo[]>();
+  for (const skill of skills) {
+    const category = skill.category || "Other";
+    if (!byCategory.has(category)) {
+      byCategory.set(category, []);
+      order.push(category);
+    }
+    byCategory.get(category)!.push(skill);
+  }
+  order.sort((a, b) => categoryRank(a) - categoryRank(b));
+  return order.map((category) => ({ category, skills: byCategory.get(category)! }));
+}
+
+function categoryRank(category: string): number {
+  if (category === "Custom") return 2;
+  if (category === "Other") return 1;
+  return 0;
+}

@@ -6,6 +6,8 @@ import type {
   TreeNode,
   WorkspaceTree,
   WorkspaceProjectMeta,
+  WorkspaceType,
+  WorkspaceTypeEntry,
   SyncAction,
   SyncResult,
   FileStatus,
@@ -50,6 +52,12 @@ export class WorkspaceService {
   manualTestsDir: string | null = null;
   isProject = false;
   project: WorkspaceProjectMeta | null = null;
+
+  // Type filtering: the root classification, the selectable views (a toggle is
+  // shown when more than one), and the active view (null → the server default).
+  workspaceType: WorkspaceType | null = null;
+  types: WorkspaceTypeEntry[] = [];
+  activeType: WorkspaceType | null = null;
 
   // Sync (check-tests pull/push) state.
   syncing: SyncAction | null = null;
@@ -195,6 +203,13 @@ export class WorkspaceService {
     return filterChangedTree(this.tree, this.changedFiles);
   }
 
+  setActiveType(type: WorkspaceType) {
+    if (type === this.activeType) return;
+    this.activeType = type;
+    this.seeded = false;
+    void this.loadTree();
+  }
+
   // --- file tree ---
   async loadTree() {
     const sessionId = this.root.sessionId;
@@ -202,15 +217,18 @@ export class WorkspaceService {
     this.treeLoading = true;
     this.treeError = null;
     try {
-      const data = await getJson<WorkspaceTree>(
-        `/api/files/tree?session=${encodeURIComponent(sessionId)}`
-      );
+      let url = `/api/files/tree?session=${encodeURIComponent(sessionId)}`;
+      if (this.activeType) url += `&type=${this.activeType}`;
+      const data = await getJson<WorkspaceTree>(url);
       runInAction(() => {
         this.tree = data.nodes ?? [];
         this.changedFiles = this.mergedStatuses();
         this.manualTestsDir = data.manualTestsDir ?? null;
         this.isProject = data.isProject ?? false;
         this.project = data.project ?? null;
+        this.workspaceType = data.type ?? null;
+        this.types = data.types ?? [];
+        this.activeType = data.activeType ?? this.activeType;
         this.seedExpansion();
         this.scheduleEmptyRetry();
       });
@@ -444,16 +462,21 @@ export class WorkspaceService {
   /**
    * Cold-load entry for web mode: if the server has a `TESTEIYA_WORKSPACE`
    * configured, switch to its session. No-op when a session is already active
-   * or none is configured.
+   * or none is configured. Returns whether a workspace was opened so the caller
+   * can skip the last-project fallback (the env var takes precedence).
    */
-  async openDefault() {
-    if (this.root.sessionId) return;
+  async openDefault(): Promise<boolean> {
+    if (this.root.sessionId) return false;
     try {
       const data = await getJson<{ sessionId: string | null }>("/api/workspace/default");
-      if (data.sessionId && !this.root.sessionId) this.root.navigate(data.sessionId);
+      if (data.sessionId && !this.root.sessionId) {
+        this.root.navigate(data.sessionId);
+        return true;
+      }
     } catch {
       // best-effort — no default workspace configured.
     }
+    return false;
   }
 
   // --- internals ---
@@ -516,6 +539,9 @@ export class WorkspaceService {
     this.manualTestsDir = null;
     this.isProject = false;
     this.project = null;
+    this.workspaceType = null;
+    this.types = [];
+    this.activeType = null;
     this.syncError = null;
     this.awaitingTests = false;
     this.pendingDelete = null;
@@ -589,6 +615,8 @@ export class WorkspaceService {
     const s = new Set<string>();
     for (const n of this.tree) if (n.kind === "folder") s.add(n.path);
     expandAncestors(s, this.manualTestsDir);
+    const active = this.types.find((t) => t.type === this.activeType);
+    expandAncestors(s, active?.dir ?? null);
     this.expanded = s;
     this.seeded = true;
   }

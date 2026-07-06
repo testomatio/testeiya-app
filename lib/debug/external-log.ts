@@ -15,6 +15,7 @@ const SKIP_EVENTS = new Set(["text-delta", "reasoning-delta", "ping"]);
 
 let sink: Sink | null = null;
 let seq = 0;
+let consoleCaptured = false;
 
 export function setExternalLogSink(next: Sink | null): void {
   sink = next;
@@ -78,6 +79,52 @@ export function logAgentEvent(data: Record<string, unknown>): void {
   });
 }
 
+/*
+ * Capture `console.error`/`console.warn` and uncaught errors into the same log
+ * so the Debug panel and the server-bound report see them. Runs once, client
+ * only. Console output is forwarded to the original console; the `console`
+ * channel is skipped by `logToConsole` so it isn't printed (and re-captured)
+ * twice.
+ */
+export function initConsoleCapture(): void {
+  if (consoleCaptured || typeof window === "undefined") return;
+  consoleCaptured = true;
+  for (const level of ["error", "warn"] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...args);
+      record({
+        kind: "event",
+        channel: "console",
+        name: level,
+        summary: consoleSummary(args),
+        ok: level !== "error",
+        detail: truncate(consoleDetail(args)),
+      });
+    };
+  }
+  window.addEventListener("error", (e) =>
+    record({
+      kind: "event",
+      channel: "console",
+      name: "uncaught",
+      summary: e.message,
+      ok: false,
+      detail: truncate(errorDetail(e.error, `${e.filename}:${e.lineno}:${e.colno}`)),
+    })
+  );
+  window.addEventListener("unhandledrejection", (e) =>
+    record({
+      kind: "event",
+      channel: "console",
+      name: "unhandledrejection",
+      summary: e.reason instanceof Error ? e.reason.message : String(e.reason),
+      ok: false,
+      detail: truncate(errorDetail(e.reason)),
+    })
+  );
+}
+
 function recordRequest(
   partial: Omit<RequestLogEntry, "id" | "ts" | "kind">
 ): void {
@@ -93,6 +140,7 @@ function record(partial: WithoutMeta<DebugLogEntry>): void {
 
 function logToConsole(e: DebugLogEntry): void {
   if (e.kind === "event") {
+    if (e.channel === "console") return;
     console.log(`[agent] ${e.name}${e.summary ? ` ${e.summary}` : ""}`);
     return;
   }
@@ -118,6 +166,29 @@ function str(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value === null || value === undefined) return null;
   return String(value);
+}
+
+function consoleSummary(args: unknown[]): string {
+  const first = args[0];
+  if (typeof first === "string") return first.slice(0, 200);
+  if (first instanceof Error) return first.message;
+  return consoleDetail(args).slice(0, 200);
+}
+
+function consoleDetail(args: unknown[]): string {
+  return args.map(formatArg).join(" ");
+}
+
+function errorDetail(error: unknown, where?: string): string {
+  const head = where ? `${where}\n` : "";
+  if (error instanceof Error) return `${head}${error.stack ?? error.message}`;
+  return `${head}${formatArg(error)}`;
+}
+
+function formatArg(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return `${value.message}\n${value.stack ?? ""}`;
+  return safeJson(value) ?? String(value);
 }
 
 function safeJson(value: unknown): string | null {
@@ -167,10 +238,14 @@ export interface RequestLogEntry {
 
 export interface EventLogEntry {
   kind: "event";
-  channel: "agent";
+  /**
+   * `agent` = pi/WS event; `console` = captured console / uncaught error;
+   * `check-tests` = a server-side `check-tests` sync run (from the SSE feed).
+   */
+  channel: "agent" | "console" | "check-tests";
   id: number;
   ts: number;
-  /** The pi/WS event `type` (e.g. `tool-input-available`). */
+  /** The pi/WS event `type` (e.g. `tool-input-available`) or console level. */
   name: string;
   /** Short inline hint shown on the row (tool name, model, …). */
   summary: string | null;

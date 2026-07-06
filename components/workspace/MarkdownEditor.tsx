@@ -18,6 +18,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";
 import { OverTypeEditor } from "./OverTypeEditor";
+import { CodeEditor } from "./CodeEditor";
 
 type Size = "collapsed" | "default" | "expanded";
 type EditorMode = "rich" | "markdown";
@@ -75,6 +76,7 @@ export function MarkdownEditor({
   contentRef.current = content;
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const isMarkdown = /\.(md|markdown)$/i.test(path);
 
   // Load when path changes (or when initialContent not provided).
   useEffect(() => {
@@ -194,7 +196,10 @@ export function MarkdownEditor({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {/* Editor mode: Rich (BlockNote blocks) ↔ Markdown (OverType raw). */}
+          {/* Editor mode: Rich (BlockNote blocks) ↔ Markdown (OverType raw).
+              Only markdown files get the block editor; other files fall back to
+              the code editor below. */}
+          {isMarkdown && (
           <div className="flex items-center rounded-md border p-0.5">
             <Tooltip>
               <TooltipTrigger render={
@@ -231,6 +236,7 @@ export function MarkdownEditor({
               <TooltipContent><p>Markdown editor</p></TooltipContent>
             </Tooltip>
           </div>
+          )}
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (
             <Tooltip>
@@ -302,7 +308,7 @@ export function MarkdownEditor({
             <Shimmer as="span">Loading file…</Shimmer>
           </div>
         )}
-        {!loading && mode === "rich" && (
+        {!loading && isMarkdown && mode === "rich" && (
           <BlockEditor
             value={content}
             onChange={setContent}
@@ -312,12 +318,22 @@ export function MarkdownEditor({
             onSaveShortcut={() => void saveRef.current()}
           />
         )}
-        {!loading && mode === "markdown" && (
+        {!loading && isMarkdown && mode === "markdown" && (
           <OverTypeEditor
             value={content}
             onChange={setContent}
             readOnly={readOnly || saving}
             theme={isDark ? "dark" : "light"}
+            scrollToText={scrollToText}
+            onSaveShortcut={() => void saveRef.current()}
+          />
+        )}
+        {!loading && !isMarkdown && (
+          <CodeEditor
+            value={content}
+            onChange={setContent}
+            path={path}
+            readOnly={readOnly || saving}
             scrollToText={scrollToText}
             onSaveShortcut={() => void saveRef.current()}
           />

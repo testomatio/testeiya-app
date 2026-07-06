@@ -21,7 +21,7 @@ import {
   testomatioHostPost,
 } from "./api/testomatio-auth.js";
 import { settingsGet, settingsPost } from "./api/settings.js";
-import { skillsList } from "./api/skills.js";
+import { skillsList, skillsOpen } from "./api/skills.js";
 import {
   mcpList,
   mcpToggle,
@@ -56,6 +56,10 @@ import {
 import { openExternal } from "./api/open-external.js";
 import { clientLog } from "./api/client-log.js";
 import { debugStream } from "./api/debug-stream.js";
+import { debugReport } from "./api/debug-report.js";
+import { debugSnapshot } from "./api/debug-snapshot.js";
+import { captureServerConsole } from "./debug-bus.js";
+import { writeServerInfo } from "./server-info.js";
 import {
   playwrightOpen,
   playwrightClose,
@@ -168,12 +172,21 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   if (pathname === "/api/debug/stream" && method === "GET") {
     return debugStream();
   }
+  if (pathname === "/api/debug/snapshot" && method === "GET") {
+    return debugSnapshot(req);
+  }
+  if (pathname === "/api/debug/report" && method === "POST") {
+    return debugReport(req);
+  }
   if (pathname === "/api/settings") {
     if (method === "GET") return settingsGet();
     if (method === "POST") return settingsPost(req);
   }
+  if (pathname === "/api/skills/open" && method === "POST") {
+    return skillsOpen();
+  }
   if (pathname === "/api/skills" && method === "GET") {
-    return skillsList();
+    return skillsList(req);
   }
   if (pathname === "/api/mcp/catalog" && method === "GET") {
     return mcpCatalog();
@@ -328,6 +341,9 @@ async function serveStatic(staticDir: string, pathname: string): Promise<Respons
 }
 
 function startServer(options: AppServerOptions = {}) {
+  // Mirror the server's own stdout into the debug snapshot's `server.console`.
+  captureServerConsole();
+
   // Carry over an existing ~/.testclaw state dir to ~/.testeiya (rename) before
   // any session/auth/config read or the migrated ~/.testeiya/.env is loaded.
   migrateLegacyHomeDir();
@@ -431,6 +447,15 @@ function startServer(options: AppServerOptions = {}) {
         void flushTelemetry();
       },
     },
+  });
+
+  const boundPort = server.port ?? port;
+  writeServerInfo({
+    port: boundPort,
+    pid: process.pid,
+    url: `http://${HOSTNAME}:${boundPort}`,
+    mode: options.port === 0 ? "desktop" : "web",
+    startedAt: new Date().toISOString(),
   });
 
   console.log(`Testeiya app server listening on http://${HOSTNAME}:${server.port}`);

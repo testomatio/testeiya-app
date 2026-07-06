@@ -49,7 +49,7 @@ import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
-import { Trash, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
+import { KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
@@ -538,6 +538,28 @@ const MessageItem = observer(function MessageItem({
     );
   };
 
+  const renderAsk = (tool: ToolCall): ReactNode => {
+    const q = tool.input as {
+      question?: string;
+      options?: string[];
+      multiSelect?: boolean;
+      recommended?: number[];
+    } | undefined;
+    if (!q?.question || !Array.isArray(q.options)) return null;
+    return (
+      <AskQuestionRenderer
+        key={tool.toolCallId}
+        question={q.question}
+        options={q.options}
+        multiSelect={q.multiSelect}
+        recommended={q.recommended}
+        answered={tool.state !== "input-available"}
+        selected={tool.output}
+        onPick={(opt) => onAnswer(tool.toolCallId, opt)}
+      />
+    );
+  };
+
   return (
     <Message className="max-w-[85%]" from={message.role}>
       {/* `/<skill>` command banner — shows which skill drove this reply. */}
@@ -598,6 +620,13 @@ const MessageItem = observer(function MessageItem({
       {/* Tools — rendered in tool-call order so the narrative stays coherent. */}
       {renderSegments(segments, renderRoutine, renderRender)}
 
+      {/* Answered `ask_question` — inline, above the follow-up text so the
+          agent's post-answer reply reads below the question, not above it. */}
+      {(message.tools ?? [])
+        .filter(isAskQuestion)
+        .filter((tool) => tool.state !== "input-available")
+        .map(renderAsk)}
+
       {/* Text content */}
       {message.content && (
         <MessageContent>
@@ -608,28 +637,12 @@ const MessageItem = observer(function MessageItem({
         </MessageContent>
       )}
 
-      {/* `ask_question` pinned to the bottom — the only interactive tool. */}
-      {(message.tools ?? []).filter(isAskQuestion).map((tool) => {
-        const q = tool.input as {
-          question?: string;
-          options?: string[];
-          multiSelect?: boolean;
-          recommended?: number[];
-        } | undefined;
-        if (!q?.question || !Array.isArray(q.options)) return null;
-        return (
-          <AskQuestionRenderer
-            key={tool.toolCallId}
-            question={q.question}
-            options={q.options}
-            multiSelect={q.multiSelect}
-            recommended={q.recommended}
-            answered={tool.state !== "input-available"}
-            selected={tool.output}
-            onPick={(opt) => onAnswer(tool.toolCallId, opt)}
-          />
-        );
-      })}
+      {/* Pending `ask_question` pinned to the bottom — the only interactive
+          tool; keep it reachable while it awaits an answer. */}
+      {(message.tools ?? [])
+        .filter(isAskQuestion)
+        .filter((tool) => tool.state === "input-available")
+        .map(renderAsk)}
     </Message>
   );
 });
@@ -797,19 +810,17 @@ const ChatPage = observer(function ChatPage() {
     (typeof window !== "undefined" && window.parent !== window);
   const canConnectTestomatio = !isEmbedded && !host?.projectSlug;
 
-  // Auto-restore the last opened project on a fresh load (no session) when the
-  // account is connected — orchestrated by the project service.
-  useEffect(() => {
-    if (sessionId || !canConnectTestomatio) return;
-    void project.restoreLast();
-  }, [sessionId, canConnectTestomatio, project]);
-
-  // Web mode: if the server has a TESTEIYA_WORKSPACE configured, open it on a
-  // cold load. No-op when a session exists or none is configured.
+  // Cold load (no session): a configured TESTEIYA_WORKSPACE takes precedence, so
+  // open it first and only reopen the last project when no default workspace was
+  // opened. Sequencing keeps restoreLast from clobbering the default workspace.
   useEffect(() => {
     if (sessionId) return;
-    void workspace.openDefault();
-  }, [sessionId, workspace]);
+    void (async () => {
+      const opened = await workspace.openDefault();
+      if (opened || !canConnectTestomatio) return;
+      void project.restoreLast();
+    })();
+  }, [sessionId, canConnectTestomatio, workspace, project]);
 
   const addAttachments = useCallback((files: File[]) => {
     const accepted = files.filter((file) => {
@@ -1083,11 +1094,10 @@ const ChatPage = observer(function ChatPage() {
         <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
         <WidgetPane fill>{widgetBody}</WidgetPane>
         <ChatColumn hasWidget={hasWidget}>
-          <ChatPanelHeader canCollapse={hasWidget} />
-      <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
-      {/* MCP status + Clear — shown only when there's an active chat */}
-      <div className={cn("flex items-center justify-end gap-2 px-3 pt-3", messages.length === 0 && "hidden")}>
-          {isDev && cwd && (
+          <ChatPanelHeader
+            canCollapse={hasWidget}
+            mcpStatus={
+              isDev && cwd && (
             <span className="flex items-center text-[11px] font-mono">
               {mcpLoaded && mcpTools.length > 0 && (
                 <Tooltip>
@@ -1146,30 +1156,10 @@ const ChatPage = observer(function ChatPage() {
                 </Tooltip>
               )}
             </span>
-          )}
-          {messages.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  onClick={handleClear}
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
-                  aria-label="Clear chat"
-                >
-                  <Trash className="size-3.5" />
-                  <span className="hidden sm:inline">Clear</span>
-                </Button>
-              } />
-              <TooltipContent className="flex items-center gap-2">
-                <p>New session</p>
-                <kbd className="pointer-events-none inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
-                  {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌥ Option + N" : "Alt + N"}
-                </kbd>
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+              )
+            }
+          />
+      <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
       <Conversation className={messages.length === 0 ? "flex-none" : "flex-1"}>
         <ConversationContent className="items-center">
           <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">

@@ -9,7 +9,7 @@ import {
   SessionManager,
 } from "@oh-my-pi/pi-coding-agent";
 import type { ExtensionFactory } from "@oh-my-pi/pi-coding-agent";
-import { loadTestomatioSkills, loadPlaywrightCliSkill } from "./skills.js";
+import { hasPlaywrightCli, loadBundledSkills, loadCustomSkills, dedupeSkillsByName } from "./skills.js";
 import { SOURCE_PATHS } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
 import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
 import { PROJECT_DIR, HOME_DIR } from "./project-dir.js";
@@ -79,6 +79,12 @@ export interface SessionOptions {
    * fresh conversation is created.
    */
   resumeConversationId?: string;
+  /**
+   * The user deliberately opened this workspace (folder picker,
+   * `TESTEIYA_WORKSPACE`, or the terminal CLI cwd), so the agent gets full
+   * read/write/bash access instead of the default read-only gating.
+   */
+  trusted?: boolean;
   [key: string]: unknown;
 }
 
@@ -192,27 +198,31 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     );
   }
 
-  // The bundled playwright-cli skill (browser automation) loads whenever the
-  // @playwright/cli package resolves; gate the browser guidance on its presence
-  // so the prompt never advertises a skill that isn't there.
-  const playwrightSkill = loadPlaywrightCliSkill();
-
+  // Gate the browser-automation guidance on whether the @playwright/cli tool is
+  // actually installed (the playwright-cli skill itself is vendored from GitHub).
   const systemPrompt = buildSystemPrompt({
     cwd,
     promptContext: options?.promptContext,
     tokens: options?.tokens,
     backendUrl: options?.backendUrl,
     mode: options?.mode,
-    browser: playwrightSkill.length > 0,
+    browser: hasPlaywrightCli(),
   });
 
-  // Load skills from @testomatio/skills + the bundled playwright-cli skill.
-  const skills = [...loadTestomatioSkills(), ...playwrightSkill];
+  // Load skills: the prebuilt skills vendored from GitHub into cli/skills
+  // (Testomat.io, CodeceptJS, Playwright) + the user's custom skills (global
+  // ~/.testeiya/skills and this workspace's .testeiya/skills). Deduped by name
+  // so a custom skill can override a bundled one and the SDK never receives two
+  // skills of one name.
+  const skills = dedupeSkillsByName([
+    ...loadBundledSkills(),
+    ...loadCustomSkills(cwd),
+  ]);
 
   const mode = options?.mode ?? "tui";
 
   const extensions: ExtensionFactory[] = [
-    createPermissionExtension(config, cwd) as ExtensionFactory,
+    createPermissionExtension(config, cwd, options?.trusted) as ExtensionFactory,
     createCommandsExtension(),
   ];
   let askChannel: AskChannel | undefined;

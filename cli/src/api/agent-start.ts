@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { readJson } from "../json-store.js";
+import { loggedServerFetch } from "../debug-bus.js";
 import { createSession } from "../session-store.js";
 import { PROJECT_DIR, MANUAL_TESTS_SUBDIR, WORKSPACES_DIR } from "../project-dir.js";
 import { runCheckTests } from "../check-tests.js";
@@ -11,20 +12,20 @@ import { writeProjectMeta } from "../workspace-model.js";
 
 const require = createRequire(import.meta.url);
 
-function resolveTestomatioMcpBin(): string | null {
+function resolveTestomatioMcpBin(pkg: string, binKey: string): string | null {
   const candidates = [
-    path.join(process.cwd(), "node_modules/@testomatio/mcp/package.json"),
+    path.join(process.cwd(), `node_modules/${pkg}/package.json`),
   ];
   try {
-    candidates.unshift(require.resolve("@testomatio/mcp/package.json"));
+    candidates.unshift(require.resolve(`${pkg}/package.json`));
   } catch {}
   for (const pkgPath of candidates) {
     try {
       if (!fs.existsSync(pkgPath)) continue;
-      const pkg = readJson<{ bin?: string | Record<string, string> }>(pkgPath, {});
-      const binRel = typeof pkg.bin === "string"
-        ? pkg.bin
-        : pkg.bin?.["testomatio-mcp"] ?? Object.values(pkg.bin ?? {})[0];
+      const meta = readJson<{ bin?: string | Record<string, string> }>(pkgPath, {});
+      const binRel = typeof meta.bin === "string"
+        ? meta.bin
+        : meta.bin?.[binKey] ?? Object.values(meta.bin ?? {})[0];
       if (!binRel || typeof binRel !== "string") continue;
       return path.resolve(path.dirname(pkgPath), binRel);
     } catch {
@@ -285,9 +286,19 @@ export async function createProjectSession(
     tokens[p.slug] = p.token;
   }
 
-  const mcpBin = resolveTestomatioMcpBin();
+  // An "enterprise" subscription swaps the base MCP server for the superset
+  // package that adds the analytics tools (same args/env, drop-in). Resolved
+  // per project so mixed multi-project sessions each get the right one.
+  const subscriptions = await Promise.all(
+    projects.map((p) => fetchProjectSubscription(backendUrl, p.slug, p.token))
+  );
   const mcpServers: Record<string, unknown> = {};
-  for (const p of projects) {
+  for (let i = 0; i < projects.length; i++) {
+    const p = projects[i];
+    const enterprise = (subscriptions[i] ?? "").toLowerCase() === "enterprise";
+    const pkg = enterprise ? "@testomatio/mcp-enterprise" : "@testomatio/mcp";
+    const binKey = enterprise ? "testomatio-mcp-enterprise" : "testomatio-mcp";
+    const mcpBin = resolveTestomatioMcpBin(pkg, binKey);
     const baseArgs = ["--token", p.token, "--project", p.slug];
     mcpServers[`testomatio-${p.slug}`] = mcpBin
       ? {
@@ -297,7 +308,7 @@ export async function createProjectSession(
         }
       : {
           command: "npx",
-          args: ["-y", "@testomatio/mcp@latest", ...baseArgs],
+          args: ["-y", `${pkg}@latest`, ...baseArgs],
           env: { TESTOMATIO_BASE_URL: backendUrl },
         };
   }
@@ -317,8 +328,7 @@ export async function createProjectSession(
     "utf8"
   );
   console.log(
-    `[agent/start] wrote ${PROJECT_DIR}/mcp.json with ${Object.keys(mcpServers).length} testomatio MCP server(s) to ${tempDir}` +
-      (mcpBin ? ` (local bin: ${mcpBin})` : " (fallback: npx fetch)")
+    `[agent/start] wrote ${PROJECT_DIR}/mcp.json with ${Object.keys(mcpServers).length} testomatio MCP server(s) to ${tempDir}`
   );
 
   createSession({
@@ -336,4 +346,34 @@ export async function createProjectSession(
     backendUrl,
     projects: results,
   };
+}
+
+/**
+ * Read a project's `subscription` from `GET /api/v2/{slug}/info`. Returns null
+ * on any failure so session creation falls back to the regular MCP package.
+ */
+async function fetchProjectSubscription(
+  baseUrl: string,
+  slug: string,
+  token: string
+): Promise<string | null> {
+  const url = new URL(
+    `/api/v2/${encodeURIComponent(slug)}/info`,
+    baseUrl.replace(/\/$/, "")
+  ).toString();
+  try {
+    const { res, text } = await loggedServerFetch(
+      url,
+      {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+      },
+      null
+    );
+    if (!res.ok) return null;
+    const parsed = JSON.parse(text) as { data?: { subscription?: string | null } };
+    return parsed.data?.subscription ?? null;
+  } catch {
+    return null;
+  }
 }

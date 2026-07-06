@@ -9,6 +9,7 @@ import {
 import type {
   CreatedSession,
   CurrentProject,
+  ProjectInfo,
   TestomatioAuthState,
   TestomatioProject,
 } from "./types";
@@ -37,6 +38,10 @@ export class ProjectService {
   // The project the active session is open on (from session metadata), with live
   // test/run counts. Drives the Project sidebar section.
   currentProject: CurrentProject | null = null;
+
+  // The open project's configuration from GET /api/v2/{id}/info (subscription,
+  // features, framework, labels, …). Fetched alongside the counts.
+  projectInfo: ProjectInfo | null = null;
 
   // True while the current project's counts are being fetched after a session
   // switch — drives a loading placeholder instead of a "—" flash.
@@ -308,6 +313,7 @@ export class ProjectService {
     if (!sessionId) {
       runInAction(() => {
         this.currentProject = null;
+        this.projectInfo = null;
         this.countsLoading = false;
       });
       return;
@@ -322,6 +328,7 @@ export class ProjectService {
     if (!project) {
       runInAction(() => {
         this.currentProject = null;
+        this.projectInfo = null;
         this.countsLoading = false;
       });
       return;
@@ -339,11 +346,12 @@ export class ProjectService {
       };
       this.countsLoading = true;
     });
-    const [tests, runs, plans, requirements] = await Promise.all([
+    const [tests, runs, plans, requirements, info] = await Promise.all([
       fetchTotal(sessionId, "tests"),
       fetchTotal(sessionId, "runs"),
       fetchTotal(sessionId, "plans"),
       fetchTotal(sessionId, "issues"),
+      fetchProjectInfo(sessionId),
     ]);
     runInAction(() => {
       if (this.currentProject?.id !== project.slug) return;
@@ -351,6 +359,7 @@ export class ProjectService {
       this.currentProject.runsCount = runs;
       this.currentProject.plansCount = plans;
       this.currentProject.requirementsCount = requirements;
+      this.projectInfo = info;
       this.countsLoading = false;
     });
   }
@@ -395,6 +404,19 @@ async function fetchTotal(
     const total = data.meta?.total;
     if (typeof total === "number") return total;
     return null;
+  } catch {
+    return null;
+  }
+}
+
+// Project configuration (subscription, features, …); one `{data}` JSON:API
+// envelope. Returns null on any failure (config simply absent from the store).
+async function fetchProjectInfo(sessionId: string): Promise<ProjectInfo | null> {
+  try {
+    const data = await getJson<{ data?: ProjectInfo }>(
+      `/api/testomatio/info?session=${encodeURIComponent(sessionId)}`
+    );
+    return data.data ?? null;
   } catch {
     return null;
   }

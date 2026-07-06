@@ -31,6 +31,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import { ChartRenderer } from "./chart-block";
 import { resizableTableComponents } from "./resizable-table";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -324,7 +325,13 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = {
+  cjk,
+  code,
+  math,
+  mermaid,
+  renderers: [{ language: "chart", component: ChartRenderer }],
+};
 
 const INLINE_CODE_BASE = "rounded bg-muted px-1.5 py-0.5 font-mono text-sm";
 

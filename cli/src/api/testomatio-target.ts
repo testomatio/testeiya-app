@@ -34,7 +34,17 @@ export async function resolveProjectTarget(
     if (token) return { token, baseUrl, project: meta.projectId };
   }
 
-  // 3. A folder's own `.env` carries a token but not a project id, so the v2
+  // 3. An unlinked folder, but an account is connected with a currently-selected
+  //    project: use that project's write-token + base URL. This is what makes a
+  //    plain folder sync against the connected project instead of falling back
+  //    to whatever stale token happens to sit in the folder's own `.env`.
+  if (stored?.token && stored.projectId) {
+    const baseUrl = normalizeBaseUrl(stored.baseUrl);
+    const token = await projectApiKey(stored.token, baseUrl, stored.projectId);
+    if (token) return { token, baseUrl, project: stored.projectId };
+  }
+
+  // 4. A folder's own `.env` carries a token but not a project id, so the v2
   //    REST path can't be built — usable for sync, not for a targeted delete.
   return null;
 }

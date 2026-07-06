@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { writeSyncSnapshot } from "./sync-snapshot.js";
+import { publishCheckTests } from "./debug-bus.js";
 
 const require = createRequire(import.meta.url);
 const RUN_TIMEOUT_MS = 120_000;
@@ -47,6 +48,7 @@ export async function runCheckTests(
     `[check-tests] ${action} -d ${dir} (cwd ${opts.cwd})${bin ? " [local bin]" : " [npx]"}`
   );
 
+  const started = Date.now();
   return new Promise<RunCheckTestsResult>((resolve) => {
     const child = spawn(command, args, { cwd: opts.cwd, env });
     let output = "";
@@ -63,11 +65,20 @@ export async function runCheckTests(
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      resolve({ ok: false, action, dir, output: `${output}\n${err.message}`.trim() });
+      const out = `${output}\n${err.message}`.trim();
+      publishCheckTests({ action, dir, code: null, output: out, durationMs: Date.now() - started });
+      resolve({ ok: false, action, dir, output: out });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       console.log(`[check-tests] ${action} exited ${code}`);
+      publishCheckTests({
+        action,
+        dir,
+        code,
+        output: output.trim(),
+        durationMs: Date.now() - started,
+      });
       if (code === 0) snapshotAfterSync(opts.cwd, dir, opts.files);
       resolve({ ok: code === 0, action, dir, output: output.trim() });
     });

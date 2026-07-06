@@ -24,6 +24,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import { ChartRenderer } from "./chart-block";
 import { resizableTableComponents } from "./resizable-table";
 
 import { Shimmer } from "./shimmer";
@@ -207,7 +208,13 @@ export type ReasoningContentProps = ComponentProps<
   children: string;
 };
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = {
+  cjk,
+  code,
+  math,
+  mermaid,
+  renderers: [{ language: "chart", component: ChartRenderer }],
+};
 
 export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => (

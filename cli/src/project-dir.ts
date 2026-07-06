@@ -29,6 +29,23 @@ export const WORKSPACES_DIR = join(HOME_DIR, "workspaces");
  */
 export const MANUAL_TESTS_SUBDIR = "manual-tests";
 
+/** Folder name that holds user-added custom skills. */
+export const CUSTOM_SKILLS_SUBDIR = "skills";
+
+/** Global custom-skills folder (`~/.testeiya/skills`), loaded for every session. */
+export const CUSTOM_SKILLS_DIR = join(HOME_DIR, CUSTOM_SKILLS_SUBDIR);
+
+/**
+ * Folder name (shipped inside the CLI package / desktop bundle) that holds the
+ * vendored, prebuilt skills as a flat tree `<skill>/SKILL.md` (one folder per
+ * skill) plus a `categories.json` sidecar mapping each skill to its UI category.
+ * Produced by `bunosh vendor:skills` from the `skills.yaml` manifest.
+ */
+export const BUNDLED_SKILLS_SUBDIR = "skills";
+
+/** The prebuilt-skills manifest file name (source of truth for `bunosh vendor:skills`). */
+export const SKILLS_MANIFEST_FILE = "skills.yaml";
+
 /** Records which Testomat.io project a workspace represents (id + base URL). */
 export const PROJECT_META_FILE = "testeiya.json";
 
@@ -38,6 +55,11 @@ export const SYNC_SNAPSHOT_FILE = "sync-snapshot.json";
 /** Absolute path to the gitignored manual-tests cache inside `cwd`. */
 export function manualTestsCachePath(cwd: string): string {
   return join(cwd, PROJECT_DIR, MANUAL_TESTS_SUBDIR);
+}
+
+/** Absolute path to a workspace's per-project custom-skills folder. */
+export function projectSkillsDir(cwd: string): string {
+  return join(cwd, PROJECT_DIR, CUSTOM_SKILLS_SUBDIR);
 }
 
 /** Absolute path to the project-association metadata file inside `cwd`. */
@@ -67,4 +89,35 @@ export function migrateLegacyHomeDir(): void {
   } catch {
     // ignore — a fresh ~/.testeiya is created on demand if the move fails
   }
+}
+
+/**
+ * Locate the vendored bundled-skills tree (`cli/skills/<category>/<skill>/`).
+ * Mirrors `resolveStaticDir()` in `src/bun/index.ts`: an env override, then the
+ * dev / npm-package layout (a sibling of `cli/src`), then the desktop-bundle
+ * layout where `electrobun.config` copies `cli/skills` to `skills` next to the
+ * bundled entry. Returns the last candidate as a best-effort fallback so a
+ * packaging mismatch is inspectable rather than crashing.
+ */
+export function resolveBundledSkillsDir(): string {
+  return probePath(BUNDLED_SKILLS_SUBDIR);
+}
+
+/** Absolute path to the prebuilt-skills manifest (`skills.yaml`), same probe. */
+export function resolveSkillsManifestPath(): string {
+  return probePath(SKILLS_MANIFEST_FILE);
+}
+
+function probePath(leaf: string): string {
+  const candidates: string[] = [];
+  if (leaf === BUNDLED_SKILLS_SUBDIR && process.env.TESTEIYA_SKILLS_DIR) {
+    candidates.push(process.env.TESTEIYA_SKILLS_DIR);
+  }
+  candidates.push(join(import.meta.dir, "..", leaf));
+  candidates.push(join(import.meta.dir, leaf));
+  candidates.push(join(import.meta.dir, "..", "..", leaf));
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[candidates.length - 1];
 }

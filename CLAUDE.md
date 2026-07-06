@@ -77,9 +77,26 @@ This is the core domain model — read it before touching the workspace/sidebar/
 
 **Sidebar tree** (`GET /api/files/tree`, `files-tree.ts`): all non-vendor, non-dot **folders** are shown; **only `*.test.md` files** outside the manual-tests dir; **all files** inside it (and the dir is auto-expanded, even when it lives under `.testeiya/`). The response carries `{ manualTestsDir, isProject, project }`.
 
-**Sync** (`POST /api/workspace/sync` `{session, action}`): runs `check-tests` (`cli/src/check-tests.ts`, `npx check-tests[@latest] pull|push -d <dir>`) for the resolved manual-tests dir. Token resolution: a managed session's `tokens[slug]` → else the linked project's `apiKey` via the connected account (`.testeiya/testeiya.json` + `loadStoredAuth`) → else the folder's own `.env` `TESTOMATIO`. The Workspace sidebar section has Pull/Push buttons (`WorkspaceService.sync`). Sync semantics follow `@testomatio/skills/skills/sync-cases/SKILL.md`.
+**Sync** (`POST /api/workspace/sync` `{session, action}`): runs `check-tests` (`cli/src/check-tests.ts`, `npx check-tests[@latest] pull|push -d <dir>`) for the resolved manual-tests dir. Token resolution: a managed session's `tokens[slug]` → else the linked project's `apiKey` via the connected account (`.testeiya/testeiya.json` + `loadStoredAuth`) → else the folder's own `.env` `TESTOMATIO`. The Workspace sidebar section has Pull/Push buttons (`WorkspaceService.sync`). Sync semantics follow the vendored `cli/skills/Test Management/sync-test-cases-with-tms/SKILL.md` (from `testomatio/skills`).
 
 > Session expiry (`session-store.ts`) only deletes **`os.tmpdir()`** workspaces — persistent `~/.testeiya/workspaces` dirs and folders the user opened are never removed on TTL.
+
+## Skills (prebuilt + custom)
+
+Testeiya passes an **explicit `skills[]` array** into `createAgentSession` (`session-factory.ts`), which bypasses the SDK's own skill discovery. The array is `dedupeSkillsByName([...playwright, ...loadBundledSkills(), ...loadCustomSkills(cwd)])`, so a later source (custom last) can **override** an earlier one by reusing its `name`.
+
+Skills reach the agent from **two sources**, each with one simple rule:
+1. **Prebuilt (`cli/skills.yaml`)** — a **flat list of GitHub repos**, one `owner/repo` per line (optionally `owner/repo/tree/<ref>/<subdir>` to pin a ref or point at a subfolder — e.g. the playwright-cli skill is `microsoft/playwright-cli/tree/main/skills/playwright-cli`). **No exceptions — every line is a GitHub repo.** Vendored into `cli/skills/` at build time (below).
+2. **User custom** — folders the user drops in `~/.testeiya/skills` / `<cwd>/.testeiya/skills` (below).
+
+> A skill that lives in an npm package is **never** put in `skills.yaml` (the vendor only clones GitHub). The `@playwright/cli` package stays a dependency, but only for the browser CLI **tool** (the binary the agent drives) — `hasPlaywrightCli()` gates the browser guidance on it. The playwright-cli **skill** is vendored from GitHub like everything else.
+
+- **Vendoring** (build time): the **`vendorSkills`** task in **`cli/Bunoshfile.js`** — run **`bunosh harness:vendor`** from the repo root (or `bunosh vendor:skills` from `cli/`); **no `cd cli` for `bun run`**. It resolves each source's SHA via the GitHub API, downloads the tarball (no `git` binary), and copies the selected skills into a committed tree **organized by category folder: `cli/skills/<category>/<skill>/`**. The **category is decided by the repo**: if the repo has a Claude-plugin marketplace (`.claude-plugin/marketplace.json`), every plugin is a category and the skills it lists (via symlinks in `plugins/<p>/skills/`) get it — so `testomatio/skills` splits into **Test Management / Test Automation / Explorbot** on its own, `codeceptjs` → **Codeceptjs**. A repo with **no marketplace** uses its **repo name** as the category (`currents-dev/playwright-best-practices-skill` → **Playwright Best Practices Skill**). The category name is **slugified into the folder name** (`Test Management` → `test-management`); `loadBundledSkills()` reads it back with the inverse (prettify the folder). A skill in the repo but **not in any plugin is skipped** (the vendor logs it). A repo that is **one skill** (its `SKILL.md` is at the root) is vendored **flat** as `cli/skills/<repo-name>/` — no redundant `<repo>/<skill>/` nesting; `loadBundledSkills()` treats a top-level folder that has its own `SKILL.md` as that single skill. SHAs are pinned in `cli/skills.lock.json`. Edit the manifest + re-run to add/update/swap; **`bunosh harness:skills`** (or `bunosh skills` from `cli/`) lists the vendored skills grouped by category. The tree + manifest ship via `cli/package.json` `files` and the `electrobun.config.ts` copy map; `resolveBundledSkillsDir()` (`project-dir.ts`) probes for the tree like `resolveStaticDir()` finds `out/`. **On release** both CI jobs re-run the vendor task (`.github/workflows/release.yml`) so shipped skills are always current — the committed tree is a dev-time cache.
+
+**Custom (user) skills:** a *skill* is a folder containing a `SKILL.md` (YAML frontmatter `name` + `description`, then the body). Drop or **symlink** one into the global `~/.testeiya/skills/` (`CUSTOM_SKILLS_DIR`) — applies to every session — or a workspace's `<cwd>/.testeiya/skills/` (`projectSkillsDir(cwd)`) for a per-project skill. Custom skills are **flat** (no category folders — unlike the vendored tree): each direct subfolder with a `SKILL.md` is a skill; `loadCustomSkills` follows symlinks (so a skill can be linked in) and ignores non-skill entries.
+
+- **Loader:** `cli/src/skills.ts` — `loadBundledSkills`, `loadCustomSkills(cwd?)`, `hasPlaywrightCli()` (browser-tool gate), `ensureCustomSkillsDir()`, `dedupeSkillsByName()`; all reuse the `readSkill` / `readSkillsDir` choke-points. `readSkill` uses the frontmatter `name` only when it's a valid slug, else the folder name (so a mention is always a clean token).
+- **UI:** the prompt input's `SkillsMenu` lists every skill **grouped by category** (custom ones badged), with **Open skills folder** (`Utils.openPath` via `/api/skills/open`; web mode toasts the path) and **Refresh** (`SkillsService.refresh()`) in the footer. `/api/skills` returns `{ name, description, source, category }`.
 
 ## HTTP API (served by the Bun app-server)
 
@@ -91,6 +108,7 @@ This is the core domain model — read it before touching the workspace/sidebar/
 | `/api/testomatio/:resource` | GET | Read-only proxy to Testomat.io v2 REST (SSRF-guarded whitelist) |
 | `/api/settings` | GET/POST | Report whether a key is configured / save the provider API key |
 | `/api/mcp` | GET/POST | List MCP servers for a session / enable-disable each |
+| `/api/skills` · `/api/skills/open` | GET/POST | List bundled + custom skills (optional `?session`) / reveal the global custom-skills folder |
 | `/api/workspace` · `/api/workspace/pick` | POST | Open a local dir as the workspace / native folder picker (Electrobun) |
 | `/api/workspace/default` | GET | Web-mode default workspace from `TESTEIYA_WORKSPACE` (reuses a live session for the same dir) |
 | `/api/workspace/sync` | POST | Run `check-tests pull`/`push` for the workspace's manual tests |
@@ -110,6 +128,44 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - The file is **gitignored** (`log/` in the submodule), append-only, and re-runnable in the VS Code REST Client / JetBrains HTTP client.
 - It contains the live `Authorization: Bearer` token — treat it as a credential; never commit or paste it.
 
+## Debugging (the `testeiya-debug` skill)
+
+**When anything in Testeiya misbehaves — a UI error, a failed request, a project that won't load, a wrong agent answer, a crash — use the `testeiya-debug` skill** (`.claude/skills/testeiya-debug/SKILL.md`) instead of guessing. It collects the whole stack into readable files so a fix has full context: the Bun app-server (CLI), the web/desktop UI + its MobX state, same-origin `/api/*` requests, outbound Testomat.io REST, and the LLM agent.
+
+### The debug snapshot (server + browser, one JSON)
+
+`GET /api/debug/snapshot?session=<id>` merges everything into one dump. The **server** side (`cli/src/debug-bus.ts`) already held outbound Testomat.io REST (`server.requests`) and LLM events (`server.ai`); `captureServerConsole()` adds the app-server's own stdout (`server.console`). The **browser** pushes what the server can't see via `POST /api/debug/report` — its unified `/api/*` + agent-WS log, captured `console.error`/`warn` + uncaught errors, and a MobX store snapshot (`client.entries` / `client.store` / `client.meta`). The client reports **errors always** (even with the Debug panel closed) and a full snapshot on load, on panel-open, and every 15s while the panel is on (`lib/services/debug-log-service.ts`).
+
+The running server publishes its (possibly random, desktop) port + pid to `~/.testeiya/server.json` (`cli/src/server-info.ts`, removed on exit) so the tooling finds it. Pull a snapshot with:
+
+```bash
+cd cli
+bun run debug:snapshot [agent-conversation-id]   # → cli/log/debug-snapshot-*.json (auto-discovers the server)
+```
+
+Correlate **downstream → upstream**: a failing `client.entries` request → the matching `server.requests` (the real Testomat.io call) → the thrown error in `server.console` → the exact request/response in `cli/log/testomatio.http`. A wrong-looking UI with no failed request is usually a stale/incorrect `client.store` value.
+
+### Langfuse trace (the LLM's-eye view)
+
+For **what the agent decided** (wrong tool, bad output), fetch its trace. `cli/src/telemetry.ts` traces every run when `LANGFUSE_*` keys are set: one **trace per prompt**, tagged `["testeiya", <mode>]`, the agent conversation id as the trace `sessionId`, an `llm-generation` child per model call, and one child per tool call (`level: "ERROR"` on failures).
+
+```bash
+bun run debug:trace session:<conv-id>     # every prompt in one chat session
+bun run debug:trace <trace-id>            # one trace (id from the Langfuse UI)
+bun run debug:trace 30m | 1h | today      # recent traces by time range
+```
+
+- Auto-detects the arg; prefix `trace:` / `session:` / `range:` to force it (a hex conversation id can look like a trace id).
+- Output → `cli/log/langfuse-trace-*.json` (**gitignored**); holds full prompts + tool IO — sensitive, never commit or paste it.
+- Needs `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` (+ optional `LANGFUSE_BASE_URL`); `bun run setup:env` seeds `~/.testeiya/.env`. No keys → telemetry is a silent no-op.
+
+```bash
+jq '.[0].observations[] | select(.type=="GENERATION") | .input' <file>      # what the model actually saw
+jq '[.[].observations[] | select(.level=="ERROR") | {name, output}]' <file> # failed tool calls
+```
+
+Look for **mismatches**: what the model's `llm-generation` output claimed vs. what the tool observation's `output`/`level` actually did.
+
 ## Key files
 
 **Frontend**
@@ -120,6 +176,7 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - `lib/host-bridge.tsx` — iframe-embed context (host theme/JWT via postMessage)
 - `lib/services/` — MobX service layer (business logic): `WorkspaceService` (tree load, classification, `sync(pull|push)`, `openDefault`), `ProjectService`, `ConnectionsService`, `ProvidersService`; consumed via `useXService()` from `observer` views
 - `components/panel/sections/WorkspaceSection.tsx` — file tree + Open-folder / Pull / Push / Refresh actions (thin `observer` over `WorkspaceService`)
+- `lib/debug/{external-log,store-snapshot}.ts` + `lib/services/debug-log-service.ts` — client debug capture: unified `/api/*` + agent-WS + console log, MobX store snapshot, and the `report()` that pushes them to the server (see "Debugging"); `components/panel/sections/DebugSection.tsx` renders the panel
 - `components/SettingsDialog.tsx` — provider key + MCP toggles + workspace section
 - `components/workspace/MarkdownEditor.tsx` — file editor (theme-synced)
 - `components/themed-toaster.tsx` — theme-bound sonner toasts
@@ -137,6 +194,9 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - `load-env.ts` — `.env` loader for the bundled app
 - `api/*.ts` — ported HTTP handlers (framework-agnostic `(req) => Response`)
 - `bridge.ts` — maps pi-coding-agent events → WS messages
+- `debug-bus.ts` · `ai-debug.ts` · `api/debug-{stream,snapshot,report}.ts` — the debug pipeline: server ring buffer + console capture + `buildSnapshot`, LLM-event recorder, and the SSE/pull/push endpoints (see "Debugging")
+- `server-info.ts` — writes/reads `~/.testeiya/server.json` so out-of-band tooling finds the running server
+- `scripts/{debug-snapshot,langfuse-trace,setup-env}.ts` — the `debug:snapshot` / `debug:trace` / `setup:env` helpers
 
 **Desktop**
 - `src/bun/index.ts` — Electrobun main entry (boots server, opens window)
@@ -148,8 +208,10 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 - `~/.testeiya/sessions.json` — active sessions (cwd, projects, tokens, 24h TTL)
 - `~/.testeiya/auth.json` — provider key (SQLite-backed via AuthStorage)
 - `~/.testeiya/config.json` — optional provider/permissions override (else defaults; provider `openrouter`, model from config)
+- `~/.testeiya/server.json` — the running app-server's `{port, pid, url, mode, startedAt}` (`server-info.ts`); lets `debug:snapshot`/the `testeiya-debug` skill find the desktop app's random port. Written on start, removed on exit.
 - `~/.testeiya/testomatio-auth.json` (JWT, 0600) · `~/.testeiya/testomatio-projects.json` (project precache incl. per-project `apiKey`, 0600)
 - `~/.testeiya/workspaces/<safe-project-id>/` — persistent per-project workspace: pulled `*.test.md` at the root + `.testeiya/{mcp.json, mcp.all.json, testeiya.json}`. Reused across launches; **not** deleted on session TTL.
+- `~/.testeiya/skills/<skill>/SKILL.md` — user's global custom skills, loaded for every session (`CUSTOM_SKILLS_DIR`). Entries may be **symlinks** to skills that live in another repo. A per-workspace `<cwd>/.testeiya/skills/` is also loaded when that workspace is open. See "Custom skills" below.
 - `os.tmpdir()/testeiya-<uuid>/` — ephemeral multi-project `/api/agent/start` workspace (per-`<slug>/` subdirs). Deleted when the session expires.
 - The project config dir name (`.testeiya`) and `manual-tests`/`testeiya.json` are centralized in `cli/src/project-dir.ts` — the SDK reads MCP/skills/rules from `.testeiya` (see the monkey-patch in `session-factory.ts`), so anything that *writes* MCP config must use the same dir.
 

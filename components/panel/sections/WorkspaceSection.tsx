@@ -13,8 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { SuiteGlyph, TypeIcon } from "@/components/icons";
+import {
+  SuiteGlyph,
+  TypeIcon,
+  ManualGlyph,
+  AutomatedGlyph,
+  MixedGlyph,
+} from "@/components/icons";
 import { Icon, TrashIcon } from "@/lib/icons";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -35,7 +42,7 @@ import {
   useWorkspaceService,
   useSearchService,
 } from "@/lib/services/StoreProvider";
-import type { FileStatus, TreeNode } from "@/lib/services/types";
+import type { FileStatus, TreeNode, WorkspaceType } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
 // `@tag` tokens in a test title — Testomat.io's TAG_ALLOWED_SYMBOLS, anchored to
@@ -147,7 +154,7 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
         path={node.path}
         name={node.name}
         nameClassName={statusClass(ws.changedFiles.get(node.path))}
-        icon={isMarkdown ? <SuiteGlyph className="size-4 text-muted-foreground" /> : undefined}
+        icon={suiteIcon(node, isMarkdown)}
         badge={count ? <span className={canPull ? "group-hover:hidden" : undefined}>{count}</span> : undefined}
         menu={menu}
         actions={refreshAction}
@@ -169,6 +176,14 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
     />
   );
 });
+
+function suiteIcon(node: TreeNode, isMarkdown: boolean) {
+  if (node.emoji) {
+    return <span className="flex size-4 items-center justify-center text-sm leading-none">{node.emoji}</span>;
+  }
+  if (isMarkdown) return <SuiteGlyph className="size-4 text-muted-foreground" />;
+  return undefined;
+}
 
 function statusClass(status: FileStatus | undefined): string | undefined {
   if (status === "created") return "font-medium text-status-success-foreground";
@@ -229,6 +244,23 @@ export const WorkspaceSection = observer(function WorkspaceSection({
       title="Workspace"
       active={active}
       onToggle={onToggle}
+      titleAccessory={
+        ws.types.length > 0 && (
+          <Tabs
+            value={ws.activeType ?? ws.types[0].type}
+            onValueChange={(v) => ws.setActiveType(v as WorkspaceType)}
+          >
+            <TabsList className="h-7">
+              {ws.types.map((t) => (
+                <TabsTrigger key={t.type} value={t.type} className="gap-1 px-2 text-xs capitalize">
+                  {typeGlyph(t.type)}
+                  {t.type}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        )
+      }
       actions={
         <>
           <Tooltip>
@@ -539,6 +571,14 @@ function deleteDescription(node: TreeNode | null): string {
     return "This deletes the folder and permanently removes every test suite inside it from Testomat.io. This can’t be undone.";
   }
   return "This deletes the local file and permanently removes the suite and all its tests from Testomat.io. This can’t be undone.";
+}
+
+function typeGlyph(type: WorkspaceType) {
+  if (type === "manual") return <ManualGlyph className="size-3.5" />;
+  if (type === "automated") return <AutomatedGlyph className="size-3.5" />;
+  if (type === "mixed") return <MixedGlyph className="size-3.5" />;
+  if (type === "code") return <Icon name="code" className="size-3.5" />;
+  return <Icon name="folder" className="size-3.5" />;
 }
 
 function WorkspaceSkeleton() {

@@ -28,7 +28,11 @@ const REPLAY_FILE = join(LOG_DIR, "testomatio.http");
 
 let seq = 0;
 let dirReady = false;
+let consolePatched = false;
+let latestReportKey: string | null = null;
 const buffer: DebugEntry[] = [];
+const serverConsole: ServerConsoleEntry[] = [];
+const clientReports = new Map<string, ClientReport>();
 const subscribers = new Set<(entry: DebugEntry) => void>();
 
 export async function loggedServerFetch(
@@ -74,6 +78,29 @@ export async function loggedServerFetch(
   }
 }
 
+/**
+ * Record a `check-tests` subprocess run (pull/push) as a Debug-panel event so its
+ * outcome + full output are visible alongside requests — the same feed the panel
+ * already renders, so an exit-1 sync stops being a silent "[check-tests] exited 1".
+ */
+export function publishCheckTests(run: {
+  action: string;
+  dir: string;
+  code: number | null;
+  output: string;
+  durationMs: number;
+}): void {
+  const entry: Omit<ProcessEventEntry, "id" | "ts"> = {
+    kind: "event",
+    channel: "check-tests",
+    name: `check-tests ${run.action}`,
+    summary: `${run.code === 0 ? "ok" : `exit ${run.code}`} · ${run.dir} · ${run.durationMs}ms`,
+    ok: run.code === 0,
+    detail: truncate(run.output),
+  };
+  publish(entry);
+}
+
 export function subscribeDebug(cb: (entry: DebugEntry) => void): () => void {
   subscribers.add(cb);
   return () => {
@@ -83,6 +110,73 @@ export function subscribeDebug(cb: (entry: DebugEntry) => void): () => void {
 
 export function recentDebugEntries(): DebugEntry[] {
   return buffer.slice();
+}
+
+/*
+ * Server-side console capture. Wraps `console.log/warn/error` so the app-server's
+ * own stdout (the CLI half of the stack — `[api]`, `[testomatio→]`, `[telemetry]`,
+ * and any thrown errors) lands in a ring buffer that the debug snapshot exposes.
+ * Still forwards to the original console. Patches once.
+ */
+export function captureServerConsole(): void {
+  if (consolePatched) return;
+  consolePatched = true;
+  for (const level of ["log", "warn", "error"] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...args);
+      serverConsole.push({ level, ts: Date.now(), text: truncate(formatArgs(args)) ?? "" });
+      if (serverConsole.length > MAX_ENTRIES) serverConsole.shift();
+    };
+  }
+}
+
+export function serverConsoleEntries(): ServerConsoleEntry[] {
+  return serverConsole.slice();
+}
+
+/*
+ * Latest client debug report per session — the browser's unified activity log
+ * (`api` + `agent` + `console` channels) plus a MobX store snapshot, pushed via
+ * `POST /api/debug/report`. Keyed by session so a snapshot request can pick the
+ * matching one; `latestReportKey` is the fallback when no session is given.
+ */
+export function recordClientReport(report: ClientReport): void {
+  const key = report.sessionId || "default";
+  clientReports.set(key, report);
+  latestReportKey = key;
+}
+
+export function buildSnapshot(sessionId?: string | null): DebugSnapshot {
+  const requests = buffer.filter((e): e is ServerRequestEntry => e.kind === "request");
+  const ai = buffer.filter((e): e is AiEventEntry => e.kind === "ai");
+  const checkTests = buffer.filter((e): e is ProcessEventEntry => e.kind === "event");
+  return {
+    generatedAt: new Date().toISOString(),
+    server: { requests, ai, checkTests, console: serverConsoleEntries() },
+    client: getClientReport(sessionId),
+    langfuseHint: "bun run debug:trace session:<agent-conversation-id>",
+  };
+}
+
+function getClientReport(sessionId?: string | null): ClientReport | null {
+  if (sessionId && clientReports.has(sessionId)) return clientReports.get(sessionId)!;
+  if (latestReportKey) return clientReports.get(latestReportKey) ?? null;
+  return null;
+}
+
+function formatArgs(args: unknown[]): string {
+  return args
+    .map((a) => {
+      if (typeof a === "string") return a;
+      if (a instanceof Error) return `${a.message}\n${a.stack ?? ""}`;
+      try {
+        return JSON.stringify(a);
+      } catch {
+        return String(a);
+      }
+    })
+    .join(" ");
 }
 
 /*
@@ -216,4 +310,44 @@ export interface AiEventEntry {
   detail: string | null;
 }
 
-export type DebugEntry = ServerRequestEntry | AiEventEntry;
+// A `check-tests` subprocess run, shaped to match the client's `EventLogEntry`
+// so it rides the SSE feed straight into the panel's event rows.
+export interface ProcessEventEntry {
+  kind: "event";
+  channel: "check-tests";
+  id: number;
+  ts: number;
+  name: string;
+  summary: string | null;
+  ok: boolean;
+  detail: string | null;
+}
+
+export type DebugEntry = ServerRequestEntry | AiEventEntry | ProcessEventEntry;
+
+export interface ServerConsoleEntry {
+  level: "log" | "warn" | "error";
+  ts: number;
+  text: string;
+}
+
+export interface ClientReport {
+  sessionId: string | null;
+  reason: string;
+  reportedAt: string;
+  entries: unknown[];
+  store: unknown;
+  meta: unknown;
+}
+
+export interface DebugSnapshot {
+  generatedAt: string;
+  server: {
+    requests: ServerRequestEntry[];
+    ai: AiEventEntry[];
+    checkTests: ProcessEventEntry[];
+    console: ServerConsoleEntry[];
+  };
+  client: ClientReport | null;
+  langfuseHint: string;
+}

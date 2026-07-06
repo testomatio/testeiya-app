@@ -12,6 +12,8 @@ export interface StoredSession {
   promptContext: string;
   backendUrl?: string;
   tokens?: Record<string, string>;
+  /** The user explicitly opened this folder, so the agent may write to it. */
+  trusted?: boolean;
   projects: {
     slug: string;
     title: string;

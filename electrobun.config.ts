@@ -16,7 +16,7 @@
  *   - Confirm the runtime location of the copied `out/` dir matches
  *     resolveStaticDir() in src/bun/index.ts.
  *   - Confirm the agent's dynamic deps are present in the bundle:
- *       • @testomatio/skills  (read as files at runtime: skills/<name>/SKILL.md)
+ *       • cli/skills          (prebuilt skills vendored from GitHub, read as files)
  *       • @testomatio/mcp     (spawned as a subprocess per project)
  *       • check-tests         (required dynamically by api/agent-start)
  *     Bun.build statically bundles *imported* JS, but these are loaded via
@@ -48,7 +48,6 @@ const config = {
         "@oh-my-pi/pi-coding-agent",
         "@oh-my-pi/pi-ai",
         "@testomatio/mcp",
-        "@testomatio/skills",
         "check-tests",
         "markit-ai",
         "mupdf",
@@ -61,10 +60,16 @@ const config = {
     // Paths are <source on disk> : <destination in bundle>.
     copy: {
       out: "out",
+      // The prebuilt skills vendored by `bunosh vendor:skills` (loaded at
+      // runtime as files by loadBundledSkills) + the manifest the skills API
+      // reads for category names. resolveBundledSkillsDir()/resolveSkillsManifestPath()
+      // probe for these next to the bundled entry.
+      "cli/skills": "skills",
+      "cli/skills.yaml": "skills.yaml",
       // Ship the cli package's full node_modules so the externalized imports
       // above resolve, and so the agent's dynamic require()/readFile/subprocess
-      // loads (@testomatio/skills SKILL.md files, @testomatio/mcp bin,
-      // check-tests) find their packages at runtime.
+      // loads (@testomatio/mcp bin, check-tests, @playwright/cli skill) find
+      // their packages at runtime.
       "cli/node_modules": "node_modules",
       // @oh-my-pi/pi-natives is bundled INTO index.js (not externalized), so its
       // loader resolves the prebuilt addon at import.meta.dir/../native i.e.

@@ -169,7 +169,7 @@ OPENROUTER_API_KEY=sk-or-...
 TESTEIYA_WORKSPACE=/path/to/your/tests
 ```
 
-See [All environment variables](#all-environment-variables) for the full list.
+See [All environment variables](#all-environment-variables) for the full list. To create `~/.testeiya/.env` with a commented [Langfuse](#observability-langfuse) block ready to fill in, run `bun run setup:env`.
 
 ## Using the app
 
@@ -248,6 +248,8 @@ curl http://localhost:3050/api/agent/<sessionId>
 | `PORT` | Port for the Bun app-server (desktop uses a random free port) | `3050` |
 | `AGENT_SERVER_URL` | Where `next dev` proxies `/api/*` (web mode) | `http://localhost:3210` |
 | `NEXT_PUBLIC_TESTEIYA_WS_URL` | Agent WebSocket URL — **dev only**; the production/desktop build always uses same-origin | `ws://localhost:3210` |
+| `LANGFUSE_PUBLIC_KEY` · `LANGFUSE_SECRET_KEY` | Enable [Langfuse](https://langfuse.com) tracing of every agent run (both required) | — (telemetry off) |
+| `LANGFUSE_BASE_URL` | Langfuse host — set for a self-hosted instance | `https://cloud.langfuse.com` |
 
 ### LLM provider
 
@@ -275,12 +277,51 @@ Choose your provider and model in the app's **Settings**, or set defaults in `cl
 | `~/.testeiya/workspaces/<project>/` | Persistent per-project workspace: pulled `*.test.md` + `.testeiya/` (MCP + project link) |
 | `<tmp>/testeiya-<id>/` | Ephemeral multi-project import workspace (removed on session expiry) |
 
+## Observability (Langfuse)
+
+Testeiya can trace every agent run to [Langfuse](https://langfuse.com) — the prompt, each model call, every tool's arguments and result, token usage, and cost. It's **optional and off by default**: with no keys set, telemetry is a silent no-op and the agent runs exactly the same.
+
+### Enable it
+
+1. **Get keys** — sign up at [langfuse.com](https://langfuse.com) (free tier) or [self-host](https://langfuse.com/docs/deployment/self-host), then copy the **Public** and **Secret** keys from your project settings.
+2. **Seed the env file** — run once to create `~/.testeiya/.env` with a commented Langfuse block:
+
+   ```bash
+   bun run setup:env
+   ```
+
+3. **Fill in the keys** — uncomment and set the values in `~/.testeiya/.env` (or your project `.env`, or export them in your shell):
+
+   ```bash
+   LANGFUSE_PUBLIC_KEY=pk-lf-...
+   LANGFUSE_SECRET_KEY=sk-lf-...
+   # LANGFUSE_BASE_URL=https://cloud.langfuse.com   # set for a self-hosted instance
+   ```
+
+4. **Restart** the app or CLI. On startup you'll see `[telemetry] Langfuse enabled → …`. Each prompt becomes one trace, tagged `testeiya`, grouped by session.
+
+### Debug a session
+
+Open the trace in the Langfuse dashboard, or pull it down as JSON for inspection:
+
+```bash
+bun run debug:trace <trace-id>          # a single trace (id from the Langfuse UI)
+bun run debug:trace session:<conv-id>   # every prompt in one chat session
+bun run debug:trace 1h                   # recent traces (30m · 1h · today)
+```
+
+The dump lands in `cli/log/langfuse-trace-*.json` (gitignored). See **Debugging** in `CLAUDE.md` for how to read it.
+
+### Full-stack debug snapshot
+
+For bugs that span the UI, the server, and the REST layer (not just the LLM), the running app exposes `GET /api/debug/snapshot` — the server's Testomat.io REST + LLM events + console, merged with the browser's `/api/*` log, console errors, and MobX store snapshot. Pull it with `bun run debug:snapshot`. Contributors debugging Testeiya itself should use the **`testeiya-debug`** skill, which collects the snapshot + Langfuse trace + `testomatio.http` and walks the failure across layers.
+
 ## Tech stack
 
 - **Next.js 16** (App Router, static export) + **Tailwind CSS v4** + **shadcn/ui / AI Elements**
 - **Bun** server (`Bun.serve` for UI + API + WebSocket)
 - **Electrobun** for the cross-platform desktop shell
-- **pi-coding-agent** SDK (the Agent), **@testomatio/mcp** (MCP), **@testomatio/skills** (QA skills), **check-tests** (Testomat.io sync)
+- **pi-coding-agent** SDK (the Agent), **@testomatio/mcp** (MCP), QA **skills** vendored from GitHub into `cli/skills` (see `cli/skills.yaml`), **check-tests** (Testomat.io sync)
 
 ## Ports
 

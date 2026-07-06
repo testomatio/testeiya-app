@@ -1,0 +1,16 @@
+# Prebuilt skills for Testeiya. ONE rule: every line is a GitHub repo.
+#
+#   owner/repo                        a skill repo (one skill, or many)
+#   owner/repo/tree/<ref>/<subdir>    pin a branch/tag/commit, or point at a subfolder
+#
+# Categories are decided by the repo, never by this file:
+#   - repo with a Claude-plugin marketplace (.claude-plugin/marketplace.json)
+#     -> one category per plugin  (testomatio/skills -> Test Management / Test Automation / Explorbot)
+#   - repo without one -> the repo name is the category
+#
+# Edit the list, then run:  bunosh harness:vendor      See the result:  bunosh harness:skills
+
+- testomatio/skills
+- codeceptjs/skills
+- currents-dev/playwright-best-practices-skill
+- microsoft/playwright-cli/tree/main/skills/playwright-cli

@@ -6,14 +6,14 @@ import { createTesteiyaSession } from "./session-factory.js";
 import { transformEvent } from "./bridge.js";
 import { attachAiDebug } from "./ai-debug.js";
 import { getSession } from "./session-store.js";
-import { loadTestomatioSkills } from "./skills.js";
+import { loadBundledSkills } from "./skills.js";
 import { browserStateNotice } from "./api/playwright-cli.js";
 
 // Skills are static for the process; load once. Each entry has name +
 // description + filePath (see skills.ts).
-let skillsCache: ReturnType<typeof loadTestomatioSkills> | null = null;
+let skillsCache: ReturnType<typeof loadBundledSkills> | null = null;
 function getSkills() {
-  if (!skillsCache) skillsCache = loadTestomatioSkills();
+  if (!skillsCache) skillsCache = loadBundledSkills();
   return skillsCache;
 }
 
@@ -73,6 +73,7 @@ export function createConnection(
                 sessionParams.promptContext = stored.promptContext;
                 sessionParams.backendUrl = stored.backendUrl;
                 sessionParams.tokens = stored.tokens;
+                sessionParams.trusted = stored.trusted;
               }
             }
 
@@ -388,7 +389,7 @@ function prepareAttachments(
   return { text, images };
 }
 
-type SkillEntry = ReturnType<typeof loadTestomatioSkills>[number];
+type SkillEntry = ReturnType<typeof loadBundledSkills>[number];
 
 /** Match a leading `/<skill-name>` against the loaded skills; null if none. */
 function matchSkillCommand(

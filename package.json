@@ -4,6 +4,10 @@
   "private": true,
   "scripts": {
     "postinstall": "cd cli && bun install",
+    "setup:env": "bunosh harness:setup",
+    "vendor:skills": "bunosh harness:vendor",
+    "debug:trace": "bunosh harness:trace",
+    "debug:snapshot": "bunosh harness:snapshot",
     "dev": "concurrently -n web,agent -c cyan,magenta \"next dev -p 3050\" \"cd cli && PORT=3210 bun run serve:app:watch\"",
     "build": "NEXT_EXPORT=1 next build",
     "desktop:dev": "NEXT_EXPORT=1 next build && (find cli/node_modules -type l ! -exec test -e {} \\; -delete 2>/dev/null || true) && GLIBC_TUNABLES=glibc.rtld.optional_static_tls=20480 electrobun dev",

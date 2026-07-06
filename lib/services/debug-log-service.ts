@@ -1,12 +1,17 @@
 import { makeAutoObservable, observable } from "mobx";
 import {
   setExternalLogSink,
+  initConsoleCapture,
   type DebugLogEntry,
 } from "@/lib/debug/external-log";
+import { serviceSnapshot } from "@/lib/debug/store-snapshot";
 import type { RootStore } from "./root-store";
 
 const STORAGE_KEY = "testeiya.debug-panel.enabled";
 const MAX_ENTRIES = 300;
+const REPORT_INTERVAL_MS = 15000;
+const ERROR_DEBOUNCE_MS = 1500;
+const MAX_STORE_BYTES = 300000;
 
 /**
  * Collects the unified activity log (from `lib/debug/external-log`) for the
@@ -19,11 +24,19 @@ export class DebugLogService {
   enabled = false;
   entries: DebugLogEntry[] = [];
   stream: EventSource | null = null;
+  reportTimer: ReturnType<typeof setInterval> | null = null;
+  errorTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly root: RootStore) {
     makeAutoObservable(
       this,
-      { root: false, entries: observable.shallow, stream: false },
+      {
+        root: false,
+        entries: observable.shallow,
+        stream: false,
+        reportTimer: false,
+        errorTimer: false,
+      },
       { autoBind: true }
     );
     setExternalLogSink(this.record);
@@ -36,15 +49,26 @@ export class DebugLogService {
    * makes the Debug section appear client-only and throws a hydration mismatch.
    */
   hydrate(): void {
+    initConsoleCapture();
     this.enabled = loadEnabled();
-    if (this.enabled) this.connectStream();
+    this.report("load");
+    if (this.enabled) {
+      this.connectStream();
+      this.startReporting();
+    }
   }
 
   setEnabled(value: boolean): void {
     this.enabled = value;
     saveEnabled(value);
-    if (value) this.connectStream();
-    else this.disconnectStream();
+    if (value) {
+      this.connectStream();
+      this.startReporting();
+      this.report("panel-open");
+      return;
+    }
+    this.disconnectStream();
+    this.stopReporting();
   }
 
   clear(): void {
@@ -55,6 +79,33 @@ export class DebugLogService {
     const next = [entry, ...this.entries];
     if (next.length > MAX_ENTRIES) next.length = MAX_ENTRIES;
     this.entries = next;
+    if (isError(entry)) this.scheduleErrorReport();
+  }
+
+  /**
+   * Push the current activity log + a MobX store snapshot to the server so the
+   * agent (via `GET /api/debug/snapshot`) sees the browser's view of the world.
+   * Raw `fetch` (not the `http` helper) so it never logs itself or loops.
+   */
+  report(reason: string): void {
+    if (typeof window === "undefined") return;
+    const store = serviceSnapshot(this.root);
+    delete store.debug;
+    const body = JSON.stringify({
+      sessionId: this.root.sessionId,
+      reason,
+      entries: this.entries,
+      store: boundStore(store),
+      meta: pageMeta(),
+    });
+    try {
+      void fetch("/api/debug/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
   }
 
   /**
@@ -80,6 +131,53 @@ export class DebugLogService {
     this.stream.close();
     this.stream = null;
   }
+
+  startReporting(): void {
+    if (this.reportTimer) return;
+    if (typeof window === "undefined") return;
+    this.reportTimer = setInterval(() => this.report("interval"), REPORT_INTERVAL_MS);
+  }
+
+  stopReporting(): void {
+    if (!this.reportTimer) return;
+    clearInterval(this.reportTimer);
+    this.reportTimer = null;
+  }
+
+  scheduleErrorReport(): void {
+    if (typeof window === "undefined" || this.errorTimer) return;
+    this.errorTimer = setTimeout(() => {
+      this.errorTimer = null;
+      this.report("error");
+    }, ERROR_DEBOUNCE_MS);
+  }
+}
+
+function isError(entry: DebugLogEntry): boolean {
+  if (entry.kind === "event") return !entry.ok;
+  return !entry.ok || (entry.status !== null && entry.status >= 400);
+}
+
+function boundStore(store: Record<string, unknown>): unknown {
+  try {
+    const json = JSON.stringify(store);
+    if (json.length <= MAX_STORE_BYTES) return store;
+    return { truncated: true, bytes: json.length, keys: Object.keys(store) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function pageMeta(): Record<string, unknown> {
+  if (typeof window === "undefined") return {};
+  const root = document.documentElement;
+  return {
+    url: window.location.href,
+    userAgent: window.navigator.userAgent,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    theme: root.classList.contains("dark") ? "dark" : "light",
+    embedded: window.self !== window.top,
+  };
 }
 
 function loadEnabled(): boolean {

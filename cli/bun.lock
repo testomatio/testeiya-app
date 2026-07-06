@@ -14,7 +14,6 @@
         "@opentelemetry/sdk-node": "^0.218.0",
         "@playwright/cli": "^0.1.13",
         "@testomatio/mcp": "^2.1.1",
-        "@testomatio/skills": "github:testomatio/skills#821d51b05c52888bda7bf5a812aa63dca251cd67",
         "check-tests": "^0.20.0",
         "dedent": "^1.7.2",
         "yaml": "^2.9.0",
@@ -396,8 +395,6 @@
     "@tailwindcss/node": ["@tailwindcss/node@4.2.2", "", { "dependencies": { "@jridgewell/remapping": "^2.3.5", "enhanced-resolve": "^5.19.0", "jiti": "^2.6.1", "lightningcss": "1.32.0", "magic-string": "^0.30.21", "source-map-js": "^1.2.1", "tailwindcss": "4.2.2" } }, "sha512-pXS+wJ2gZpVXqFaUEjojq7jzMpTGf8rU6ipJz5ovJV6PUGmlJ+jvIwGrzdHdQ80Sg+wmQxUFuoW1UAAwHNEdFA=="],
 
     "@testomatio/mcp": ["@testomatio/mcp@2.1.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^0.4.0", "commander": "^12.0.0", "dotenv": "^17.2.3" }, "bin": { "testomatio-mcp": "index.js" } }, "sha512-+FdaAfulilVRacUM0pGrlJahQXqfAOrKoYACY16Y2h/OVpI4rGK0gYpYlufi8d0satTuE2zsth2MHWLilbc4lw=="],
-
-    "@testomatio/skills": ["@testomatio/skills@github:testomatio/skills#821d51b", {}, "testomatio-skills-821d51b", "sha512-FPOYmihdn5fTigDx59O1Df4YwKI6aIPuecJaWGHUIQt8oaz5dI4gtMJHlBvdNpecKTRWhSot3HReo7VgG7ZtSQ=="],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 

@@ -56,6 +56,13 @@ jobs:
         shell: bash
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
+      # Refresh the bundled skills from GitHub so every release ships current
+      # SKILL.md files (the committed cli/skills tree is only a dev-time cache).
+      - name: Vendor prebuilt skills (refresh from GitHub)
+        run: bunx bunosh harness:vendor
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build desktop installer
         run: bun run desktop:release
         env:
@@ -125,6 +132,15 @@ jobs:
 
       - name: Update npm (Trusted Publishing support)
         run: npm install -g npm@latest
+
+      # Refresh the bundled skills from GitHub so the published package ships
+      # current SKILL.md files (cli/skills is included via package.json "files").
+      - name: Setup Bun (for skill vendoring)
+        uses: oven-sh/setup-bun@v2
+      - name: Vendor prebuilt skills (refresh from GitHub)
+        run: bun install --frozen-lockfile && bunx bunosh vendor:skills
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync version from release tag
         env:

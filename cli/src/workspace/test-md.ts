@@ -5,6 +5,7 @@
 export const TEST_MD_RE = /\.test\.md$/i;
 
 const SUITE_ID_RE = /@S([\w\d]{8})/;
+const SUITE_EMOJI_RE = /<!--\s*suite\b(?:(?!-->)[\s\S])*?emoji:[ \t]*(\S+)/;
 const TEST_ID_RE = /@T([\w\d]{8})/;
 const TEST_MARKER_RE = /^<!--\s*test\b/;
 const ANY_MARKER_RE = /^<!--\s*(test|suite)\b/;
@@ -13,6 +14,13 @@ const HEADING_RE = /^#{1,2}\s+(.+?)\s*$/;
 /** The suite id (`@S…`, prefix stripped) from a file's `<!-- suite` block. */
 export function suiteId(content: string): string | null {
   const match = SUITE_ID_RE.exec(content);
+  if (!match) return null;
+  return match[1];
+}
+
+/** The `emoji:` value from a file's first `<!-- suite` block (null when absent/empty). */
+export function suiteEmoji(content: string): string | null {
+  const match = SUITE_EMOJI_RE.exec(content);
   if (!match) return null;
   return match[1];
 }

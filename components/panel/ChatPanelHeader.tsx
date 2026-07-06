@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { observer } from "mobx-react-lite";
 import {
   mdiChatOutline,
   mdiChatPlusOutline,
   mdiPencilOutline,
 } from "@mdi/js";
-import { ChevronDownIcon, Trash, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, Trash2Icon } from "lucide-react";
 import { Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
@@ -30,14 +30,11 @@ import { useSessionsService } from "@/lib/services/StoreProvider";
  * agent socket). Replaces the old "Chats" sidebar section.
  */
 export const ChatPanelHeader = observer(function ChatPanelHeader({
-  onClear,
-  canClear,
+  mcpStatus,
   canCollapse,
 }: {
-  /** Clear the current chat (wired to the live agent socket by the page). */
-  onClear?: () => void;
-  /** Whether there is anything to clear (hides the button on an empty chat). */
-  canClear?: boolean;
+  /** Live MCP connection badge, rendered at the head of the panel. */
+  mcpStatus?: ReactNode;
   /** Whether the chat can be collapsed (only when a widget fills the row). */
   canCollapse?: boolean;
 }) {
@@ -155,6 +152,8 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {mcpStatus}
+
       <Button
         size="sm"
         variant="ghost"
@@ -180,19 +179,6 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
       >
         <MdiIcon path={mdiChatPlusOutline} className="size-3.5" />
       </Button>
-      {canClear && onClear && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-          onClick={onClear}
-          title="Clear chat"
-          aria-label="Clear chat"
-        >
-          <Trash className="size-3.5" />
-          <span className="hidden sm:inline">Clear</span>
-        </Button>
-      )}
       <BrowserControls />
       {canCollapse && (
         <Button
