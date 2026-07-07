@@ -15,7 +15,7 @@ import { loggedFetch } from "@/lib/debug/external-log";
  * A module-scope cache keeps repeat opens of the same drill-down instant.
  */
 
-type QueryValue = string | number | undefined | null;
+type QueryValue = string | number | string[] | undefined | null;
 
 interface UseTestomatioOpts {
   /** Skip the fetch entirely (e.g. when the caller already has rich data). */
@@ -49,6 +49,12 @@ function buildUrl(
   const params = new URLSearchParams({ session: sessionId });
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === null || v === "") continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item !== "") params.append(k, String(item));
+      }
+      continue;
+    }
     params.set(k, String(v));
   }
   return `/api/testomatio/${encodeURIComponent(resource)}?${params.toString()}`;

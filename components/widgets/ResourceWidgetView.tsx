@@ -15,11 +15,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CreateRunDialog } from "./CreateRunDialog";
+import { ResourceDataTable } from "./ResourceDataTable";
 import { ListPager } from "./list-row";
 import PlansListRenderer from "./PlansListRenderer";
 import RequirementsListRenderer from "./RequirementsListRenderer";
 import RunsListRenderer from "./RunsListRenderer";
 import TestsListRenderer from "./TestsListRenderer";
+import TestRunsListRenderer from "./TestRunsListRenderer";
 
 // Page size for the in-app live list; Prev/Next walks the rest (the external
 // link still covers everything in the full Testomat.io UI).
@@ -36,6 +38,7 @@ const RESOURCE_CONFIG: Record<
     api: string;
     render: (json: unknown) => ReactNode;
     searchVar?: string;
+    table?: boolean;
   }
 > = {
   tests: {
@@ -43,22 +46,32 @@ const RESOURCE_CONFIG: Record<
     api: "tests",
     render: (json) => <TestsListRenderer json={json} />,
     searchVar: "test",
+    table: true,
   },
   runs: {
     label: "Runs",
     api: "runs",
     render: (json) => <RunsListRenderer json={json} />,
     searchVar: "title",
+    table: true,
+  },
+  testruns: {
+    label: "Test Runs",
+    api: "testruns",
+    render: (json) => <TestRunsListRenderer json={json} />,
+    table: true,
   },
   plans: {
     label: "Plans",
     api: "plans",
     render: (json) => <PlansListRenderer json={json} />,
+    table: true,
   },
   requirements: {
     label: "Requirements",
     api: "issues",
     render: (json) => <RequirementsListRenderer json={json} />,
+    table: true,
   },
 };
 
@@ -85,7 +98,7 @@ export function ResourceWidgetView({
   onClose: () => void;
   className?: string;
 }) {
-  const { label, api, render, searchVar } = RESOURCE_CONFIG[resource];
+  const { label, api, render, searchVar, table: isTable } = RESOURCE_CONFIG[resource];
   const store = useStores();
   const [newRunOpen, setNewRunOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -123,11 +136,15 @@ export function ResourceWidgetView({
     setPage(1);
   }
 
-  const { data, loading, error, meta } = useTestomatio<unknown[]>(api, {
-    page,
-    per_page: PER_PAGE,
-    query: query || undefined,
-  });
+  const { data, loading, error, meta } = useTestomatio<unknown[]>(
+    api,
+    {
+      page,
+      per_page: PER_PAGE,
+      query: query || undefined,
+    },
+    { skip: isTable }
+  );
 
   const items = data ?? [];
   const total = meta?.total;
@@ -197,7 +214,9 @@ export function ResourceWidgetView({
   useRegisterWidget(widgetId, runCommand);
 
   let body;
-  if (loading) {
+  if (isTable) {
+    body = <ResourceDataTable resource={resource} />;
+  } else if (loading) {
     body = (
       <div className="flex flex-1 items-center justify-center py-12">
         <Spinner className="size-5 text-muted-foreground" />
@@ -236,7 +255,7 @@ export function ResourceWidgetView({
           <TooltipContent><p>Close</p></TooltipContent>
         </Tooltip>
         <span className="shrink-0 text-sm font-medium">{label}</span>
-        {searchVar && (
+        {searchVar && !isTable && (
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:max-w-xs">
               <SearchIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -299,8 +318,10 @@ export function ResourceWidgetView({
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-3">{body}</div>
-      {showPager && (
+      <div className={cn("min-h-0 flex-1", !isTable && "overflow-auto p-3")}>
+        {body}
+      </div>
+      {showPager && !isTable && (
         <ListPager
           label={pagerLabel}
           page={page}

@@ -81,8 +81,14 @@ export const ZapIcon = Zap
 
 // ─── System icons — Material Symbols Rounded, wght 300, outline ──────────────
 function makeIcon(name: string) {
-  return function MaterialIcon({ className }: { className?: string }) {
-    return <Icon name={name} className={className} />
+  return function MaterialIcon({
+    className,
+    style,
+  }: {
+    className?: string
+    style?: React.CSSProperties
+  }) {
+    return <Icon name={name} className={className} style={style} />
   }
 }
 
@@ -93,6 +99,7 @@ export const ArrowLeftIcon = makeIcon("arrow_back")
 export const ArrowRightIcon = makeIcon("arrow_forward")
 export const ArrowUpIcon = makeIcon("arrow_upward")
 export const ArrowUpRightIcon = makeIcon("north_east")
+export const CalendarIcon = makeIcon("calendar_month")
 export const CameraIcon = makeIcon("photo_camera")
 export const CheckIcon = makeIcon("check")
 export const ChevronDownIcon = makeIcon("keyboard_arrow_down")
@@ -110,8 +117,10 @@ export const EyeIcon = makeIcon("visibility")
 export const EyeOffIcon = makeIcon("visibility_off")
 export const FileIcon = makeIcon("draft")
 export const FileTextIcon = makeIcon("description")
+export const FilterIcon = makeIcon("filter_list")
 export const FolderOpenIcon = makeIcon("folder_open")
 export const GlobeIcon = makeIcon("language")
+export const GripVerticalIcon = makeIcon("drag_indicator")
 export const ImageIcon = makeIcon("image")
 export const InfoIcon = makeIcon("info")
 export const KeyRoundIcon = makeIcon("key")
@@ -126,6 +135,8 @@ export const MonitorIcon = makeIcon("computer")
 export const Monitor = makeIcon("computer")
 export const MoonIcon = makeIcon("dark_mode")
 export const MoreHorizontalIcon = makeIcon("more_horiz")
+export const PanelLeftCloseIcon = makeIcon("left_panel_close")
+export const PanelLeftOpenIcon = makeIcon("left_panel_open")
 export const PaperclipIcon = makeIcon("attach_file")
 export const Pencil = makeIcon("edit")
 export const PhoneIcon = makeIcon("phone")
@@ -134,6 +145,7 @@ export const RotateCwIcon = makeIcon("refresh")
 export const SaveIcon = makeIcon("save")
 export const SearchIcon = makeIcon("search")
 export const SettingsIcon = makeIcon("settings")
+export const Settings2Icon = makeIcon("tune")
 export const SquareIcon = makeIcon("stop")
 export const SunIcon = makeIcon("light_mode")
 export const TerminalIcon = makeIcon("terminal")
@@ -150,12 +162,21 @@ export function Loader2Icon({ className }: LucideProps) {
 }
 
 // ─── Icon primitive ──────────────────────────────────────────────────────────
-export function Icon({ name, className }: { name: string; className?: string }) {
+export function Icon({
+  name,
+  className,
+  style,
+}: {
+  name: string
+  className?: string
+  style?: React.CSSProperties
+}) {
   return (
     <span
       data-slot="icon"
       aria-hidden="true"
       className={cn("material-symbols-rounded", className)}
+      style={style}
     >
       {name}
     </span>

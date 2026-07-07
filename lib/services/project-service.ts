@@ -22,7 +22,12 @@ const CACHE_KEY = "testeiya.testomatio.authState.v1";
 type Status = "idle" | "loading" | "connecting";
 
 /** Project resources that have an in-app widget + a v2 list endpoint. */
-export type ProjectResource = "tests" | "runs" | "plans" | "requirements";
+export type ProjectResource =
+  | "tests"
+  | "runs"
+  | "testruns"
+  | "plans"
+  | "requirements";
 
 /**
  * Project (Testomat.io) business logic: connection status, connect/disconnect,
@@ -126,6 +131,7 @@ export class ProjectService {
     project: string;
     tests: string;
     runs: string;
+    testruns: string;
     plans: string;
     requirements: string;
   } | null {
@@ -137,6 +143,7 @@ export class ProjectService {
       project: root,
       tests: root,
       runs: `${root}/runs`,
+      testruns: `${root}/runs`,
       plans: `${root}/plans`,
       requirements: `${root}/requirements`,
     };

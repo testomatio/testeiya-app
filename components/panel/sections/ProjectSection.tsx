@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/lib/icons";
 import { ProjectGlyph } from "@/components/icons";
+import { cn } from "@/lib/utils";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { useProjectService } from "@/lib/services/StoreProvider";
@@ -68,6 +69,7 @@ export const ProjectSection = observer(function ProjectSection({
               label="Tests"
               count={current.testsCount}
               loading={project.countsLoading}
+              active={project.openResource === "tests"}
               onClick={() => project.showResource("tests")}
             />
             <StatTile
@@ -75,6 +77,7 @@ export const ProjectSection = observer(function ProjectSection({
               label="Runs"
               count={current.runsCount}
               loading={project.countsLoading}
+              active={project.openResource === "runs"}
               onClick={() => project.showResource("runs")}
             />
             <StatTile
@@ -82,6 +85,7 @@ export const ProjectSection = observer(function ProjectSection({
               label="Plans"
               count={current.plansCount}
               loading={project.countsLoading}
+              active={project.openResource === "plans"}
               onClick={() => project.showResource("plans")}
             />
             <StatTile
@@ -89,6 +93,7 @@ export const ProjectSection = observer(function ProjectSection({
               label="Requirements"
               count={current.requirementsCount}
               loading={project.countsLoading}
+              active={project.openResource === "requirements"}
               onClick={() => project.showResource("requirements")}
             />
           </div>
@@ -162,22 +167,33 @@ function StatTile({
   label,
   count,
   loading,
+  active,
   onClick,
 }: {
   icon: string;
   label: string;
   count: number | null;
   loading: boolean;
+  active?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-current={active ? "true" : undefined}
       title={`Open ${label.toLowerCase()} in Testomat.io`}
-      className="group flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
+      className={cn(
+        "group flex items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40",
+        active ? "border-primary/50 bg-primary/10" : "bg-muted/20"
+      )}
     >
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "flex items-center gap-1.5 text-xs",
+          active ? "text-primary" : "text-muted-foreground"
+        )}
+      >
         <Icon name={icon} className="size-3.5" />
         {label}
       </span>
@@ -189,7 +205,12 @@ function StatTile({
         {loading && count === null ? (
           <Skeleton className="h-6 w-10" />
         ) : (
-          <span className="text-lg font-semibold tabular-nums">
+          <span
+            className={cn(
+              "text-lg font-semibold tabular-nums",
+              active && "text-primary"
+            )}
+          >
             {count === null ? "—" : count.toLocaleString()}
           </span>
         )}

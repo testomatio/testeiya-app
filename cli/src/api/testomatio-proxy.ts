@@ -32,13 +32,63 @@ const WRITABLE_RESOURCES = new Set(["testruns", "runs"]);
 
 const CREATABLE_RESOURCES = new Set(["runs"]);
 
-const ALLOWED_FILTERS = new Set([
-  "run_id",
-  "page",
-  "per_page",
-  "query",
-  "filter[status]",
-]);
+const COMMON_FILTERS = ["page", "per_page", "query"];
+
+const RESOURCE_FILTERS: Record<string, string[]> = {
+  tests: [
+    "search_text",
+    "suites[]",
+    "tags[]",
+    "user",
+    "labels[]",
+    "priority",
+    "state",
+    "sync_status",
+    "milestones[]",
+    "tql",
+    "wildcard_tag",
+  ],
+  suites: ["file_type", "tag", "labels", "search_text"],
+  plans: ["kind", "hidden", "labels[]", "search_text"],
+  runs: [
+    "with_rungroups",
+    "search",
+    "tql",
+    "groupId",
+    "jira_ids",
+    "filter[status]",
+    "filter[kind]",
+    "filter[user]",
+    "filter[created_by]",
+    "filter[env]",
+    "filter[unfinished]",
+    "filter[archived]",
+    "filter[in_group]",
+    "filter[milestone]",
+    "filter[labels][]",
+  ],
+  testruns: [
+    "run_id",
+    "test_ids",
+    "filter[status]",
+    "filter[kind]",
+    "filter[user]",
+    "filter[priority]",
+    "filter[substatus]",
+    "filter[search]",
+    "filter[message]",
+    "filter[link]",
+    "filter[finished_at_date_range]",
+    "tags",
+    "labels",
+    "envs",
+    "rungroups",
+    "defects",
+  ],
+  rungroups: [],
+  issues: ["test_id", "suite_id", "run_id", "testrun_id", "plan_id", "source"],
+  info: [],
+};
 
 export async function testomatioProxy(
   req: Request,
@@ -106,7 +156,7 @@ export async function testomatioProxy(
 
   if (method === "GET") {
     for (const [k, v] of url.searchParams) {
-      if (ALLOWED_FILTERS.has(k) && v) upstream.searchParams.set(k, v);
+      if (v && isAllowedFilter(resource, k)) upstream.searchParams.append(k, v);
     }
   }
 
@@ -137,4 +187,9 @@ export function resolveTestomatioTarget(
     return { error: "session missing project slug, token, or backendUrl" };
   }
   return { baseUrl: baseUrl.replace(/\/$/, ""), projectSlug, token };
+}
+
+function isAllowedFilter(resource: string, key: string): boolean {
+  if (COMMON_FILTERS.includes(key)) return true;
+  return RESOURCE_FILTERS[resource]?.includes(key) ?? false;
 }
