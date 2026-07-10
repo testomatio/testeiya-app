@@ -1,10 +1,9 @@
 /**
- * Fixture data for the /preview component gallery. Sampled from the live
- * Testomat.io MCP (project: codeceptjs) and then enriched with varied
- * statuses/counts so each renderer state is reachable without a backend.
+ * Fixture data for Storybook stories. Sampled from the live Testomat.io MCP
+ * (project: codeceptjs) and then enriched with varied statuses/counts so each
+ * renderer state is reachable without a backend.
  *
- * Do NOT import this from production runtime code — only the /preview page
- * uses it, and that page is gated behind NODE_ENV.
+ * Do NOT import this from production runtime code — only stories use it.
  */
 
 export const runsFixture = {

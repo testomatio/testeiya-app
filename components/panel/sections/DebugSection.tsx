@@ -5,31 +5,55 @@ import { observer } from "mobx-react-lite";
 import { toPlain } from "@/lib/debug/store-snapshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDownIcon, Trash2Icon } from "@/lib/icons";
+import { ChevronDownIcon, Icon, Trash2Icon } from "@/lib/icons";
+import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionShell } from "../SectionShell";
 import { useDebugLogService, useStores } from "@/lib/services/StoreProvider";
 import type {
-  DebugLogEntry,
+  AiLogEntry,
   EventLogEntry,
   RequestLogEntry,
 } from "@/lib/debug/external-log";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-type Filter = "all" | "request" | "event";
-type View = "activity" | "store";
+type View = "store" | "requests" | "cli";
+
+const STORYBOOK_URL =
+  process.env.NEXT_PUBLIC_STORYBOOK_URL ?? "http://localhost:6006";
+const SHOW_STORYBOOK =
+  process.env.NODE_ENV === "development" ||
+  !!process.env.NEXT_PUBLIC_STORYBOOK_URL;
 
 export const DebugSection = observer(function DebugSection({
   active,
 }: PanelSectionProps) {
   const debug = useDebugLogService();
-  const [view, setView] = useState<View>("activity");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<View>("requests");
 
-  const entries = debug.entries
-    .filter((e) => filter === "all" || e.kind === filter)
-    .sort((a, b) => b.ts - a.ts);
+  const requests = debug.entries.filter((e) => e.kind === "request");
+  const cli = debug.entries.filter((e) => e.kind !== "request");
+  const entries = (view === "cli" ? cli : requests).sort((a, b) => b.ts - a.ts);
+
+  const storybookAction = SHOW_STORYBOOK && (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open Storybook"
+            onClick={() => void openExternalUrl(STORYBOOK_URL)}
+          >
+            <Icon name="web_stories" className="size-4" />
+          </Button>
+        }
+      />
+      <TooltipContent><p>Open Storybook</p></TooltipContent>
+    </Tooltip>
+  );
 
   const clearAction = (
     <Tooltip>
@@ -54,30 +78,53 @@ export const DebugSection = observer(function DebugSection({
     <SectionShell
       title="Debug"
       active={active}
-      actions={view === "activity" ? clearAction : null}
+      titleAccessory={
+        <Tabs value={view} onValueChange={(v) => setView(v as View)}>
+          <TabsList className="h-7">
+            <TabsTrigger value="store" className="px-2">
+              Store
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="gap-1 px-2">
+              Requests
+              <span className="text-xs tabular-nums opacity-60">{requests.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="cli" className="gap-1 px-2">
+              CLI
+              <span className="text-xs tabular-nums opacity-60">{cli.length}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      }
+      actions={
+        <>
+          {storybookAction}
+          {view !== "store" && clearAction}
+        </>
+      }
     >
-      <ViewTabs view={view} onChange={setView} />
       {view === "store" ? (
         <StoreInspector />
       ) : (
         <>
-          <FilterBar filter={filter} onChange={setFilter} entries={debug.entries} />
-          <p className="border-b px-3 py-1.5 text-[10px] text-muted-foreground">
-            Testomat.io requests + responses are saved (re-runnable) to{" "}
-            <code className="font-mono">cli/log/testomatio.http</code>
-          </p>
+          {view === "requests" && (
+            <p className="border-b px-3 py-1.5 text-[10px] text-muted-foreground">
+              Testomat.io requests + responses are saved (re-runnable) to{" "}
+              <code className="font-mono">cli/log/testomatio.http</code>
+            </p>
+          )}
           {entries.length === 0 && (
             <p className="p-4 text-muted-foreground text-xs">
-              No activity yet. API requests, Testomat.io calls, and agent events
-              appear here (and in the browser console).
+              {view === "requests"
+                ? "No requests yet. Same-origin /api calls and outbound Testomat.io calls appear here."
+                : "No activity yet. Agent events, LLM calls, and check-tests runs appear here."}
             </p>
           )}
           <div className="flex flex-col">
             {entries.map((entry) =>
-              entry.kind === "event" ? (
-                <EventRow key={`${entry.channel}:${entry.id}`} entry={entry} />
-              ) : (
+              entry.kind === "request" ? (
                 <RequestRow key={`${entry.channel}:${entry.id}`} entry={entry} />
+              ) : (
+                <EventRow key={`${entry.channel}:${entry.id}`} entry={entry} />
               )
             )}
           </div>
@@ -107,38 +154,6 @@ const StoreInspector = observer(function StoreInspector() {
     </>
   );
 });
-
-function ViewTabs({
-  view,
-  onChange,
-}: {
-  view: View;
-  onChange: (v: View) => void;
-}) {
-  const tabs: { id: View; label: string }[] = [
-    { id: "activity", label: "Activity" },
-    { id: "store", label: "Store" },
-  ];
-  return (
-    <div className="flex gap-1 border-b px-3 py-2">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={cn(
-            "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-            view === t.id
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 const StoreRow = observer(function StoreRow({
   name,
@@ -179,44 +194,6 @@ const StoreRow = observer(function StoreRow({
   );
 });
 
-function FilterBar({
-  filter,
-  onChange,
-  entries,
-}: {
-  filter: Filter;
-  onChange: (f: Filter) => void;
-  entries: DebugLogEntry[];
-}) {
-  const requests = entries.filter((e) => e.kind === "request").length;
-  const events = entries.length - requests;
-  const tabs: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: entries.length },
-    { id: "request", label: "Requests", count: requests },
-    { id: "event", label: "Events", count: events },
-  ];
-  return (
-    <div className="flex gap-1 border-b px-3 py-2">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={cn(
-            "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-            filter === t.id
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          {t.label}
-          <span className="tabular-nums opacity-60">{t.count}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function RequestRow({ entry }: { entry: RequestLogEntry }) {
   const failed = entry.error !== null || (entry.status !== null && entry.status >= 400);
   return (
@@ -250,7 +227,7 @@ function RequestRow({ entry }: { entry: RequestLogEntry }) {
   );
 }
 
-function EventRow({ entry }: { entry: EventLogEntry }) {
+function EventRow({ entry }: { entry: EventLogEntry | AiLogEntry }) {
   const failed = !entry.ok;
   return (
     <details className="group border-b text-xs">
@@ -260,7 +237,7 @@ function EventRow({ entry }: { entry: EventLogEntry }) {
           {clock(entry.ts)}
         </span>
         <Badge variant="outline" className="shrink-0 px-1 text-[9px] uppercase tracking-wide">
-          {entry.channel === "check-tests" ? "ct" : "evt"}
+          {channelTag(entry.channel)}
         </Badge>
         <span className="shrink-0 font-mono font-semibold text-foreground">
           {entry.name}
@@ -268,15 +245,33 @@ function EventRow({ entry }: { entry: EventLogEntry }) {
         <span className="min-w-0 flex-1 truncate text-muted-foreground">
           {entry.summary}
         </span>
+        {entry.kind === "ai" && entry.durationMs !== null && (
+          <span className="shrink-0 tabular-nums text-muted-foreground">
+            {entry.durationMs}ms
+          </span>
+        )}
         {failed && <Badge variant="destructive" className="shrink-0">ERR</Badge>}
       </summary>
       {entry.detail && (
         <div className="space-y-2 px-3 pb-3 pt-1">
+          {entry.kind === "ai" && entry.tokens && (
+            <div className="text-[10px] tabular-nums text-muted-foreground">
+              tokens: {entry.tokens.input} in · {entry.tokens.output} out ·{" "}
+              {entry.tokens.total} total
+            </div>
+          )}
           <Field label="Payload" value={entry.detail} tone={failed ? "error" : "default"} />
         </div>
       )}
     </details>
   );
+}
+
+function channelTag(channel: EventLogEntry["channel"] | AiLogEntry["channel"]): string {
+  if (channel === "check-tests") return "ct";
+  if (channel === "ai") return "ai";
+  if (channel === "console") return "js";
+  return "evt";
 }
 
 function Field({

@@ -46,6 +46,7 @@ Testeiya has **three runnable surfaces**, all driven by the same `cli/` agent co
 | `npm run desktop:dev` | `NEXT_EXPORT=1 next build` → `electrobun dev` (native window) | Testing the real desktop shell |
 | `npm run desktop:build` | `NEXT_EXPORT=1 next build` → `electrobun build` (installers) | Shipping the desktop app |
 | `cd cli && bun src/cli.ts` | The standalone **terminal CLI** agent (no UI/server); reads a provider key from env and runs in the cwd | Terminal / CI agent use |
+| `npm run storybook` | Storybook dev server on :6006 (see "Storybook") | Browsing/authoring component stories |
 
 > The agent server **must** be `app-server.ts` (`testeiya`'s `serve:app`) — it serves `/api/*` + the WS upgrade. The old `server.ts` was WS-only and answered every REST call with `426 Upgrade Required`; its `serve` script has been removed. `npm run dev` wires the correct pair.
 
@@ -234,6 +235,15 @@ The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark the
 - **Palette:** the `:root` / `.dark` blocks in `app/globals.css` map shadcn tokens to the brand hex — `--primary` = indigo-500 `#6366f1`, neutral surfaces (`#ffffff`/`#fafafa`/`#f5f5f5` light, `#0a0a0a`/`#171717`/`#262626` dark), neutral borders/text. Only `--destructive` (red) and the `--status-*`/`--run-*`/`--type-*` vars stay non-brand (functional status indicators). No `gray`/`zinc`/`slate`/`stone`; no hues other than indigo for accents.
 - **Headings:** compact scale in `@layer base` — H1 `text-2xl` (24px) → H6 `text-sm` (14px, the indigo uppercase "eyebrow"). Element defaults only; explicit `text-*` utilities still win.
 - To restyle, edit the variables/`@layer base` in `globals.css` — components inherit automatically.
+
+## Storybook (component catalog)
+
+Every presentational component has a story. `npm run storybook` → http://localhost:6006 (Storybook 10, `@storybook/nextjs-vite`, config in `.storybook/`). **Dev-only** — never shipped in `out/` or the Electrobun bundle (`storybook-static/` is gitignored). The Debug panel header has an "Open Storybook" button (`DebugSection.tsx`; URL overridable via `NEXT_PUBLIC_STORYBOOK_URL`, hidden in production builds without it).
+
+- **Stories live centrally in `stories/<category>/*.stories.tsx`** (not co-located) with titles `"<Category>/<Component>"`. Categories: **Global** (`components/ui/*` primitives + design tokens + icons), **Sidebar** (panel shells), **Widget** (status pills, item renderers, data-table cells — fixtures from `stories/fixtures.ts`), **Agent** (ai-elements + agent-output). One named story per variant/state (`Primary`, `Secondary`, `Sizes`, …).
+- **Presentational only** — components that need MobX services / `DataTableProvider` / `usePanel` are not storied (no provider mocking). Stories must not import the tsconfig-excluded `components/ai-elements/*` files: story files are typechecked by `npm run typecheck`/`next build`, so a broken story breaks the app build.
+- Theme/tooltips come from `.storybook/preview.tsx` (a `.dark`-class toolbar decorator + `TooltipProvider`); `app/globals.css` is imported directly, fonts via `.storybook/preview-head.html` + `staticDirs: ["../public"]`.
+- The old `/ui-kit` and `/preview` routes were absorbed into these stories and removed.
 
 ## Tooltips
 
