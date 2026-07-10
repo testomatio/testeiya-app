@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/lib/icons";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SectionShell } from "../SectionShell";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
@@ -11,15 +12,11 @@ export function PipelinesSection({ active, onToggle, initializing: _initializing
       active={active}
       onToggle={onToggle}
     >
-      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-          <Icon name="account_tree" className="size-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">Pipelines coming soon</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          CI/CD pipeline integration will appear here once it's available.
-        </p>
-      </div>
+      <EmptyState
+        icon={<Icon name="account_tree" className="size-5 text-muted-foreground" />}
+        title="Pipelines coming soon"
+        description="CI/CD pipeline integration will appear here once it's available."
+      />
     </SectionShell>
   );
 }

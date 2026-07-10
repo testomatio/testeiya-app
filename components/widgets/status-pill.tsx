@@ -304,6 +304,53 @@ export function RunStatusDot({
 
 
 /**
+ * Toggleable status-filter chip: colored status dot + optional label + count.
+ * Active fills the pill with the status's `--run-*` color. Used by run widgets
+ * to filter their test lists by status (re-click clears the filter).
+ */
+export function StatusFilterChip({
+  status,
+  label,
+  count,
+  active,
+  onClick,
+  className,
+}: {
+  status: string;
+  label?: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+  const color = `var(--run-${status}, var(--run-pending))`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={label ?? `${status} (${count ?? 0})`}
+      title={label ? undefined : `${status} (${count ?? 0})`}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-transparent text-white"
+          : "border-border bg-background hover:bg-muted",
+        className
+      )}
+      style={active ? { background: color } : undefined}
+    >
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: active ? "#fff" : color }}
+      />
+      {label}
+      {count != null && <span className="tabular-nums opacity-80">{count}</span>}
+    </button>
+  );
+}
+
+/**
  * Thin progress bar matching `list-run/progress.hbs`:
  * `w-20 h-1.5 rounded-full bg-muted` + indigo fill.
  */

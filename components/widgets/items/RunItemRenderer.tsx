@@ -33,7 +33,9 @@ import {
   LabelsRow,
   MetaPill,
   RunStatusDot,
+  StatusFilterChip,
 } from "../status-pill";
+import { formatDate } from "@/lib/format";
 import { resolveType, TypeIcon } from "../type-icons";
 import ManualRunRenderer from "./ManualRunRenderer";
 
@@ -350,7 +352,7 @@ export default function RunItemRenderer({
                 {startedAt && (
                   <tr>
                     <th scope="row">Started</th>
-                    <td>{formatDateTime(startedAt)}</td>
+                    <td>{formatDate(startedAt)}</td>
                   </tr>
                 )}
 
@@ -402,21 +404,21 @@ export default function RunItemRenderer({
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusFilterChip
             label="Passed"
-            color="var(--run-passed)"
+            status="passed"
             count={passedCount}
             active={statusFilter === "passed"}
             onClick={() => toggleStatusFilter("passed")}
           />
           <StatusFilterChip
             label="Failed"
-            color="var(--run-failed)"
+            status="failed"
             count={failedCount}
             active={statusFilter === "failed"}
             onClick={() => toggleStatusFilter("failed")}
           />
           <StatusFilterChip
             label="Skipped"
-            color="var(--run-skipped)"
+            status="skipped"
             count={skippedCount}
             active={statusFilter === "skipped"}
             onClick={() => toggleStatusFilter("skipped")}
@@ -501,42 +503,6 @@ export default function RunItemRenderer({
   );
 }
 
-function StatusFilterChip({
-  label,
-  color,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  color: string;
-  count?: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-transparent text-white"
-          : "border-border bg-background hover:bg-muted"
-      )}
-      style={active ? { background: color } : undefined}
-    >
-      <span
-        className="size-2 shrink-0 rounded-full"
-        style={{ background: active ? "#fff" : color }}
-      />
-      {label}
-      {count != null && <span className="tabular-nums opacity-80">{count}</span>}
-    </button>
-  );
-}
-
 function RunStatsPie({
   passed,
   failed,
@@ -602,21 +568,6 @@ function RunStatsPie({
       </PieChart>
     </ResponsiveContainer>
   );
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const date = d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${date} ${time}`;
 }
 
 function personName(v: unknown): string | undefined {

@@ -12,7 +12,7 @@ import {
 import type { DataTableFilterField } from "@/components/data-table/types";
 import { field } from "@/lib/store/schema";
 import { useMemoryAdapter } from "@/lib/store/adapters/memory";
-import { DataTableStoreProvider } from "@/lib/store/provider/DataTableStoreProvider";
+import { DataTableStoreProvider } from "@/components/data-table/data-table-store-provider";
 import { useFilterState } from "@/lib/store/hooks/useFilterState";
 import { useFilterActions } from "@/lib/store/hooks/useFilterActions";
 import { DataTableInfinite } from "@/components/data-table/data-table-infinite";

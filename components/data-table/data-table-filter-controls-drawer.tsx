@@ -13,7 +13,6 @@ import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useHotKey } from "@/hooks/use-hot-key";
@@ -32,20 +31,18 @@ export function DataTableFilterControlsDrawer() {
 
   return (
     <Drawer>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger render={<DrawerTrigger render={<Button ref={isMobile ? triggerButtonRef : null} variant="ghost" size="icon" className="h-9 w-9" />} />}><FilterIcon className="size-4" /></TooltipTrigger>
-          <TooltipContent side="right">
-            <p className="text-nowrap">
-              Toggle controls with{" "}
-              <Kbd className="text-muted-foreground group-hover:text-accent-foreground ml-1">
-                <span className="mr-1">⌘</span>
-                <span>B</span>
-              </Kbd>
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger render={<DrawerTrigger render={<Button ref={isMobile ? triggerButtonRef : null} variant="ghost" size="icon" className="h-9 w-9" />} />}><FilterIcon className="size-4" /></TooltipTrigger>
+        <TooltipContent side="right">
+          <p className="text-nowrap">
+            Toggle controls with{" "}
+            <Kbd className="text-muted-foreground group-hover:text-accent-foreground ml-1">
+              <span className="mr-1">⌘</span>
+              <span>B</span>
+            </Kbd>
+          </p>
+        </TooltipContent>
+      </Tooltip>
       <DrawerContent className="max-h-[calc(100dvh-4rem)]">
         <div className="sr-only">
           <DrawerHeader>

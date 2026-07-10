@@ -4,7 +4,7 @@ import {
   Sortable,
   SortableDragHandle,
   SortableItem,
-} from "@/components/custom/sortable";
+} from "@/components/data-table/sortable";
 import { useDataTable } from "@/components/data-table/data-table-provider";
 import { Button } from "@/components/ui/button";
 import {

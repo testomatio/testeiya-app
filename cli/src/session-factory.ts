@@ -44,6 +44,31 @@ const OTHER_MCP_PROVIDERS = [
   "windsurf",
 ];
 
+// The SDK's bash tool runs on the brush shell, where a heredoc inside $(...)
+// intermittently fails with a bogus "syntax error near token" — and
+// `playwright-cli run-code` snippets have no Node globals. Both failures are
+// cryptic and cost the model several retries; intercept them with an
+// actionable message instead. Replaces the SDK's default rules (cat/grep/find
+// redirects), which we don't want.
+const BASH_GUARD_RULES = [
+  {
+    pattern: "\\$\\((?!\\()[^)\\n]*<<",
+    tool: "write",
+    message:
+      "Heredocs inside $(...) command substitution are unreliable in this shell. " +
+      "Write the script to a file with the write tool and run it, or use a " +
+      "single-line node -e / node -p. Top-level heredocs (not inside $(...)) work fine.",
+  },
+  {
+    pattern: "playwright-cli\\s+run-code[\\s\\S]*process\\.env",
+    tool: "bash",
+    message:
+      "playwright-cli run-code executes in a browser sandbox — process.env and " +
+      "other Node globals are not available there. Read the values in bash first " +
+      "and interpolate them into the snippet.",
+  },
+];
+
 import { loadConfig, type TesteiyaConfig } from "./config.js";
 import { buildSystemPrompt } from "./prompt/index.js";
 import { createPermissionExtension } from "./permissions.js";
@@ -107,6 +132,9 @@ export async function createTesteiyaSession(options?: SessionOptions) {
   // toggles it in Settings (persisted to config.json). Our sessions are persisted
   // and run at taskDepth 0, so this flag is all that gates activation.
   settings.set("memories.enabled", config.memoryEnabled);
+
+  settings.set("bashInterceptor.enabled", true);
+  settings.set("bashInterceptor.patterns", BASH_GUARD_RULES);
 
   // Resolve the active model via the SDK's ModelRegistry. The provider + model
   // are chosen in the Providers & Models UI and persisted to

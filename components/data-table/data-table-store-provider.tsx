@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo } from "react";
-import type { StoreAdapter } from "../adapter/types";
-import { StoreContext, type StoreContextValue } from "../context";
+import type { StoreAdapter } from "@/lib/store/adapter/types";
+import { StoreContext, type StoreContextValue } from "@/lib/store/context";
 
 export interface DataTableStoreProviderProps<
   T extends Record<string, unknown>,

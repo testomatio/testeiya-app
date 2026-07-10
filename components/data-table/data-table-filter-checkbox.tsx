@@ -1,6 +1,7 @@
 "use client";
 
 import { useDataTable } from "@/components/data-table/data-table-provider";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   InputGroup,
@@ -121,16 +122,14 @@ export function DataTableFilterCheckbox<TData>({
                       formatCompactNumber(facetedValue.get(option.value) || 0)
                     ) : null}
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() => column?.setFilterValue([option.value])}
-                    className={cn(
-                      "text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 hidden font-normal backdrop-blur-xs group-hover:block",
-                      "focus-visible:border-ring focus-visible:ring-ring/50 rounded-md transition-all outline-none focus-visible:ring-[3px]",
-                    )}
+                    className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 hidden h-auto rounded-md px-2 font-normal backdrop-blur-xs group-hover:inline-flex"
                   >
-                    <span className="px-2">only</span>
-                  </button>
+                    only
+                  </Button>
                 </Label>
               </div>
             );

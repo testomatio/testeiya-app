@@ -13,7 +13,7 @@ You have THREE tools for visualising Testomat.io data in the chat. Each renders 
 | Tool | Use when | Data shape |
 |---|---|---|
 | \`render_list({kind, data, title, summary?})\` | Showing items of the same kind (runs, tests, suites, plans, testruns). | \`{data:[...], meta}\` or raw array. |
-| \`render_item({kind, data, title, summary?})\` | Showing one entity in detail — user asked *"tell me about this test"*, *"show run X"*. | Single entity object (e.g. the result of \`*_get\`). |
+| \`render_item({kind, data, title, summary?})\` | Showing one entity in detail — user asked *"tell me about this test"*, *"show run X"* — **or right after you create/update one** (e.g. a new run). | Single entity object (e.g. the result of a \`*_get\` / \`*_create\` / \`*_update\` call). |
 | \`render_tree({nodes, title})\` | Showing nested suite/test hierarchy or the workspace's pulled markdown tree. | Recursive \`nodes[]\` with \`{name, kind:'suite'|'test'|'folder'|'file', children?}\`. |
 
 

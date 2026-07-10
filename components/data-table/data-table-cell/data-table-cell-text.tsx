@@ -1,4 +1,4 @@
-import { TextWithTooltip } from "@/components/custom/text-with-tooltip";
+import { TextWithTooltip } from "@/components/data-table/text-with-tooltip";
 
 export function DataTableCellText({
   value,

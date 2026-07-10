@@ -7,12 +7,11 @@ import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useHotKey } from "@/hooks/use-hot-key";
 import { formatCompactNumber } from "@/lib/format";
-import { useControls } from "@/components/controls";
+import { useControls } from "@/components/data-table/controls";
 import { cn } from "@/lib/utils";
 import { FilterIcon } from "@/lib/icons";
 import { DataTableFilterControlsDrawer } from "./data-table-filter-controls-drawer";
@@ -35,30 +34,28 @@ export function DataTableToolbar({ renderActions }: DataTableToolbarProps) {
   return (
     <div className="flex min-h-[46px] flex-wrap items-center justify-between gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="outline" onClick={() => setOpen((prev) => !prev)} className={cn("hidden gap-2 sm:flex", columnFilters.length && "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")} />}>
-              <FilterIcon className="size-4" />
-              <span className="hidden md:block">
-                {open ? "Hide Filters" : "Show Filters"}
-              </span>
-              {columnFilters.length ? (
-                <Badge variant="default" className="h-5 min-w-5 rounded-full px-1 tabular-nums">
-                  {columnFilters.length}
-                </Badge>
-              ) : null}
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p className="text-nowrap">
-                Toggle filters with{" "}
-                <Kbd className="text-muted-foreground group-hover:text-accent-foreground ml-1">
-                  <span className="mr-1">⌘</span>
-                  <span>B</span>
-                </Kbd>
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="outline" onClick={() => setOpen((prev) => !prev)} className={cn("hidden gap-2 sm:flex", columnFilters.length && "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")} />}>
+            <FilterIcon className="size-4" />
+            <span className="hidden md:block">
+              {open ? "Hide Filters" : "Show Filters"}
+            </span>
+            {columnFilters.length ? (
+              <Badge variant="default" className="h-5 min-w-5 rounded-full px-1 tabular-nums">
+                {columnFilters.length}
+              </Badge>
+            ) : null}
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p className="text-nowrap">
+              Toggle filters with{" "}
+              <Kbd className="text-muted-foreground group-hover:text-accent-foreground ml-1">
+                <span className="mr-1">⌘</span>
+                <span>B</span>
+              </Kbd>
+            </p>
+          </TooltipContent>
+        </Tooltip>
         <div className="block sm:hidden">
           <DataTableFilterControlsDrawer />
         </div>

@@ -52,5 +52,5 @@ When you need to push changes back, run \`npx check-tests push\` (or similar \`n
 
 ## Notes
 
-See the app interface rules for list-tool rendering. Detail tools (\`*_get\`, create/update responses) don't have a rich renderer — quote or describe those normally.`;
+See the app interface rules for rendering. After any **single-entity** call — \`*_get\` **or a \`*_create\` / \`*_update\`** that returns one run, testrun, test, suite, or plan — render the returned entity with \`render_item({kind, data})\` instead of pasting its link or describing it in text (e.g. after creating a run, \`render_item({kind:"run", data:<run>})\`). Only responses \`render_item\` can't show (labels, issues, analytics, ci/ims config) should be quoted or described normally.`;
 }

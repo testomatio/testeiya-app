@@ -23,7 +23,9 @@ export function formatMilliseconds(value: number) {
 }
 
 export function formatDate(value: Date | string) {
-  return format(new Date(`${value}`), "LLL dd, y HH:mm");
+  const date = new Date(`${value}`);
+  if (Number.isNaN(date.getTime())) return `${value}`;
+  return format(date, "LLL dd, y HH:mm");
 }
 
 export function formatCompactNumber(value: number) {

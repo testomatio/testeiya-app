@@ -1,10 +1,6 @@
 import type { SerializableDisplayConfig } from "@/lib/table-schema/types";
 import type { JSX } from "react";
 
-export type SearchParams = {
-  [key: string]: string | string[] | undefined;
-};
-
 export type DatePreset = {
   label: string;
   from: Date;

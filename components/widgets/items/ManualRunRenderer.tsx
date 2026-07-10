@@ -52,7 +52,7 @@ import { captureDisplayScreenshot } from "@/lib/screenshot";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
 import { ListPager } from "../list-row";
-import { RunProgress, RunStatusDot } from "../status-pill";
+import { RunProgress, RunStatusDot, StatusFilterChip } from "../status-pill";
 import { resolveType, TypeIcon } from "../type-icons";
 
 const STREAMDOWN_PLUGINS = { cjk, code, math, mermaid };
@@ -422,21 +422,14 @@ function ManualRunRenderer({
                 {STATUS_FILTERS.map((f) => {
                   const active = statusFilter === f.value;
                   return (
-                    <button
+                    <StatusFilterChip
                       key={f.value}
-                      type="button"
-                      title={`${f.label} (${filterCounts[f.value]})`}
+                      status={f.value}
+                      count={filterCounts[f.value]}
+                      active={active}
                       onClick={() => setStatusFilter(active ? null : f.value)}
-                      className={cn(
-                        "inline-flex h-7 items-center gap-1 rounded-md border px-1.5 text-xs",
-                        active ? "border-primary bg-muted" : "hover:bg-muted/50"
-                      )}
-                    >
-                      <RunStatusDot status={f.value} />
-                      <span className="tabular-nums text-muted-foreground">
-                        {filterCounts[f.value]}
-                      </span>
-                    </button>
+                      className="h-7"
+                    />
                   );
                 })}
               </div>

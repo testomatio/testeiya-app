@@ -139,7 +139,7 @@ function record(partial: WithoutMeta<DebugLogEntry>): void {
 }
 
 function logToConsole(e: DebugLogEntry): void {
-  if (e.kind === "event") {
+  if (e.kind !== "request") {
     if (e.channel === "console") return;
     console.log(`[agent] ${e.name}${e.summary ? ` ${e.summary}` : ""}`);
     return;
@@ -218,7 +218,7 @@ type Sink = (entry: DebugLogEntry) => void;
 // `Omit<A | B, K>` collapses to only the keys common to A and B).
 type WithoutMeta<T> = T extends unknown ? Omit<T, "id" | "ts"> : never;
 
-export type DebugLogEntry = RequestLogEntry | EventLogEntry;
+export type DebugLogEntry = RequestLogEntry | EventLogEntry | AiLogEntry;
 
 export interface RequestLogEntry {
   kind: "request";
@@ -251,5 +251,23 @@ export interface EventLogEntry {
   summary: string | null;
   ok: boolean;
   /** Pretty-printed event payload (truncated). */
+  detail: string | null;
+}
+
+/**
+ * LLM-level event published server-side (`cli/src/ai-debug.ts` via `debug-bus`)
+ * and delivered over the `/api/debug/stream` SSE feed. Mirrors `AiEventEntry`.
+ */
+export interface AiLogEntry {
+  kind: "ai";
+  channel: "ai";
+  id: number;
+  ts: number;
+  name: string;
+  summary: string | null;
+  ok: boolean;
+  model: string | null;
+  durationMs: number | null;
+  tokens: { input: number; output: number; total: number } | null;
   detail: string | null;
 }

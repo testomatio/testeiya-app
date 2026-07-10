@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/lib/icons";
 import { ProjectGlyph } from "@/components/icons";
@@ -108,18 +109,15 @@ export const ProjectSection = observer(function ProjectSection({
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-          <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-            <Icon name="folder_managed" className="size-5 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-foreground">
-            {project.connected ? "No project selected" : "Not connected"}
-          </p>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {project.connected
+        <EmptyState
+          icon={<Icon name="folder_managed" className="size-5 text-muted-foreground" />}
+          title={project.connected ? "No project selected" : "Not connected"}
+          description={
+            project.connected
               ? "Select a Testomat.io project to load its tests into the workspace."
-              : "Connect your Testomat.io account to load tests into the workspace."}
-          </p>
+              : "Connect your Testomat.io account to load tests into the workspace."
+          }
+        >
           <Button
             size="sm"
             variant="outline"
@@ -128,7 +126,7 @@ export const ProjectSection = observer(function ProjectSection({
           >
             {project.connected ? "Open a project" : "Connect a project"}
           </Button>
-        </div>
+        </EmptyState>
       )}
 
       <TestomatioLogin open={authOpen} onOpenChange={setAuthOpen} />

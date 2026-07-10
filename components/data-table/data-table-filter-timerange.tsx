@@ -1,6 +1,6 @@
 "use client";
 
-import { DatePickerWithRange } from "@/components/custom/date-picker-with-range";
+import { DatePickerWithRange } from "@/components/data-table/date-picker-with-range";
 import { useDataTable } from "@/components/data-table/data-table-provider";
 import { isArrayOfDates } from "@/lib/is-array";
 import { useMemo } from "react";

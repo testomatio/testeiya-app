@@ -9,6 +9,7 @@ import {
 } from "@/components/ai-elements/file-tree";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -252,7 +253,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           >
             <TabsList className="h-7">
               {ws.types.map((t) => (
-                <TabsTrigger key={t.type} value={t.type} className="gap-1 px-2 text-xs capitalize">
+                <TabsTrigger key={t.type} value={t.type} className="gap-1 px-2 capitalize">
                   {typeGlyph(t.type)}
                   {t.type}
                 </TabsTrigger>
@@ -430,15 +431,11 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           initializing ? (
             <WorkspaceSkeleton />
           ) : (
-            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-                <Icon name="folder_open" className="size-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium text-foreground">No active session</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Send a message to start a session and load your workspace.
-              </p>
-            </div>
+            <EmptyState
+              icon={<Icon name="folder_open" className="size-5 text-muted-foreground" />}
+              title="No active session"
+              description="Send a message to start a session and load your workspace."
+            />
           )
         )}
         {ws.sessionId && !ws.treeError && ws.tree.length === 0 && (ws.awaitingTests || ws.treeLoading) && (
@@ -452,15 +449,11 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           initializing ? (
             <WorkspaceSkeleton />
           ) : (
-            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-                <Icon name="folder_open" className="size-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium text-foreground">Workspace is empty</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Pull tests from Testomat.io or open a folder to get started.
-              </p>
-            </div>
+            <EmptyState
+              icon={<Icon name="folder_open" className="size-5 text-muted-foreground" />}
+              title="Workspace is empty"
+              description="Pull tests from Testomat.io or open a folder to get started."
+            />
           )
         )}
         {ws.tree.length > 0 && ws.changedOnly && ws.visibleTree.length === 0 && (

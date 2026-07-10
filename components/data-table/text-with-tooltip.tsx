@@ -1,7 +1,6 @@
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -45,15 +44,13 @@ export function TextWithTooltip({
   }, []);
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger disabled={!isTruncated} render={<div ref={textRef} className={cn(
-                            "truncate",
-                            !isTruncated && "pointer-events-none",
-                            className,
-                          )} style={style} />}>{text}</TooltipTrigger>
-        <TooltipContent>{text}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger disabled={!isTruncated} render={<div ref={textRef} className={cn(
+                          "truncate",
+                          !isTruncated && "pointer-events-none",
+                          className,
+                        )} style={style} />}>{text}</TooltipTrigger>
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
   );
 }

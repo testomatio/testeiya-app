@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -97,15 +98,12 @@ const ConnectionsBody = observer(function ConnectionsBody({
 }) {
   if (!conn.sessionId) {
     return (
-      <div className="flex flex-col items-center gap-2 py-6 text-center">
-        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-          <Icon name="linked_services" className="size-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">No active session</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Send a message to start a session, then manage connections here.
-        </p>
-      </div>
+      <EmptyState
+        className="py-6"
+        icon={<Icon name="linked_services" className="size-5 text-muted-foreground" />}
+        title="No active session"
+        description="Send a message to start a session, then manage connections here."
+      />
     );
   }
   if (conn.loading && conn.servers.length === 0) {
@@ -117,18 +115,16 @@ const ConnectionsBody = observer(function ConnectionsBody({
   }
   if (conn.servers.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-6 text-center">
-        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-          <Icon name="add_link" className="size-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">No connections yet</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Connect a service or custom MCP server to extend the agent.
-        </p>
+      <EmptyState
+        className="py-6"
+        icon={<Icon name="add_link" className="size-5 text-muted-foreground" />}
+        title="No connections yet"
+        description="Connect a service or custom MCP server to extend the agent."
+      >
         <Button size="sm" variant="outline" className="mt-1 w-full" onClick={onManage}>
           <Icon name="add" className="size-3.5" /> Add connection
         </Button>
-      </div>
+      </EmptyState>
     );
   }
   return (

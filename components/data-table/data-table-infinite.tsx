@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/custom/table";
+} from "@/components/ui/table";
 import { DataTableFilterControls } from "@/components/data-table/data-table-filter-controls";
 import { DataTableProvider } from "@/components/data-table/data-table-provider";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar"; // TODO: check where to put this
@@ -27,7 +27,7 @@ import {
   getColumnOrderKey,
   getColumnVisibilityKey,
 } from "@/lib/constants/local-storage";
-import { getFacetedUniqueValuesFlattened } from "@/lib/data-table/faceted";
+import { getFacetedUniqueValuesFlattened } from "@/components/data-table/faceted";
 import { formatCompactNumber } from "@/lib/format";
 import { useFilterActions } from "@/lib/store/hooks/useFilterActions";
 import { useFilterState } from "@/lib/store/hooks/useFilterState";
@@ -370,7 +370,7 @@ export function DataTableInfinite<TData, TValue>({
               onScroll={onScroll}
               // REMINDER: https://stackoverflow.com/questions/50361698/border-style-do-not-work-with-sticky-position-element
               className="border-separate border-spacing-0"
-              containerClassName="h-full"
+              containerClassName="h-full overflow-y-auto"
             >
               <TableHeader className={cn("bg-background sticky top-0 z-20")}>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -400,7 +400,7 @@ export function DataTableInfinite<TData, TValue>({
                                 : undefined
                           }
                           className={cn(
-                            "border-border relative truncate border-b select-none last:[&>.cursor-col-resize]:opacity-0",
+                            "border-border relative h-9 truncate border-b px-1.5 text-xs text-muted-foreground select-none last:[&>.cursor-col-resize]:opacity-0",
                             header.column.columnDef.meta?.headerClassName,
                           )}
                           aria-sort={
@@ -590,7 +590,7 @@ function Row<TData>({
                 : undefined
           }
           className={cn(
-            "border-border truncate border-b",
+            "border-border truncate border-b px-1.5 py-1",
             cell.column.columnDef.meta?.cellClassName,
           )}
         >

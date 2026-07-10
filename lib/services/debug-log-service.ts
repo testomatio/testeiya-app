@@ -154,7 +154,7 @@ export class DebugLogService {
 }
 
 function isError(entry: DebugLogEntry): boolean {
-  if (entry.kind === "event") return !entry.ok;
+  if (entry.kind !== "request") return !entry.ok;
   return !entry.ok || (entry.status !== null && entry.status >= 400);
 }
 

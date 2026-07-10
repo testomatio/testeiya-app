@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { SuiteGlyph } from "@/components/icons";
@@ -200,42 +201,32 @@ export function MarkdownEditor({
               Only markdown files get the block editor; other files fall back to
               the code editor below. */}
           {isMarkdown && (
-          <div className="flex items-center rounded-md border p-0.5">
-            <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  onClick={() => { setMode("rich"); localStorage.setItem("editor-mode", "rich"); }}
-                  className={cn(
-                    "rounded p-1 text-muted-foreground hover:bg-muted",
-                    mode === "rich" && "bg-muted text-foreground"
-                  )}
-                  aria-pressed={mode === "rich"}
-                  aria-label="Rich editor"
-                >
-                  <Blocks className="size-3.5" />
-                </button>
-              } />
-              <TooltipContent><p>Rich editor</p></TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  onClick={() => { setMode("markdown"); localStorage.setItem("editor-mode", "markdown"); }}
-                  className={cn(
-                    "rounded p-1 text-muted-foreground hover:bg-muted",
-                    mode === "markdown" && "bg-muted text-foreground"
-                  )}
-                  aria-pressed={mode === "markdown"}
-                  aria-label="Markdown editor"
-                >
-                  <Code className="size-3.5" />
-                </button>
-              } />
-              <TooltipContent><p>Markdown editor</p></TooltipContent>
-            </Tooltip>
-          </div>
+          <Tabs
+            value={mode}
+            onValueChange={(v) => {
+              setMode(v as EditorMode);
+              localStorage.setItem("editor-mode", String(v));
+            }}
+          >
+            <TabsList className="h-7">
+              <Tooltip>
+                <TooltipTrigger render={
+                  <TabsTrigger value="rich" className="px-1.5" aria-label="Rich editor">
+                    <Blocks className="size-3.5" />
+                  </TabsTrigger>
+                } />
+                <TooltipContent><p>Rich editor</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <TabsTrigger value="markdown" className="px-1.5" aria-label="Markdown editor">
+                    <Code className="size-3.5" />
+                  </TabsTrigger>
+                } />
+                <TooltipContent><p>Markdown editor</p></TooltipContent>
+              </Tooltip>
+            </TabsList>
+          </Tabs>
           )}
           {/* Full-screen toggle: fills the area (and hides the chat) ↔ strip. */}
           {onToggleFullScreen && (

@@ -1,5 +1,5 @@
 import { DataTableFilterField } from "@/components/data-table/types";
-import { ControlsProvider } from "@/components/controls";
+import { ControlsProvider } from "@/components/data-table/controls";
 import type {
   ColumnDef,
   ColumnFiltersState,
