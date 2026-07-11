@@ -16,6 +16,7 @@ import { migrateLegacyHomeDir } from "./project-dir.js";
 import { ensureTestomatioAuth } from "./testomatio-auth.js";
 import { loadEnvFiles } from "./load-env.js";
 import { initTelemetry } from "./telemetry.js";
+import { initFileLog, logStartupConfig } from "./file-log.js";
 
 const VERSION = "0.2.0";
 
@@ -24,6 +25,10 @@ export async function main(_args: string[]): Promise<void> {
   // anything reads sessions/auth/config or the migrated ~/.testeiya/.env.
   migrateLegacyHomeDir();
 
+  // Open the persistent file log (after the home-dir migration) so the terminal
+  // agent's console + crashes are captured on disk like the other surfaces.
+  initFileLog("tui");
+
   // Load .env BEFORE the session starts — the provider API key and the
   // TESTOMATIO token are read from process.env in createTesteiyaSession.
   loadDotEnv();
@@ -31,6 +36,7 @@ export async function main(_args: string[]): Promise<void> {
   // start OpenTelemetry → Langfuse (no-op unless the keys are present).
   loadEnvFiles();
   initTelemetry();
+  logStartupConfig();
 
   // Terminal dark/light detection is built into pi-tui's ProcessTerminal —
   // read interactive.ui.terminal.appearance / .onAppearanceChange() when needed.

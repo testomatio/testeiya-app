@@ -79,6 +79,16 @@ export function logAgentEvent(data: Record<string, unknown>): void {
   });
 }
 
+/**
+ * Record a WebSocket lifecycle event (connect/open/close/error/stall) into the
+ * same log the Debug panel and the server report read — the native browser
+ * "WebSocket connection failed" line reaches neither `console` nor `window`
+ * error handlers, so without this a failed connection leaves no trace.
+ */
+export function logWsEvent(name: string, summary: string, ok: boolean): void {
+  record({ kind: "event", channel: "agent", name, summary, ok, detail: null });
+}
+
 /*
  * Capture `console.error`/`console.warn` and uncaught errors into the same log
  * so the Debug panel and the server-bound report see them. Runs once, client

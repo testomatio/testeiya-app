@@ -114,7 +114,7 @@ export function createConnection(
               resumeConversationId: resumeConversationId ?? undefined,
             });
             session = result.session;
-            aiDebugUnsub = attachAiDebug(session);
+            aiDebugUnsub = attachAiDebug(session, (result as any).conversationId ?? null);
             askChannel = (result as any).askChannel ?? null;
             widgetChannel = (result as any).widgetChannel ?? null;
 
@@ -240,6 +240,7 @@ export function createConnection(
             images.length > 0 ? { images } : undefined
           );
         } catch (err: any) {
+          console.error("[session] prompt error:", err?.message || err);
           send({ type: "error", error: err.message || String(err) });
         } finally {
           stopHeartbeat();

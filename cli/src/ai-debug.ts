@@ -11,10 +11,12 @@ import { publish, type AiEventEntry } from "./debug-bus.js";
 
 const MAX_DETAIL = 16000;
 
-export function attachAiDebug(session: any): () => void {
+export function attachAiDebug(session: any, conversationId?: string | null): () => void {
   return session.subscribe((event: any) => {
     const entry = mapAiEvent(event);
-    if (entry) publish(entry);
+    if (!entry) return;
+    if (conversationId) entry.summary = withSession(entry.summary, conversationId);
+    publish(entry);
   });
 }
 
@@ -34,15 +36,17 @@ function mapAiEvent(event: any): AiEventInput | null {
 
 function turnEntry(message: any): AiEventInput | null {
   if (!message || message.role !== "assistant") return null;
+  const text = assistantText(message.content);
+  const tokens = tokensOf(message.usage);
   const entry: AiEventInput = {
     kind: "ai",
     channel: "ai",
     name: "response",
-    summary: `${message.model} · ${message.stopReason}`,
+    summary: `${message.model} · ${message.stopReason} · ${text.length} chars${tokenSummary(tokens)}`,
     ok: true,
     model: message.model ?? null,
     durationMs: numberOrNull(message.duration),
-    tokens: tokensOf(message.usage),
+    tokens,
     detail: detail({
       model: message.model,
       provider: message.provider,
@@ -51,7 +55,7 @@ function turnEntry(message: any): AiEventInput | null {
       usage: message.usage,
       ttft: message.ttft,
       duration: message.duration,
-      text: assistantText(message.content),
+      text,
     }),
   };
   if (message.stopReason !== "error") return entry;
@@ -59,6 +63,16 @@ function turnEntry(message: any): AiEventInput | null {
   entry.ok = false;
   entry.summary = message.errorMessage ?? "error";
   return entry;
+}
+
+function tokenSummary(tokens: AiEventEntry["tokens"]): string {
+  if (!tokens) return "";
+  return ` · ${tokens.input}/${tokens.output} tok`;
+}
+
+function withSession(summary: string | null, conversationId: string): string {
+  if (!summary) return `session:${conversationId}`;
+  return `${summary} · session:${conversationId}`;
 }
 
 function retryStart(event: any): AiEventInput {

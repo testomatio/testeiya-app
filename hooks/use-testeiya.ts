@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { logAgentEvent } from "@/lib/debug/external-log";
+import { logAgentEvent, logWsEvent } from "@/lib/debug/external-log";
 
 export interface ToolCall {
   toolCallId: string;
@@ -76,6 +76,11 @@ function getWsBase(): string {
  *  socket is dead. Comfortably above the server's HEARTBEAT_MS (15s) so a couple
  *  of dropped frames don't trip it. */
 const STALL_TIMEOUT_MS = 45000;
+
+/** How long to wait for the socket to open before treating the connect as
+ *  failed. Without this a dead agent server leaves the socket stuck in
+ *  CONNECTING and a queued message hangs silently forever. */
+const CONNECT_TIMEOUT_MS = 10000;
 
 export function useTesteiya(params?: TesteiyaParams) {
   const wsUrl = useMemo(() => {
@@ -157,6 +162,7 @@ export function useTesteiya(params?: TesteiyaParams) {
       // signal at all for STALL_TIMEOUT_MS — the socket is dead (a zombie
       // connection can still report OPEN), so drop it and let the next send
       // reconnect. Fires only on a real disconnect, never on a slow turn.
+      logWsEvent("ws-stall", `no server events for ${STALL_TIMEOUT_MS}ms`, false);
       setStatus((s) => (s === "submitted" || s === "streaming" ? "ready" : s));
       setError(
         "Lost connection to the agent — your last message may not have finished. Send it again to reconnect."
@@ -412,8 +418,17 @@ export function useTesteiya(params?: TesteiyaParams) {
 
     setStatus("connecting");
     const ws = new WebSocket(wsUrl);
+    let opened = false;
+    const connectTimer = setTimeout(() => {
+      if (ws.readyState !== WebSocket.CONNECTING) return;
+      logWsEvent("ws-connect-timeout", wsUrl, false);
+      ws.close();
+    }, CONNECT_TIMEOUT_MS);
 
     ws.onopen = () => {
+      opened = true;
+      clearTimeout(connectTimer);
+      logWsEvent("ws-open", wsUrl, true);
       setStatus("ready");
       // Re-bind a conversation the user switched to while reconnecting.
       if (pendingConversationRef.current && ws.readyState === WebSocket.OPEN) {
@@ -447,14 +462,34 @@ export function useTesteiya(params?: TesteiyaParams) {
 
     ws.onmessage = handleWsMessage;
 
-    ws.onclose = () => {
+    ws.onclose = (e: CloseEvent) => {
+      clearTimeout(connectTimer);
+      logWsEvent("ws-close", `code ${e.code}${e.reason ? ` ${e.reason}` : ""}`, e.wasClean);
+      // A superseded socket (the effect reconnected with a new wsUrl) shouldn't
+      // touch the live connection's status or raise a false "can't connect".
+      if (wsRef.current !== ws) return;
       wsRef.current = null;
+      if (!opened) {
+        setError(
+          "Could not connect to the agent server — is it running? Your message was not sent."
+        );
+        setStatus("ready");
+        return;
+      }
+      if (
+        statusRef.current === "submitted" ||
+        statusRef.current === "streaming" ||
+        pendingMessageRef.current
+      ) {
+        setError(
+          "Connection to the agent server was lost mid-turn — send it again to reconnect."
+        );
+      }
       setStatus("ready");
     };
 
     ws.onerror = () => {
-      wsRef.current = null;
-      setStatus("ready");
+      logWsEvent("ws-error", wsUrl, false);
     };
 
     wsRef.current = ws;

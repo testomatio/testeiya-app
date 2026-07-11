@@ -80,6 +80,10 @@ export class DebugLogService {
     if (next.length > MAX_ENTRIES) next.length = MAX_ENTRIES;
     this.entries = next;
     if (isError(entry)) this.scheduleErrorReport();
+    // On a fresh (re)connect, flush the whole ring so the pre-outage error
+    // history — which couldn't be POSTed while the server was down — reaches the
+    // server-side snapshot now that it's reachable again.
+    if (entry.kind === "event" && entry.name === "ws-open") this.report("reconnect");
   }
 
   /**

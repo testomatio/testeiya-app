@@ -2,50 +2,16 @@
  * Persistent file logging for the desktop shell.
  *
  * Importing this module (it must be the FIRST import in the Electrobun main
- * entry) tees every `console.*` call to `~/.testeiya/testeiya.log` and records
- * uncaught exceptions / unhandled rejections — so a packaged app that crashes on
- * launch leaves a trace on disk instead of dying silently behind the window.
+ * entry) opens the shared `~/.testeiya/logs/` file log — teeing every
+ * `console.*` call and recording uncaught exceptions — before anything else
+ * runs, so a packaged app that crashes on launch leaves a trace on disk instead
+ * of dying silently behind the window. The actual logging lives in the shared
+ * `cli/src/file-log.ts` so desktop, web, and the terminal CLI all log the same.
  */
-import { appendFileSync, mkdirSync } from "node:fs";
-import { homedir, EOL } from "node:os";
-import { join } from "node:path";
-import { inspect } from "node:util";
+import { migrateLegacyHomeDir } from "../../cli/src/project-dir";
+import { initFileLog, appLogPath } from "../../cli/src/file-log";
 
-const logDir = join(homedir(), ".testeiya");
-const logPath = join(logDir, "testeiya.log");
+migrateLegacyHomeDir();
+initFileLog("desktop");
 
-mkdirSync(logDir, { recursive: true });
-writeLine("info", [`--- session start ${new Date().toISOString()} (pid ${process.pid}) ---`]);
-
-patchConsole("log", "info");
-patchConsole("info", "info");
-patchConsole("warn", "warn");
-patchConsole("error", "error");
-patchConsole("debug", "debug");
-
-process.on("uncaughtException", (err) => {
-  writeLine("error", ["uncaughtException", err]);
-});
-process.on("unhandledRejection", (reason) => {
-  writeLine("error", ["unhandledRejection", reason]);
-});
-
-export { logPath };
-
-function patchConsole(method: "log" | "info" | "warn" | "error" | "debug", level: string): void {
-  const original = console[method].bind(console);
-  console[method] = (...args: unknown[]) => {
-    writeLine(level, args);
-    original(...args);
-  };
-}
-
-function writeLine(level: string, args: unknown[]): void {
-  const ts = new Date().toISOString();
-  const body = args
-    .map((a) => (typeof a === "string" ? a : inspect(a, { depth: 4, colors: false })))
-    .join(" ");
-  try {
-    appendFileSync(logPath, `${ts} [${level}] ${body}${EOL}`);
-  } catch {}
-}
+export const logPath = appLogPath() ?? "";

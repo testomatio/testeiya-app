@@ -43,4 +43,5 @@ export interface ServerInfo {
   url: string;
   mode: string;
   startedAt: string;
+  logFile?: string | null;
 }

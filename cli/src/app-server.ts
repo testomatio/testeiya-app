@@ -60,6 +60,7 @@ import { debugReport } from "./api/debug-report.js";
 import { debugSnapshot } from "./api/debug-snapshot.js";
 import { captureServerConsole } from "./debug-bus.js";
 import { writeServerInfo } from "./server-info.js";
+import { initFileLog, logStartupConfig, appLogPath } from "./file-log.js";
 import {
   playwrightOpen,
   playwrightClose,
@@ -92,6 +93,10 @@ const DEFAULT_PORT = parseInt(
 );
 const HOSTNAME = process.env.HOST || "127.0.0.1";
 
+// Endpoints the UI polls on a timer — logging every hit floods the app log and
+// the Debug panel with noise. Suppress the per-request `[api]` line for these.
+const QUIET_API_PATHS = new Set(["/api/playwright/status"]);
+
 // Where the static Next export lives. Defaults to `<repo>/out`; the Electrobun
 // entry passes the bundled location (or set TESTEIYA_STATIC_DIR).
 const DEFAULT_STATIC_DIR =
@@ -116,7 +121,7 @@ function notFound(message = "Not found"): Response {
 
 async function handleApi(req: Request, pathname: string): Promise<Response> {
   const method = req.method.toUpperCase();
-  console.log(`[api] ${method} ${pathname}`);
+  if (!QUIET_API_PATHS.has(pathname)) console.log(`[api] ${method} ${pathname}`);
 
   if (pathname === "/api/agent/start" && method === "POST") {
     return agentStart(req);
@@ -348,9 +353,16 @@ function startServer(options: AppServerOptions = {}) {
   // any session/auth/config read or the migrated ~/.testeiya/.env is loaded.
   migrateLegacyHomeDir();
 
+  // Open the persistent file log (after the home-dir migration, which bails if
+  // ~/.testeiya already exists). Tees console + records crashes to disk.
+  initFileLog(options.port === 0 ? "desktop" : "web");
+
   // Fill in env (e.g. OPENROUTER_API_KEY) from .env files the bundled app's CWD
   // wouldn't otherwise pick up. Existing/exported vars always win.
   loadEnvFiles();
+
+  // Record the resolved config + env presence at the top of the app log (no keys).
+  logStartupConfig();
 
   // Put the shipped `playwright-cli` on PATH and pin a shared browser session so
   // the agent's CLI calls and the record/stop/screenshot endpoints line up.
@@ -407,6 +419,7 @@ function startServer(options: AppServerOptions = {}) {
           },
         });
         if (ok) return undefined as unknown as Response;
+        console.warn("[ws] upgrade failed");
         return new Response("WebSocket upgrade failed", { status: 400 });
       }
 
@@ -456,10 +469,12 @@ function startServer(options: AppServerOptions = {}) {
     url: `http://${HOSTNAME}:${boundPort}`,
     mode: options.port === 0 ? "desktop" : "web",
     startedAt: new Date().toISOString(),
+    logFile: appLogPath(),
   });
 
   console.log(`Testeiya app server listening on http://${HOSTNAME}:${server.port}`);
   console.log(`Serving static UI from ${staticDir}`);
+  console.log(`Debug log → ${appLogPath()}`);
   return server;
 }
 

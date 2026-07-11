@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { logApp } from "./file-log.js";
 
 /*
  * Server-side instrumentation for the sidebar Debug panel. The real outbound
@@ -191,6 +192,7 @@ export function publish(entry: Omit<DebugEntry, "id" | "ts">): void {
   buffer.push(full);
   if (buffer.length > MAX_ENTRIES) buffer.shift();
   for (const cb of subscribers) cb(full);
+  if (full.kind !== "request") teeToAppLog(full);
 }
 
 function record(
@@ -277,6 +279,13 @@ function truncate(value: string | null): string | null {
   if (!value) return value;
   if (value.length <= MAX_BODY) return value;
   return `${value.slice(0, MAX_BODY)}… (+${value.length - MAX_BODY} more chars)`;
+}
+
+function teeToAppLog(entry: AiEventEntry | ProcessEventEntry): void {
+  let text = entry.name;
+  if (!entry.ok) text += " FAIL";
+  if (entry.summary) text += ` — ${entry.summary}`;
+  logApp(entry.channel, text);
 }
 
 export interface ServerRequestEntry {

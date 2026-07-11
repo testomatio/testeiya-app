@@ -99,6 +99,10 @@ Skills reach the agent from **two sources**, each with one simple rule:
 - **Loader:** `cli/src/skills.ts` — `loadBundledSkills`, `loadCustomSkills(cwd?)`, `hasPlaywrightCli()` (browser-tool gate), `ensureCustomSkillsDir()`, `dedupeSkillsByName()`; all reuse the `readSkill` / `readSkillsDir` choke-points. `readSkill` uses the frontmatter `name` only when it's a valid slug, else the folder name (so a mention is always a clean token).
 - **UI:** the prompt input's `SkillsMenu` lists every skill **grouped by category** (custom ones badged), with **Open skills folder** (`Utils.openPath` via `/api/skills/open`; web mode toasts the path) and **Refresh** (`SkillsService.refresh()`) in the footer. `/api/skills` returns `{ name, description, source, category }`.
 
+## Models catalog (providers & models)
+
+Provider list and model *resolution* come from the oh-my-pi SDK (`cli/src/api/providers.ts`, `session-factory.ts`) — never hardcoded. But the SDK's bundled `models.json` is frozen at the SDK's publish date and its registry **never removes** entries, so the *listing* goes stale. The committed **`cli/models.catalog.json`** fixes the listing: **`bunosh harness:models`** (root; `collect:models` from `cli/`; script `cli/scripts/collect-models.ts`) re-collects each provider's live model listing via the SDK's own descriptor fetchers (`PROVIDER_DESCRIPTORS`), **prunes models the provider no longer serves** — unless models.dev shows a release date within the last year — and adds models newer than the SDK snapshot. Providers without a reachable live listing (no fetcher / no API key) keep the SDK list unchanged. Provider keys come from the usual `.env` loading (`catalogDiscovery.envVars` or conventional `<PROVIDER>_API_KEY`) — more keys in env = wider pruning coverage; OpenRouter works unauthenticated. `cli/src/models-catalog.ts` merges the catalog into `GET /api/providers/models` responses (`applyModelsCatalog`); resolution still goes through the SDK registry's live discovery, so picking a catalog-only model works. **On release both CI jobs re-run the collection** (`.github/workflows/release.yml`) — the committed file is a dev-time cache. It ships via `cli/package.json` `files` + the `electrobun.config.ts` copy map; `resolveModelsCatalogPath()` (`project-dir.ts`) probes for it. The model picker (`ProvidersDialog`) also accepts a **free-typed model id** (type it into the combobox → "Use ‹id›"), which resolves through live discovery at session start.
+
 ## HTTP API (served by the Bun app-server)
 
 | Route | Method | Purpose |
@@ -132,6 +136,10 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 ## Debugging (the `testeiya-debug` skill)
 
 **When anything in Testeiya misbehaves — a UI error, a failed request, a project that won't load, a wrong agent answer, a crash — use the `testeiya-debug` skill** (`.claude/skills/testeiya-debug/SKILL.md`) instead of guessing. It collects the whole stack into readable files so a fix has full context: the Bun app-server (CLI), the web/desktop UI + its MobX state, same-origin `/api/*` requests, outbound Testomat.io REST, and the LLM agent.
+
+### Persistent app log (`~/.testeiya/logs/`, survives crashes)
+
+`cli/src/file-log.ts` (`initFileLog`) opens a durable, plain-text **app log** on **every** process start, on all four surfaces (desktop, `serve:app`, the `next dev` agent half, terminal CLI): `app-<yyyyMMdd-HHmmss>-<pid>.log`, with a `[start]` header, a `[config]` block dumping the resolved provider/model/permissions + an env presence summary (**no keys**), and every teed `console.*` line. It captures the **basic** interactions to debug LLM connection/usage + API/connection issues — `[session]` (incl. `[session] prompt error:`), `[api]` (noisy polls like `/api/playwright/status` suppressed), `[testomatio→]`, `[error]`/`uncaughtException`, and `[ai]` LLM events. Each `[ai]` line carries model · stopReason · output chars · in/out tokens · **`session:<id>`** (the Langfuse session id — feed it to `bun run debug:trace session:<id>`). It is **not** a full transcript; the deep per-session detail (prompts, tool IO, generations) lives in **Langfuse**, not on disk. Pruned to **7 days + the 30 newest** on start (so `bun --watch` doesn't pile up). Unlike the snapshot, it's written as things happen, so it's the **first stop when the server crashed or the UI never connected**. Additional sink; the snapshot flow below is unchanged. The live app log's path is published in `~/.testeiya/server.json` (`logFile`).
 
 ### The debug snapshot (server + browser, one JSON)
 
@@ -196,6 +204,7 @@ Look for **mismatches**: what the model's `llm-generation` output claimed vs. wh
 - `api/*.ts` — ported HTTP handlers (framework-agnostic `(req) => Response`)
 - `bridge.ts` — maps pi-coding-agent events → WS messages
 - `debug-bus.ts` · `ai-debug.ts` · `api/debug-{stream,snapshot,report}.ts` — the debug pipeline: server ring buffer + console capture + `buildSnapshot`, LLM-event recorder, and the SSE/pull/push endpoints (see "Debugging")
+- `file-log.ts` — durable `~/.testeiya/logs/` app log (shared by all surfaces): console tee, config header, `[ai]` usage lines, 7-day + 30-file prune (see "Debugging")
 - `server-info.ts` — writes/reads `~/.testeiya/server.json` so out-of-band tooling finds the running server
 - `scripts/{debug-snapshot,langfuse-trace,setup-env}.ts` — the `debug:snapshot` / `debug:trace` / `setup:env` helpers
 
@@ -209,7 +218,8 @@ Look for **mismatches**: what the model's `llm-generation` output claimed vs. wh
 - `~/.testeiya/sessions.json` — active sessions (cwd, projects, tokens, 24h TTL)
 - `~/.testeiya/auth.json` — provider key (SQLite-backed via AuthStorage)
 - `~/.testeiya/config.json` — optional provider/permissions override (else defaults; provider `openrouter`, model from config)
-- `~/.testeiya/server.json` — the running app-server's `{port, pid, url, mode, startedAt}` (`server-info.ts`); lets `debug:snapshot`/the `testeiya-debug` skill find the desktop app's random port. Written on start, removed on exit.
+- `~/.testeiya/server.json` — the running app-server's `{port, pid, url, mode, startedAt, logFile}` (`server-info.ts`); lets `debug:snapshot`/the `testeiya-debug` skill find the desktop app's random port and its live app log. Written on start, removed on exit.
+- `~/.testeiya/logs/` — persistent app log (`cli/src/file-log.ts`): `app-<ts>-<pid>.log` per process start (config header + teed console incl. `[ai]` usage lines with the Langfuse `session:<id>` + crashes). Pruned to 7 days + 30 newest on start; survives crashes. Deep per-session detail lives in Langfuse, not on disk. See "Debugging".
 - `~/.testeiya/testomatio-auth.json` (JWT, 0600) · `~/.testeiya/testomatio-projects.json` (project precache incl. per-project `apiKey`, 0600)
 - `~/.testeiya/workspaces/<safe-project-id>/` — persistent per-project workspace: pulled `*.test.md` at the root + `.testeiya/{mcp.json, mcp.all.json, testeiya.json}`. Reused across launches; **not** deleted on session TTL.
 - `~/.testeiya/skills/<skill>/SKILL.md` — user's global custom skills, loaded for every session (`CUSTOM_SKILLS_DIR`). Entries may be **symlinks** to skills that live in another repo. A per-workspace `<cwd>/.testeiya/skills/` is also loaded when that workspace is open. See "Custom skills" below.
