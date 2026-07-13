@@ -61,6 +61,34 @@ describe("detectManualProject", () => {
   });
 });
 
+describe("gitignore filtering", () => {
+  test("a git-ignored subtree (Rails storage) is excluded from classification", () => {
+    const d = tmp();
+    write(d, ".gitignore", "/storage/*\n");
+    write(d, "a.test.md", "# a");
+    for (let i = 0; i < 50; i++) write(d, `storage/${i}/blob`, "x");
+    // Without gitignore the 50 extensionless blobs would sink the test-file
+    // ratio below 90% and it would no longer read as a manual project.
+    expect(detectManualProject(d)).toBe(true);
+  });
+
+  test("a root .gitignore keeps code out of the code bucket", () => {
+    const d = tmp();
+    write(d, ".gitignore", "generated/\n");
+    write(d, "a.test.md", "# a");
+    for (let i = 0; i < 50; i++) write(d, `generated/gen${i}.ts`, "// gen");
+    expect(detectWorkspaceType(d)).toBe("manual");
+  });
+
+  test("a nested .gitignore applies only to its own subtree", () => {
+    const d = tmp();
+    write(d, "a.test.md", "# a");
+    write(d, "src/.gitignore", "generated/\n");
+    for (let i = 0; i < 50; i++) write(d, `src/generated/gen${i}.ts`, "// gen");
+    expect(detectWorkspaceType(d)).toBe("manual");
+  });
+});
+
 describe("resolveManualTestsDir", () => {
   test("the .testeiya/manual-tests cache wins even over a code repo", () => {
     const d = tmp();
@@ -237,6 +265,29 @@ describe("describeWorkspace types", () => {
     ]);
   });
 
+  test("a code repo with a manual-tests overlay offers code, manual and files", () => {
+    const d = tmp();
+    write(d, "go.mod", "module x");
+    write(d, "main.go", "package main");
+    write(d, "util.go", "package main");
+    write(d, ".testeiya/manual-tests/login.test.md", "# login");
+    const info = describeWorkspace(d);
+    expect(info.type).toBe("code");
+    expect(info.types).toEqual([
+      { type: "code", dir: "" },
+      { type: "manual", dir: ".testeiya/manual-tests" },
+      { type: "files", dir: "" },
+    ]);
+  });
+
+  test("a pure code repo has no separate files toggle", () => {
+    const d = tmp();
+    write(d, "go.mod", "module x");
+    write(d, "main.go", "package main");
+    write(d, "util.go", "package main");
+    expect(describeWorkspace(d).types).toEqual([{ type: "code", dir: "" }]);
+  });
+
   test("a mixed root offers automated, manual and a browse toggle", () => {
     const d = tmp();
     write(d, "login.test.md", "# login");
@@ -284,6 +335,136 @@ describe("describeWorkspace types", () => {
     write(d, "b.test.md", "# b");
     write(d, ".testeiya/manual-tests/x.md", "# x");
     expect(describeWorkspace(d).types).toEqual([{ type: "manual", dir: "" }]);
+  });
+});
+
+describe("application repos are code, e2e repos are automated", () => {
+  test("a Rails app with an rspec suite is code, not automated", () => {
+    const d = tmp();
+    write(d, "Gemfile", "gem 'rails'");
+    write(d, "config.ru", "run App");
+    write(d, "Rakefile", "task :default");
+    write(d, ".rspec", "--require spec_helper");
+    write(d, "app/models/user.rb", "class User; end");
+    write(d, "app/models/post.rb", "class Post; end");
+    write(d, "app/controllers/app_controller.rb", "class AppController; end");
+    write(d, "config/routes.rb", "Rails.routes");
+    write(d, "app/views/index.html.erb", "<h1></h1>");
+    write(d, "app/views/show.html.erb", "<h1></h1>");
+    write(d, "config/database.yml", "development:");
+    write(d, "spec/models/user_spec.rb", "describe User");
+    write(d, "spec/models/post_spec.rb", "describe Post");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a Django app with a pytest suite is code, not automated", () => {
+    const d = tmp();
+    write(d, "manage.py", "def main(): pass");
+    write(d, "pyproject.toml", "[project]");
+    write(d, "pytest.ini", "[pytest]");
+    write(d, "conftest.py", "import pytest");
+    write(d, "app/models.py", "class Model: pass");
+    write(d, "app/views.py", "def index(): pass");
+    write(d, "app/urls.py", "urlpatterns = []");
+    for (const t of ["base", "home", "list", "detail"]) write(d, `templates/${t}.html`, "<html></html>");
+    write(d, "tests/test_models.py", "def test_x(): pass");
+    write(d, "tests/test_views.py", "def test_y(): pass");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a PHP app with a phpunit suite is code, not automated", () => {
+    const d = tmp();
+    write(d, "composer.json", JSON.stringify({ require: { "php": "^8.2" } }));
+    write(d, "phpunit.xml", "<phpunit/>");
+    write(d, "src/User.php", "<?php class User {}");
+    write(d, "src/Post.php", "<?php class Post {}");
+    write(d, "src/Controller.php", "<?php class Controller {}");
+    for (const v of ["home", "about", "contact"]) write(d, `resources/${v}.html`, "<html></html>");
+    write(d, "tests/UserTest.php", "<?php class UserTest {}");
+    write(d, "tests/PostTest.php", "<?php class PostTest {}");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a jest/TS library is code, not automated", () => {
+    const d = tmp();
+    write(d, "package.json", JSON.stringify({ name: "lib", devDependencies: { jest: "^29" } }));
+    write(d, "tsconfig.json", "{}");
+    write(d, "jest.config.js", "module.exports = {}");
+    for (let i = 0; i < 6; i++) write(d, `src/mod${i}.ts`, "export const x = 1");
+    write(d, "src/index.test.ts", "test('x', () => {})");
+    write(d, "README.md", "# lib");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a small manifest-marked repo diluted by data is still code", () => {
+    const d = tmp();
+    write(d, "go.mod", "module x");
+    write(d, "main.go", "package main");
+    write(d, "util.go", "package main");
+    write(d, "Dockerfile", "FROM scratch");
+    for (let i = 0; i < 6; i++) write(d, `data/f${i}.yml`, "k: v");
+    write(d, "README.md", "# x");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a page-object-heavy Playwright repo is automated", () => {
+    const d = tmp();
+    write(d, "playwright.config.ts", "export default {}");
+    write(d, "package.json", JSON.stringify({ devDependencies: { "@playwright/test": "^1.60" } }));
+    for (const p of ["login", "home", "cart", "checkout", "profile"]) {
+      write(d, `pages/${p}.page.ts`, "export class Page {}");
+    }
+    write(d, "tests/login.spec.ts", "test('login', () => {})");
+    write(d, "tests/checkout.spec.ts", "test('checkout', () => {})");
+    expect(detectWorkspaceType(d)).toBe("automated");
+  });
+
+  test("a Cypress config alone marks an automated project", () => {
+    const d = tmp();
+    write(d, "cypress.config.js", "module.exports = {}");
+    write(d, "src/app.js", "// code");
+    expect(detectWorkspaceType(d)).toBe("automated");
+  });
+
+  test("a unit-test config alone does not force automated", () => {
+    const d = tmp();
+    write(d, ".rspec", "--require spec_helper");
+    write(d, "Gemfile", "gem 'rspec'");
+    for (let i = 0; i < 5; i++) write(d, `lib/mod${i}.rb`, "class M; end");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("source files below the ratio without a manifest stay files", () => {
+    const d = tmp();
+    write(d, "one.go", "package main");
+    write(d, "two.go", "package main");
+    for (let i = 0; i < 8; i++) write(d, `notes/n${i}.txt`, "notes");
+    expect(detectWorkspaceType(d)).toBe("files");
+  });
+
+  test("a manifest without any source code is not code", () => {
+    const d = tmp();
+    write(d, "Makefile", "all:");
+    write(d, "README.md", "# docs");
+    write(d, "guide.md", "# guide");
+    expect(detectWorkspaceType(d)).toBe("files");
+  });
+
+  test("source files below the ratio are code inside a git repo", () => {
+    const d = tmp();
+    fs.mkdirSync(path.join(d, ".git"));
+    write(d, "one.go", "package main");
+    write(d, "two.go", "package main");
+    for (let i = 0; i < 8; i++) write(d, `notes/n${i}.txt`, "notes");
+    expect(detectWorkspaceType(d)).toBe("code");
+  });
+
+  test("a git repo without any source code is not code", () => {
+    const d = tmp();
+    fs.mkdirSync(path.join(d, ".git"));
+    write(d, "README.md", "# docs");
+    write(d, "guide.md", "# guide");
+    expect(detectWorkspaceType(d)).toBe("files");
   });
 });
 

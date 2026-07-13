@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.widget-pane.width";
 const DEFAULT_WIDTH = 520;
@@ -70,10 +71,13 @@ export function WidgetPane({
     saveWidth(width);
   }, [width, hydrated]);
 
+  const layoutRef = useLayoutNode("WidgetPane");
+
   if (!children) return null;
 
   return (
     <aside
+      ref={layoutRef}
       className={cn(
         "relative flex flex-col bg-muted/20",
         fill ? "min-w-0 flex-1" : "shrink-0 border-r"

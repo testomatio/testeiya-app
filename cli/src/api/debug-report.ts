@@ -23,6 +23,7 @@ export async function debugReport(req: Request): Promise<Response> {
     entries,
     store: report.store ?? null,
     meta: report.meta ?? null,
+    layout: report.layout ?? null,
   });
   return Response.json({ ok: true });
 }

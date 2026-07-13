@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionsService } from "@/lib/services/StoreProvider";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 
 /**
  * The chat column's header: shows the active conversation's summary as the
@@ -40,6 +41,7 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
 }) {
   const sessions = useSessionsService();
   const { setChatOpen } = usePanel();
+  const layoutRef = useLayoutNode("ChatPanelHeader");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -74,7 +76,7 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   }
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-1 border-b pr-1">
+    <div ref={layoutRef} className="flex h-12 shrink-0 items-center gap-1 border-b pr-1">
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) void sessions.load();

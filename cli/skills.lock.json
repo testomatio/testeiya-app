@@ -3,20 +3,19 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "df3bab7f9104c0b8e4573fa8a0db459470b1dc8b",
+      "sha": "5a81ad60e1246c4897b7edf678fdb7a00b1217e8",
       "skills": [
         "testomatio-mcp",
         "sync-test-cases-with-tms",
         "scan-automation-project",
         "qa-write-test-cases",
         "qa-thinking",
+        "qa-test-code-coverage",
         "qa-requirement-reviewer",
         "qa-pr-requirements-analyzer",
-        "qa-manual-tests-to-code-coverage",
         "qa-e2e-tests-reporting",
         "pull-request-diff-analyzer",
         "improve-test-cases",
-        "e2e-test-coverage-mapping",
         "detect-duplicate-test-cases",
         "debug-fix-failed-flaky-autotests",
         "automate-manual-test-cases",
@@ -57,7 +56,7 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "74d9bf144a96770b6295ceedecb07a2fd7e86775",
+      "sha": "793cfb32572733cbcb401e6f28d05a7a914ce408",
       "skills": [
         "playwright-cli"
       ]

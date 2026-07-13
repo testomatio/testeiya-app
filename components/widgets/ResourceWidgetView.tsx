@@ -7,6 +7,7 @@ import {
   useTestomatio,
 } from "@/lib/agent-output/use-testomatio";
 import { useStores } from "@/lib/services/StoreProvider";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 import { useRegisterWidget } from "@/lib/widgets/command-bus";
 import type { ProjectResource } from "@/lib/services/project-service";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,7 @@ export function ResourceWidgetView({
 }) {
   const { label, api, render, searchVar, table: isTable } = RESOURCE_CONFIG[resource];
   const store = useStores();
+  const layoutRef = useLayoutNode("ResourceWidgetView");
   const [newRunOpen, setNewRunOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
@@ -234,6 +236,7 @@ export function ResourceWidgetView({
 
   return (
     <div
+      ref={layoutRef}
       className={cn(
         "flex min-h-0 flex-1 flex-col rounded-md border bg-background",
         className

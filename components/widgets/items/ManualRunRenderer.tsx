@@ -5,6 +5,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -134,10 +135,11 @@ function ManualRunRenderer({
   const [shots, setShots] = useState<Record<string, Shot[]>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const activeRowRef = useRef<HTMLButtonElement>(null);
+  const activeRowRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrls = useRef<string[]>([]);
   const [leftPct, setLeftPct] = useState(50);
+  const [maxHeight, setMaxHeight] = useState<number>();
 
   // Reset to the first test/page whenever the search changes (render-time reset,
   // the React-recommended alternative to a setState-in-effect).
@@ -151,6 +153,21 @@ function ManualRunRenderer({
   // Focus the view on mount so the keyboard shortcuts work without a click.
   useEffect(() => {
     rootRef.current?.focus();
+  }, []);
+
+  // Bound the height to the viewport so the header/list/steps scroll internally
+  // and the status controls stay pinned — the surrounding widget panes don't all
+  // hand down a definite height, so `h-full` alone would collapse to content.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top;
+      setMaxHeight(Math.max(320, window.innerHeight - top - 12));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   // While the manual-run executor is showing it shares the parent widget's id
@@ -336,6 +353,7 @@ function ManualRunRenderer({
       ref={rootRef}
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      style={{ maxHeight }}
       className="flex h-full min-h-[26rem] flex-col gap-3 outline-none"
     >
       <div className="flex items-center gap-2">
@@ -448,13 +466,20 @@ function ManualRunRenderer({
                     const rowTitle =
                       t.test_title ?? t.title ?? String(t.id ?? "(untitled)");
                     return (
-                      <button
+                      <div
                         key={t.id ?? i}
                         ref={i === index ? activeRowRef : undefined}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
+                        aria-current={i === index}
                         onClick={() => setIndex(i)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          setIndex(i);
+                        }}
                         className={cn(
-                          "flex w-full scroll-mt-8 items-center gap-2 border-l-2 px-2 py-1.5 text-left text-sm",
+                          "flex w-full scroll-mt-8 cursor-pointer items-center gap-2 border-l-2 px-2 py-1.5 text-left text-sm outline-none focus-visible:bg-muted/50",
                           i === index
                             ? "border-primary bg-primary/10 font-medium"
                             : "border-transparent hover:bg-muted/50"
@@ -469,8 +494,19 @@ function ManualRunRenderer({
                         >
                           {rowTitle}
                         </span>
-                        <RunStatusDot status={d?.status ?? t.status} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cycleStatus(t);
+                          }}
+                          aria-label={`Set status for ${rowTitle}`}
+                          title="Click to cycle passed → failed → skipped → not run"
+                          className="flex size-6 shrink-0 items-center justify-center rounded-full outline-none transition-colors hover:bg-muted focus-visible:bg-muted"
+                        >
+                          <RunStatusDot status={d?.status ?? t.status} />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -785,6 +821,30 @@ function ManualRunRenderer({
     if (!current) return;
     const key = String(current.id);
     setDrafts((d) => ({ ...d, [key]: { ...d[key], message: value } }));
+  }
+
+  // Clicking a row's status dot cycles it through the result states and back to
+  // "not run" (passed → failed → skipped → pending), persisting each step so the
+  // counts and progress update without opening the test.
+  async function cycleStatus(t: TestRunRow) {
+    const sessionId = store.sessionId;
+    if (!runId || !sessionId) return;
+    const key = String(t.id);
+    const order: StatusBucket[] = ["passed", "failed", "skipped", "pending"];
+    const cur = drafts[key]?.status ?? t.status;
+    const next = order[(order.indexOf(statusBucket(cur)) + 1) % order.length];
+    const message = drafts[key]?.message ?? t.message ?? "";
+    setDrafts((prev) => ({ ...prev, [key]: { status: next, message } }));
+    setActionError(null);
+    try {
+      await mutateTestomatio(
+        "testruns",
+        { id: t.id as string | number, body: { run_id: runId, status: next, message } },
+        sessionId
+      );
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function save(advance: boolean, statusOverride?: string) {

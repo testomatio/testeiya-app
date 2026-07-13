@@ -307,6 +307,13 @@ export default function RunItemRenderer({
                 passed={passedCount ?? 0}
                 failed={failedCount ?? 0}
                 skipped={skippedCount ?? 0}
+                pending={Math.max(
+                  0,
+                  (testsTotal ?? 0) -
+                    (passedCount ?? 0) -
+                    (failedCount ?? 0) -
+                    (skippedCount ?? 0)
+                )}
               />
             </div>
           )}
@@ -507,17 +514,20 @@ function RunStatsPie({
   passed,
   failed,
   skipped,
+  pending,
 }: {
   passed: number;
   failed: number;
   skipped: number;
+  pending: number;
 }) {
-  const total = passed + failed + skipped;
+  const total = passed + failed + skipped + pending;
   if (total <= 0) return null;
   const data = [
     { name: "Passed", value: passed, fill: "var(--run-passed)" },
     { name: "Failed", value: failed, fill: "var(--run-failed)" },
     { name: "Skipped", value: skipped, fill: "var(--run-skipped)" },
+    { name: "Not run", value: pending, fill: "var(--run-pending)" },
   ];
   return (
     <ResponsiveContainer width="100%" height={190}>

@@ -487,15 +487,11 @@ export const WorkspaceSection = observer(function WorkspaceSection({
             <DialogDescription>{deleteDescription(ws.pendingDelete)}</DialogDescription>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => ws.cancelDelete()} disabled={ws.deleting}>
+            <Button variant="outline" onClick={() => ws.cancelDelete()}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void ws.confirmDelete()}
-              disabled={ws.deleting}
-            >
-              {ws.deleting ? "Deleting…" : "Delete"}
+            <Button variant="destructive" onClick={() => void ws.confirmDelete()}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -552,7 +548,8 @@ function deleteTitle(node: TreeNode | null): string {
   if (!node) return "";
   if (node.kind === "test") return `Delete test “${splitTags(node.name).title}”?`;
   if (node.kind === "folder") return `Delete folder “${node.name}”?`;
-  return `Delete suite “${node.name}”?`;
+  if (TEST_MD_RE.test(node.name)) return `Delete suite “${node.name}”?`;
+  return `Delete file “${node.name}”?`;
 }
 
 function deleteDescription(node: TreeNode | null): string {
@@ -563,7 +560,10 @@ function deleteDescription(node: TreeNode | null): string {
   if (node.kind === "folder") {
     return "This deletes the folder and permanently removes every test suite inside it from Testomat.io. This can’t be undone.";
   }
-  return "This deletes the local file and permanently removes the suite and all its tests from Testomat.io. This can’t be undone.";
+  if (TEST_MD_RE.test(node.name)) {
+    return "This deletes the local file and permanently removes the suite and all its tests from Testomat.io. This can’t be undone.";
+  }
+  return "This deletes the local file. This can’t be undone.";
 }
 
 function typeGlyph(type: WorkspaceType) {

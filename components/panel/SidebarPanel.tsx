@@ -4,12 +4,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { observer } from "mobx-react-lite";
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
-import { useProjectService, useDebugLogService } from "@/lib/services/StoreProvider";
+import { useProjectService, useDebugLogService, useWorkspaceService } from "@/lib/services/StoreProvider";
 import { useTheme } from "@/lib/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon, SunIcon, MoonIcon, ChevronsUpDownIcon, ExternalLinkIcon } from "@/lib/icons";
 import { ProjectGlyph, FolderGlyph } from "@/components/icons";
 import { PANEL_SECTIONS } from "./sections/registry";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.workspace-tree.width";
 const DEFAULT_WIDTH = 400;
@@ -43,8 +44,10 @@ export const SidebarPanel = observer(function SidebarPanel({
 }) {
   const { open, activeSection, setActiveSection, togglePanel } = usePanel();
   const project = useProjectService();
+  const workspace = useWorkspaceService();
   const debug = useDebugLogService();
   const { theme, toggle: toggleTheme, locked: themeLocked } = useTheme();
+  const layoutRef = useLayoutNode("SidebarPanel");
 
   const sections = PANEL_SECTIONS.filter(
     (def) => def.id !== "debug" || debug.enabled
@@ -87,6 +90,7 @@ export const SidebarPanel = observer(function SidebarPanel({
 
   return (
     <aside
+      ref={layoutRef}
       className={cn(
         "relative flex shrink-0 border-r bg-background",
         className
@@ -250,14 +254,23 @@ export const SidebarPanel = observer(function SidebarPanel({
                 <button
                   type="button"
                   onClick={() => setActiveSection("settings")}
-                  className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground truncate"
+                  className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <FolderGlyph className="size-3 shrink-0" />
-                  <span className="truncate [direction:rtl]">{cwd}</span>
+                  <span className="min-w-0 truncate [direction:rtl]">{cwd}</span>
+                  {workspace.branch && (
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <Icon name="fork_right" className="size-3 shrink-0" />
+                      {workspace.branch}
+                    </span>
+                  )}
                 </button>
               } />
               <TooltipContent side="top">
                 <p className="font-mono text-xs break-all">{cwd}</p>
+                {workspace.branch && (
+                  <p className="font-mono text-xs">on branch {workspace.branch}</p>
+                )}
                 <p className="text-muted-foreground text-xs">Open workspace settings</p>
               </TooltipContent>
             </Tooltip>

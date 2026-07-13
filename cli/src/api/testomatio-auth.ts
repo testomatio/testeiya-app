@@ -9,8 +9,6 @@
 // connection exists and the (id, title, framework) of accessible projects.
 
 import fs from "node:fs";
-import { WORKSPACES_DIR } from "../project-dir.js";
-import path from "node:path";
 import {
   loadStoredAuth,
   saveStoredAuth,
@@ -25,7 +23,6 @@ import {
 } from "../testomatio-auth.js";
 import { createProjectSession, projectWorkspaceDir } from "./agent-start.js";
 import { getSession } from "../session-store.js";
-import { describeWorkspace } from "../workspace-model.js";
 import { loadConfig, saveTestomatioHost } from "../config.js";
 
 /** Public, token-free view of a project for the client. */
@@ -236,15 +233,17 @@ export async function testomatioAuthSession(request: Request): Promise<Response>
   saveStoredAuth({ ...stored, baseUrl, projectId: project.id });
 
   // Where the project's tests land:
-  //  - From the user's OWN folder (a workspace that is not itself a project),
-  //    stay there and overlay tests into `.testeiya/manual-tests`.
-  //  - Otherwise (no current workspace, or the current one is a project /
-  //    managed dir) use a dedicated, reusable per-project workspace so a known
-  //    project opens instantly from the same dir.
+  //  - The user opened this workspace themselves — a folder they picked or the
+  //    `TESTEIYA_WORKSPACE` env dir (both `trusted`): stay there and overlay
+  //    tests into `.testeiya/manual-tests`. Connecting a project must never move
+  //    the user out of a directory they chose.
+  //  - Otherwise (empty: no current workspace, or a managed / pulled one) use a
+  //    dedicated, reusable per-project workspace so a known project opens
+  //    instantly from the same dir.
   let workspaceDir = projectWorkspaceDir(project.id);
   let overlay = false;
   const from = body.fromSession ? getSession(body.fromSession) : null;
-  if (from && fs.existsSync(from.cwd) && isOverlayCandidate(from.cwd)) {
+  if (from?.trusted && fs.existsSync(from.cwd)) {
     workspaceDir = from.cwd;
     overlay = true;
   }
@@ -256,7 +255,7 @@ export async function testomatioAuthSession(request: Request): Promise<Response>
 
   const result = await createProjectSession(
     [{ slug: project.id, title: project.title, token: project.apiKey }],
-    { backendUrl: baseUrl, workspaceDir, background: true, overlay }
+    { backendUrl: baseUrl, workspaceDir, background: true, overlay, trusted: overlay }
   );
 
   console.log(
@@ -267,15 +266,4 @@ export async function testomatioAuthSession(request: Request): Promise<Response>
     ...result,
     project: { id: project.id, title: project.title },
   });
-}
-
-/**
- * True when `cwd` is the user's own folder (not a Testeiya-managed per-project
- * dir, and not itself a manual-tests project) — so a newly opened project
- * should overlay into it rather than jump to a dedicated workspace.
- */
-function isOverlayCandidate(cwd: string): boolean {
-  const managedRoot = WORKSPACES_DIR;
-  if (cwd === managedRoot || cwd.startsWith(managedRoot + path.sep)) return false;
-  return !describeWorkspace(cwd).isProject;
 }

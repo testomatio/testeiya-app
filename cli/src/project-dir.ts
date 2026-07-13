@@ -46,6 +46,9 @@ export const BUNDLED_SKILLS_SUBDIR = "skills";
 /** The prebuilt-skills manifest file name (source of truth for `bunosh vendor:skills`). */
 export const SKILLS_MANIFEST_FILE = "skills.yaml";
 
+/** The vendored models catalog produced by `bunosh collect:models` (see models-catalog.ts). */
+export const MODELS_CATALOG_FILE = "models.catalog.json";
+
 /** Records which Testomat.io project a workspace represents (id + base URL). */
 export const PROJECT_META_FILE = "testeiya.json";
 
@@ -106,6 +109,11 @@ export function resolveBundledSkillsDir(): string {
 /** Absolute path to the prebuilt-skills manifest (`skills.yaml`), same probe. */
 export function resolveSkillsManifestPath(): string {
   return probePath(SKILLS_MANIFEST_FILE);
+}
+
+/** Absolute path to the vendored models catalog (`models.catalog.json`), same probe. */
+export function resolveModelsCatalogPath(): string {
+  return probePath(MODELS_CATALOG_FILE);
 }
 
 function probePath(leaf: string): string {

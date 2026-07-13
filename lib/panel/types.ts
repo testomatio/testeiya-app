@@ -4,7 +4,7 @@ export type PanelSectionId =
   | "workspace"
   | "project"
   | "connections"
-  | "pipelines"
+  | "workflows"
   | "settings"
   | "debug";
 

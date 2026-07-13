@@ -47,7 +47,8 @@ function writeAll(sessions: StoredSession[]): void {
     fs.mkdirSync(dir, { recursive: true });
   }
   const tmp = `${SESSIONS_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(sessions, null, 2));
+  // 0600 — holds plaintext project API tokens; rename preserves the mode.
+  fs.writeFileSync(tmp, JSON.stringify(sessions, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, SESSIONS_FILE);
 }
 

@@ -113,6 +113,12 @@ export interface CreateProjectSessionOptions {
    * `.testeiya/manual-tests` cache instead of the workspace root.
    */
   overlay?: boolean;
+  /**
+   * Mark the created session `trusted` (the user explicitly opened this folder,
+   * so the agent may write to it and later project connects keep overlaying
+   * here instead of switching to a managed dir). Set when overlaying.
+   */
+  trusted?: boolean;
 }
 
 /** Stable on-disk workspace for a project, reused across launches. */
@@ -286,32 +292,7 @@ export async function createProjectSession(
     tokens[p.slug] = p.token;
   }
 
-  // An "enterprise" subscription swaps the base MCP server for the superset
-  // package that adds the analytics tools (same args/env, drop-in). Resolved
-  // per project so mixed multi-project sessions each get the right one.
-  const subscriptions = await Promise.all(
-    projects.map((p) => fetchProjectSubscription(backendUrl, p.slug, p.token))
-  );
-  const mcpServers: Record<string, unknown> = {};
-  for (let i = 0; i < projects.length; i++) {
-    const p = projects[i];
-    const enterprise = (subscriptions[i] ?? "").toLowerCase() === "enterprise";
-    const pkg = enterprise ? "@testomatio/mcp-enterprise" : "@testomatio/mcp";
-    const binKey = enterprise ? "testomatio-mcp-enterprise" : "testomatio-mcp";
-    const mcpBin = resolveTestomatioMcpBin(pkg, binKey);
-    const baseArgs = ["--token", p.token, "--project", p.slug];
-    mcpServers[`testomatio-${p.slug}`] = mcpBin
-      ? {
-          command: process.execPath,
-          args: [mcpBin, ...baseArgs],
-          env: { TESTOMATIO_BASE_URL: backendUrl },
-        }
-      : {
-          command: "npx",
-          args: ["-y", `${pkg}@latest`, ...baseArgs],
-          env: { TESTOMATIO_BASE_URL: backendUrl },
-        };
-  }
+  const mcpServers = await buildTestomatioMcpServers(projects, backendUrl);
   const projectDir = path.join(tempDir, PROJECT_DIR);
   fs.mkdirSync(projectDir, { recursive: true });
   // `mcp.json` is what the SDK reads (the *enabled* set). `mcp.all.json` is the
@@ -338,6 +319,7 @@ export async function createProjectSession(
     backendUrl,
     tokens,
     projects: results,
+    trusted: options.trusted,
   });
 
   return {
@@ -346,6 +328,43 @@ export async function createProjectSession(
     backendUrl,
     projects: results,
   };
+}
+
+/**
+ * Build the per-project Testomat.io MCP server entries written into a
+ * workspace's `.testeiya/mcp.json`. An "enterprise" subscription swaps the
+ * base MCP server for the superset package that adds the analytics tools
+ * (same args/env, drop-in). Resolved per project so mixed multi-project
+ * sessions each get the right one. Shared with the TUI's `/connect` command.
+ */
+export async function buildTestomatioMcpServers(
+  projects: Array<{ slug: string; token: string }>,
+  backendUrl: string
+): Promise<Record<string, unknown>> {
+  const subscriptions = await Promise.all(
+    projects.map((p) => fetchProjectSubscription(backendUrl, p.slug, p.token))
+  );
+  const mcpServers: Record<string, unknown> = {};
+  for (let i = 0; i < projects.length; i++) {
+    const p = projects[i];
+    const enterprise = (subscriptions[i] ?? "").toLowerCase() === "enterprise";
+    const pkg = enterprise ? "@testomatio/mcp-enterprise" : "@testomatio/mcp";
+    const binKey = enterprise ? "testomatio-mcp-enterprise" : "testomatio-mcp";
+    const mcpBin = resolveTestomatioMcpBin(pkg, binKey);
+    const baseArgs = ["--token", p.token, "--project", p.slug];
+    mcpServers[`testomatio-${p.slug}`] = mcpBin
+      ? {
+          command: process.execPath,
+          args: [mcpBin, ...baseArgs],
+          env: { TESTOMATIO_BASE_URL: backendUrl },
+        }
+      : {
+          command: "npx",
+          args: ["-y", `${pkg}@latest`, ...baseArgs],
+          env: { TESTOMATIO_BASE_URL: backendUrl },
+        };
+  }
+  return mcpServers;
 }
 
 /**

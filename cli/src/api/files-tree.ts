@@ -12,6 +12,8 @@ import {
   type WorkspaceTypeEntry,
 } from "../workspace-model.js";
 import { computeChangedFiles, ensureSyncBaseline, type FileStatus } from "../sync-snapshot.js";
+import { loadGitignore, type GitignoreChain } from "../gitignore.js";
+import { gitCommittedFiles, gitBranch } from "../git-tracked.js";
 import { suiteId, suiteEmoji } from "../workspace/test-md.js";
 
 const MAX_DEPTH = 8;
@@ -42,11 +44,11 @@ export async function filesTree(request: Request): Promise<Response> {
   } else if (active.dir) {
     focusAbs = path.resolve(cwd, active.dir);
   }
-  // A browse-all view (Files / Code root) also surfaces the gitignored
-  // `.testeiya/manual-tests` cache so "show all" really shows the manual tests.
+  // Only the Files view folds in the gitignored `.testeiya/manual-tests` cache
+  // so "show all" really shows everything. The Code view stays the source repo —
+  // the manual tests belong to the Manual tab, not the code tree.
   let manualAbs: string | null = null;
-  const browseAll = !active.dir && (active.type === "files" || active.type === "code");
-  if (browseAll && info.manualTestsDir) {
+  if (active.type === "files" && !active.dir && info.manualTestsDir) {
     manualAbs = path.resolve(cwd, info.manualTestsDir);
   }
   const view: TreeView = {
@@ -58,9 +60,11 @@ export async function filesTree(request: Request): Promise<Response> {
 
   ensureSyncBaseline(cwd);
   const changed = computeChangedFiles(cwd);
-  const nodes = readDir(cwd, "", 0, { count: 0 }, view, changed);
+  const committed = gitCommittedFiles(cwd);
+  const nodes = readDir(cwd, "", 0, { count: 0 }, view, changed, committed, loadGitignore(cwd));
   return Response.json({
     cwd,
+    branch: gitBranch(cwd),
     nodes,
     changedCount: Object.keys(changed).length,
     activeType: active.type,
@@ -74,7 +78,9 @@ function readDir(
   depth: number,
   state: { count: number },
   view: TreeView,
-  changed: Record<string, FileStatus>
+  changed: Record<string, FileStatus>,
+  committed: Set<string>,
+  ig: GitignoreChain
 ): TreeNode[] {
   if (depth > MAX_DEPTH || state.count >= MAX_NODES) return [];
   let entries: fs.Dirent[];
@@ -99,6 +105,10 @@ function readDir(
       (!!view.manualAbs && isAncestorOrEqual(childAbs, view.manualAbs));
     const inside = isInsideFocus(childAbs, view.focusAbs) || isInsideFocus(childAbs, view.manualAbs);
 
+    // Hide git-ignored paths (e.g. a Rails `storage/` blob cache), except the
+    // surfaced `.testeiya` cache the browse-all view deliberately folds in.
+    if (!leads && !inside && ig.ignores(childRel)) continue;
+
     if (entry.isDirectory()) {
       // Hide dot folders unless they lead to a surfaced dir (e.g. surface
       // `.testeiya/manual-tests` or `.testeiya/code`). Inside such a dot path,
@@ -108,7 +118,7 @@ function readDir(
       if (inDotPath && !leads && !inside) continue;
       if (view.branchOnly && !leads && !inside) continue;
       state.count++;
-      const children = readDir(childAbs, childRel, depth + 1, state, view, changed);
+      const children = readDir(childAbs, childRel, depth + 1, state, view, changed, committed, ig.descend(childRel));
       // Prune folders outside the focus dir whose files were all filtered out,
       // so a manual view over `.testeiya/manual-tests` doesn't render empty
       // `src/`/`tests/` repo folders. Folders inside the focus dir always show.
@@ -137,6 +147,7 @@ function readDir(
     state.count++;
     const file: TreeNode = { name: entry.name, kind: "file", path: childRel };
     if (changed[childRel]) file.status = changed[childRel];
+    if (committed.has(childRel)) file.committed = true;
     // Expand `*.test.md` into its tests (one per `<!-- test` marker) so the
     // sidebar tree can drill into each test and scroll to it in the editor. The
     // suite id (when present) lets the UI pull/push this one suite.
@@ -214,6 +225,7 @@ interface TreeNode {
   suiteId?: string; // `@S…` when the file/test belongs to a pushed suite
   emoji?: string; // suite icon from the `<!-- suite` block's `emoji:` field
   status?: FileStatus; // "created" | "changed" since the last Testomat.io sync
+  committed?: boolean; // tracked by git and unmodified — safely restorable
   children?: TreeNode[];
 }
 

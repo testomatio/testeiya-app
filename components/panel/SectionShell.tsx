@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 
 export function SectionShell({
   title,
@@ -16,10 +17,11 @@ export function SectionShell({
   titleAccessory?: ReactNode;
   children?: ReactNode;
 }) {
+  const layoutRef = useLayoutNode(title);
   if (!active) return null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={layoutRef} className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-2 px-4">
         <span className="min-w-0 shrink truncate text-sm font-semibold text-foreground">
           {title}

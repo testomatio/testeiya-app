@@ -52,6 +52,8 @@ export class WorkspaceService {
   manualTestsDir: string | null = null;
   isProject = false;
   project: WorkspaceProjectMeta | null = null;
+  // The workspace's checked-out git branch (null when not a git repo / detached).
+  branch: string | null = null;
 
   // Type filtering: the root classification, the selectable views (a toggle is
   // shown when more than one), and the active view (null → the server default).
@@ -63,10 +65,8 @@ export class WorkspaceService {
   syncing: SyncAction | null = null;
   syncError: string | null = null;
 
-  // The node awaiting delete confirmation (drives the confirm dialog), and
-  // whether its delete is in flight.
+  // The node awaiting delete confirmation (drives the confirm dialog).
   pendingDelete: TreeNode | null = null;
-  deleting = false;
 
   // The node being renamed (drives the rename dialog), its edited value, and
   // whether the rename is in flight.
@@ -226,6 +226,7 @@ export class WorkspaceService {
         this.manualTestsDir = data.manualTestsDir ?? null;
         this.isProject = data.isProject ?? false;
         this.project = data.project ?? null;
+        this.branch = data.branch ?? null;
         this.workspaceType = data.type ?? null;
         this.types = data.types ?? [];
         this.activeType = data.activeType ?? this.activeType;
@@ -366,6 +367,13 @@ export class WorkspaceService {
 
   // --- delete (file/test/folder + remote suite/test) ---
   requestDelete(node: TreeNode) {
+    // A committed plain file is recoverable from git, so skip the prompt and
+    // delete it right away. Suites/folders still confirm — their Testomat.io
+    // removal can't be undone with git.
+    if (canDeleteInstantly(node)) {
+      void this.performDelete(node);
+      return;
+    }
     this.pendingDelete = node;
   }
 
@@ -373,36 +381,61 @@ export class WorkspaceService {
     this.pendingDelete = null;
   }
 
-  /**
-   * Delete the pending node locally AND its Testomat.io counterpart (a file's
-   * suite, a test, or every suite under a folder). The server removes the remote
-   * resource first; on failure nothing is removed on disk, so we leave the tree
-   * untouched and surface the error.
-   */
   async confirmDelete() {
     const node = this.pendingDelete;
+    if (!node) return;
+    this.pendingDelete = null;
+    await this.performDelete(node);
+  }
+
+  /**
+   * Delete a file or folder optimistically: drop it from the tree and toast right
+   * away, then remove its Testomat.io suite(s) in the background. On failure the
+   * tree is restored and the error surfaced. A committed plain file is
+   * recoverable, so its toast says how to bring it back from git. A test isn't a
+   * removable tree node (its block is stripped server-side and the file re-opened
+   * with fresh content), so it stays on the confirm-then-do path.
+   */
+  private async performDelete(node: TreeNode) {
     const sessionId = this.root.sessionId;
-    if (!node || !sessionId || this.deleting) return;
-    this.deleting = true;
+    if (!sessionId) return;
+    if (node.kind === "test") return this.deleteTest(node, sessionId);
+    const snapshot = this.tree;
+    runInAction(() => {
+      this.tree = removeTreeNode(this.tree, node.path);
+      this.afterDelete(node);
+    });
+    if (canDeleteInstantly(node)) {
+      toast.success(`Deleted ${node.name}`, {
+        description: `Restore it with: git restore "${node.path}"`,
+      });
+    } else {
+      toast.success(`Deleted ${node.name}`);
+    }
     try {
-      const body: { session: string; path: string; anchor?: string } = {
+      await postJson("/api/files/delete", { session: sessionId, path: node.path });
+      await this.loadTree();
+    } catch (err) {
+      runInAction(() => {
+        this.tree = snapshot;
+      });
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+      void this.loadTree();
+    }
+  }
+
+  private async deleteTest(node: TreeNode, sessionId: string) {
+    try {
+      await postJson("/api/files/delete", {
         session: sessionId,
         path: node.path,
-      };
-      if (node.kind === "test") body.anchor = node.anchor;
-      await postJson("/api/files/delete", body);
-      runInAction(() => {
-        this.afterDelete(node);
+        anchor: node.anchor,
       });
+      runInAction(() => this.afterDelete(node));
       toast.success(`Deleted ${node.name}`);
       await this.loadTree();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
-    } finally {
-      runInAction(() => {
-        this.pendingDelete = null;
-        this.deleting = false;
-      });
     }
   }
 
@@ -539,13 +572,13 @@ export class WorkspaceService {
     this.manualTestsDir = null;
     this.isProject = false;
     this.project = null;
+    this.branch = null;
     this.workspaceType = null;
     this.types = [];
     this.activeType = null;
     this.syncError = null;
     this.awaitingTests = false;
     this.pendingDelete = null;
-    this.deleting = false;
     this.renaming = null;
     this.renameValue = "";
     this.renamingBusy = false;
@@ -613,10 +646,21 @@ export class WorkspaceService {
   private seedExpansion() {
     if (this.seeded || this.tree.length === 0) return;
     const s = new Set<string>();
-    for (const n of this.tree) if (n.kind === "folder") s.add(n.path);
-    expandAncestors(s, this.manualTestsDir);
     const active = this.types.find((t) => t.type === this.activeType);
+    // Reveal the active view's focus dir (if it's a subdir).
     expandAncestors(s, active?.dir ?? null);
+    // The manual-tests overlay is only surfaced in the manual and files views —
+    // reveal the branch to it there so pulled tests are discoverable. The code
+    // view is the source repo, so leave it out.
+    if (this.activeType === "manual" || this.activeType === "files") {
+      expandAncestors(s, this.manualTestsDir);
+    }
+    // Open the folders that directly hold the manual tests (the suite folders),
+    // but only in the manual view — other views stay collapsed so a real repo
+    // isn't rendered as a wall of expanded top-level folders.
+    if (this.activeType === "manual") {
+      expandChildFolders(s, this.tree, this.manualTestsDir ?? active?.dir ?? "");
+    }
     this.expanded = s;
     this.seeded = true;
   }
@@ -680,6 +724,21 @@ function collectStatuses(nodes: TreeNode[]): Map<string, FileStatus> {
   }
 }
 
+// Expand the immediate folder children of `dir` ("" = tree root), so the suite
+// folders inside the manual-tests dir open without expanding their subtrees.
+function expandChildFolders(set: Set<string>, tree: TreeNode[], dir: string): void {
+  const children = dir === "" ? tree : childrenOf(tree, dir);
+  for (const n of children) if (n.kind === "folder") set.add(n.path);
+}
+
+function childrenOf(nodes: TreeNode[], path: string): TreeNode[] {
+  for (const n of nodes) {
+    if (n.path === path) return n.children ?? [];
+    if (n.children && path.startsWith(n.path + "/")) return childrenOf(n.children, path);
+  }
+  return [];
+}
+
 function containsFolder(nodes: TreeNode[], path: string): boolean {
   for (const n of nodes) {
     if (n.path === path) return n.kind === "folder";
@@ -698,6 +757,28 @@ function treeHasPath(nodes: TreeNode[], path: string): boolean {
     }
   }
   return false;
+}
+
+// A plain (non-suite) file that git tracks unmodified: deletable without a
+// prompt because `git restore` brings it back.
+function canDeleteInstantly(node: TreeNode): boolean {
+  if (node.kind !== "file" || !node.committed) return false;
+  return !TEST_MD_RE.test(node.name) && !node.suiteId;
+}
+
+// The tree with the node at `path` (and its subtree) removed — the optimistic
+// counterpart to a delete, before the server confirms it.
+function removeTreeNode(nodes: TreeNode[], path: string): TreeNode[] {
+  const kept: TreeNode[] = [];
+  for (const n of nodes) {
+    if (n.path === path) continue;
+    if (!n.children) {
+      kept.push(n);
+      continue;
+    }
+    kept.push({ ...n, children: removeTreeNode(n.children, path) });
+  }
+  return kept;
 }
 
 function filterChangedTree(

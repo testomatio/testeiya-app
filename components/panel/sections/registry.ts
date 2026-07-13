@@ -6,7 +6,7 @@ import type { PanelSectionDef } from "@/lib/panel/types";
 import { WorkspaceSection } from "./WorkspaceSection";
 import { ProjectSection } from "./ProjectSection";
 import { ConnectionsSection } from "./ConnectionsSection";
-import { PipelinesSection } from "./PipelinesSection";
+import { WorkflowsSection } from "./WorkflowsSection";
 import { SettingsSection } from "./SettingsSection";
 import { DebugSection } from "./DebugSection";
 
@@ -30,10 +30,10 @@ export const PANEL_SECTIONS: PanelSectionDef[] = [
     Section: ConnectionsSection,
   },
   {
-    id: "pipelines",
-    title: "Pipelines",
-    icon: createElement(Icon, { name: "account_tree", className: "size-4" }),
-    Section: PipelinesSection,
+    id: "workflows",
+    title: "Workflows",
+    icon: createElement(Icon, { name: "schema", className: "size-4" }),
+    Section: WorkflowsSection,
   },
   {
     id: "settings",

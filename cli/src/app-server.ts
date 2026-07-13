@@ -58,6 +58,7 @@ import { clientLog } from "./api/client-log.js";
 import { debugStream } from "./api/debug-stream.js";
 import { debugReport } from "./api/debug-report.js";
 import { debugSnapshot } from "./api/debug-snapshot.js";
+import { debugLayout } from "./api/debug-layout.js";
 import { captureServerConsole } from "./debug-bus.js";
 import { writeServerInfo } from "./server-info.js";
 import { initFileLog, logStartupConfig, appLogPath } from "./file-log.js";
@@ -93,9 +94,10 @@ const DEFAULT_PORT = parseInt(
 );
 const HOSTNAME = process.env.HOST || "127.0.0.1";
 
-// Endpoints the UI polls on a timer — logging every hit floods the app log and
-// the Debug panel with noise. Suppress the per-request `[api]` line for these.
-const QUIET_API_PATHS = new Set(["/api/playwright/status"]);
+// Endpoints the UI polls on a timer, plus the debug plumbing itself — logging
+// every hit floods the app log with noise. Suppress the per-request `[api]` line
+// for anything under these path prefixes.
+const QUIET_API_PREFIXES = ["/api/playwright/status", "/api/files/tree", "/api/debug"];
 
 // Where the static Next export lives. Defaults to `<repo>/out`; the Electrobun
 // entry passes the bundled location (or set TESTEIYA_STATIC_DIR).
@@ -121,7 +123,9 @@ function notFound(message = "Not found"): Response {
 
 async function handleApi(req: Request, pathname: string): Promise<Response> {
   const method = req.method.toUpperCase();
-  if (!QUIET_API_PATHS.has(pathname)) console.log(`[api] ${method} ${pathname}`);
+  if (!QUIET_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    console.log(`[api] ${method} ${pathname}`);
+  }
 
   if (pathname === "/api/agent/start" && method === "POST") {
     return agentStart(req);
@@ -182,6 +186,9 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   }
   if (pathname === "/api/debug/report" && method === "POST") {
     return debugReport(req);
+  }
+  if (pathname === "/api/debug/layout" && method === "GET") {
+    return debugLayout(req);
   }
   if (pathname === "/api/settings") {
     if (method === "GET") return settingsGet();

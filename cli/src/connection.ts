@@ -6,6 +6,7 @@ import { createTesteiyaSession } from "./session-factory.js";
 import { transformEvent } from "./bridge.js";
 import { attachAiDebug } from "./ai-debug.js";
 import { getSession } from "./session-store.js";
+import { resolveSessionShellEnv } from "./api/testomatio-target.js";
 import { loadBundledSkills } from "./skills.js";
 import { browserStateNotice } from "./api/playwright-cli.js";
 
@@ -73,6 +74,7 @@ export function createConnection(
                 sessionParams.promptContext = stored.promptContext;
                 sessionParams.backendUrl = stored.backendUrl;
                 sessionParams.tokens = stored.tokens;
+                sessionParams.projects = stored.projects;
                 sessionParams.trusted = stored.trusted;
               }
             }
@@ -84,28 +86,51 @@ export function createConnection(
             const tokenEntries = sessionParams.tokens
               ? Object.entries(sessionParams.tokens)
               : [];
-            // NOTE: process.env is process-GLOBAL, but the unified server is one
-            // process serving many WS connections — so this still bleeds across
-            // sessions in hosted/web mode. The pi-coding-agent SDK exposes no
-            // per-session shell env (CreateAgentSessionOptions has no env field),
-            // so full isolation needs an SDK feature. Until then: export a single
-            // project's token only when the session has exactly one (the common,
-            // correct case). For 2+ projects a single global TESTOMATIO would be
-            // wrong for all but one, so unset it and steer the agent to
-            // `check-tests` (which builds a correct per-call env in check-tests.ts).
+            // NOTE: process.env is process-GLOBAL and the unified server is one
+            // process serving many WS connections, so concurrent sessions share
+            // the last-set token (accepted: desktop and single-user web are the
+            // real deployments; per-session isolation needs an SDK env hook).
+            // The shell-env.ts patch overlays these live values onto the SDK's
+            // otherwise frozen-after-first-use shell env, so whatever is set
+            // here is what every agent bash command actually sees.
+            let tokenSource = "none";
             if (tokenEntries.length === 1) {
               process.env.TESTOMATIO = tokenEntries[0][1] as string;
+              tokenSource = "managed";
             } else if (tokenEntries.length > 1) {
+              // A single global TESTOMATIO would be wrong for all but one
+              // project — unset it; the agent uses per-project MCP / app Sync.
               delete process.env.TESTOMATIO;
-              console.warn(
-                "[session] multiple project tokens; not setting a single global TESTOMATIO — agent should use `check-tests` (per-call env)"
+              tokenSource = "managed-multi";
+            } else {
+              const resolved = await resolveSessionShellEnv(
+                {
+                  tokens: sessionParams.tokens,
+                  backendUrl: sessionParams.backendUrl,
+                  projects: sessionParams.projects ?? [],
+                },
+                sessionCwd
               );
+              if (resolved) {
+                Object.assign(process.env, resolved.env);
+                tokenSource = resolved.source;
+                sessionParams.connection = {
+                  tokenAvailable: true,
+                  projectId: resolved.projectId,
+                  title: resolved.title,
+                };
+              } else {
+                delete process.env.TESTOMATIO;
+                delete process.env.TESTOMATIO_PROJECT_ID;
+                sessionParams.connection = { tokenAvailable: false };
+              }
             }
 
             console.log(
               "[session] cwd:", sessionParams.cwd || `default (${process.cwd()})`,
               "| promptContext:", sessionParams.promptContext ? "yes" : "no",
-              "| TESTOMATIO:", tokenEntries.length === 1 ? "set" : "unset",
+              "| TESTOMATIO:", process.env.TESTOMATIO ? "set" : "unset",
+              `(${tokenSource})`,
               "| TESTOMATIO_URL:", process.env.TESTOMATIO_URL || "default"
             );
             const result = await createTesteiyaSession({

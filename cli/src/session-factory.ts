@@ -29,6 +29,11 @@ if (SOURCE_PATHS.native.projectDir !== PROJECT_DIR) {
   (SOURCE_PATHS.native as { projectDir: string }).projectDir = PROJECT_DIR;
 }
 
+// Companion monkey patch: overlay the live TESTOMATIO* env vars onto the SDK's
+// (frozen-after-first-use) shell env so agent bash commands always run with the
+// current session's Testomat.io credentials. See shell-env.ts.
+import "./shell-env.js";
+
 // Every discovery provider that loads MCP configs from another tool
 // (Cursor, Claude, VSCode, etc.) or from arbitrary project-root files.
 // We keep only `builtin` — it reads our per-session `<cwd>/.testeiya/mcp.json`.
@@ -74,7 +79,7 @@ import { buildSystemPrompt } from "./prompt/index.js";
 import { createPermissionExtension } from "./permissions.js";
 import type { AskChannel } from "./extensions/webui/ask-channel.js";
 import type { WidgetCommandChannel } from "./extensions/webui/widget-channel.js";
-import { createCommandsExtension } from "./commands.js";
+import { createCommandsExtension, type CommandsRuntime } from "./commands.js";
 import { createTelemetryExtension, isTelemetryEnabled } from "./telemetry.js";
 
 /** Derive API key env var name from provider name (e.g., "openrouter" -> "OPENROUTER_API_KEY") */
@@ -88,6 +93,13 @@ export interface SessionOptions {
   promptContext?: string;
   backendUrl?: string;
   tokens?: Record<string, string>;
+  /**
+   * How this workspace's Testomat.io credentials were resolved (connection.ts):
+   * whether a token is exported to the shell env, and the linked project's
+   * id/title when known. Drives the system-prompt guidance for sessions that
+   * have no managed `tokens` (linked folders, `.env`, mcp.json).
+   */
+  connection?: { tokenAvailable?: boolean; projectId?: string; title?: string };
   /**
    * Which frontend is driving this session.
    *   - "tui"  → activates Pi's built-in `ask` tool via `hasUI: true`; no
@@ -233,6 +245,7 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     promptContext: options?.promptContext,
     tokens: options?.tokens,
     backendUrl: options?.backendUrl,
+    connection: options?.connection,
     mode: options?.mode,
     browser: hasPlaywrightCli(),
   });
@@ -249,9 +262,13 @@ export async function createTesteiyaSession(options?: SessionOptions) {
 
   const mode = options?.mode ?? "tui";
 
+  // The commands extension needs the MCP manager (created below with the
+  // session) to live-connect servers from /connect — pass a mutable runtime
+  // and fill it in after createAgentSession returns.
+  const commandsRuntime: CommandsRuntime = { cwd };
   const extensions: ExtensionFactory[] = [
     createPermissionExtension(config, cwd, options?.trusted) as ExtensionFactory,
-    createCommandsExtension(),
+    createCommandsExtension(commandsRuntime),
   ];
   let askChannel: AskChannel | undefined;
   let widgetChannel: WidgetCommandChannel | undefined;
@@ -312,6 +329,8 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     // configs in `<cwd>/.testeiya/mcp.json` and the permission extension to gate
     // dangerous calls instead.
   });
+
+  commandsRuntime.mcpManager = result.mcpManager;
 
   return {
     ...result,

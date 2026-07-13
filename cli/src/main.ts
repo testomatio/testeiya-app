@@ -13,7 +13,7 @@ import { applyTesteiyaTheme } from "./theme.js";
 import { attachBrandedLoader } from "./loader-style.js";
 import { loadDotEnv, testomatioStatusLine } from "./testomatio.js";
 import { migrateLegacyHomeDir } from "./project-dir.js";
-import { ensureTestomatioAuth } from "./testomatio-auth.js";
+import { restoreTestomatioAuth } from "./testomatio-auth.js";
 import { loadEnvFiles } from "./load-env.js";
 import { initTelemetry } from "./telemetry.js";
 import { initFileLog, logStartupConfig } from "./file-log.js";
@@ -44,28 +44,25 @@ export async function main(_args: string[]): Promise<void> {
   // Initialize theme early (InteractiveMode needs it at construction time)
   initTheme();
 
-  // Bootstrap Testomat.io user auth + project selection — but only if the
-  // legacy env-var path isn't already set up by the user's shell / .env.
-  // The .env flow stays the source of truth when present.
+  // Testomat.io is optional at startup: the env var wins, else a stored
+  // connection is restored silently. With neither, the agent starts
+  // unconnected and the user links a project in-session via /connect.
   const envHasTestomatio = Boolean(process.env.TESTOMATIO?.trim());
   let sessionTokens: Record<string, string> | undefined;
   let sessionBackendUrl: string | undefined;
   if (envHasTestomatio) {
     console.log(chalk.dim("  ✓ Using TESTOMATIO from environment"));
   } else {
-    try {
-      const auth = await ensureTestomatioAuth({
-        baseUrl: process.env.TESTOMATIO_URL,
-      });
+    const auth = await restoreTestomatioAuth({ baseUrl: process.env.TESTOMATIO_URL });
+    if (auth) {
       process.env.TESTOMATIO = auth.project.apiKey;
       process.env.TESTOMATIO_URL = auth.baseUrl;
       process.env.TESTOMATIO_PROJECT_ID = auth.project.id;
       sessionTokens = { [auth.project.id]: auth.project.apiKey };
       sessionBackendUrl = auth.baseUrl;
       console.log(chalk.green(`  ✓ Testomat.io: ${auth.project.title} (${auth.project.id})`));
-    } catch (err: any) {
-      console.error(chalk.red(`Testomat.io auth failed: ${err.message}`));
-      process.exit(1);
+    } else {
+      console.log(chalk.dim("  ○ Testomat.io: not connected — use /connect to link a project"));
     }
   }
 

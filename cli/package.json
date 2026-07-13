@@ -16,6 +16,7 @@
     "skills",
     "skills.yaml",
     "skills.lock.json",
+    "models.catalog.json",
     "testeiya.config.json",
     "README.md"
   ],
@@ -30,8 +31,10 @@
     "serve:app": "bun src/app-server.ts",
     "serve:app:watch": "bun --watch src/app-server.ts",
     "setup:env": "bun scripts/setup-env.ts",
+    "collect:models": "bun scripts/collect-models.ts",
     "debug:trace": "bun scripts/langfuse-trace.ts",
-    "debug:snapshot": "bun scripts/debug-snapshot.ts"
+    "debug:snapshot": "bun scripts/debug-snapshot.ts",
+    "debug:layout": "bun scripts/debug-layout.ts"
   },
   "keywords": [
     "testing",
@@ -53,6 +56,7 @@
     "@testomatio/mcp": "^2.1.1",
     "check-tests": "^0.20.0",
     "dedent": "^1.7.2",
+    "ignore": "^5.3.2",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

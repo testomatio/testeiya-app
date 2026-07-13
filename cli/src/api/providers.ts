@@ -14,6 +14,7 @@ import {
   THINKING_LEVELS,
   type ThinkingLevel,
 } from "../config.js";
+import { applyModelsCatalog } from "../models-catalog.js";
 
 /**
  * Providers & Models API.
@@ -147,12 +148,16 @@ export async function providersModels(request: Request): Promise<Response> {
     models = registry.getAll().filter((m) => m.provider === provider);
   }
   const seen = new Set<string>();
-  const out: { id: string; name: string }[] = [];
+  let out: { id: string; name: string }[] = [];
   for (const m of models) {
     if (seen.has(m.id)) continue;
     seen.add(m.id);
     out.push({ id: m.id, name: m.name ?? m.id });
   }
+  // Overlay the vendored catalog (refreshed on release): prunes models the
+  // provider no longer serves from the SDK's frozen bundled list and adds
+  // models newer than the SDK snapshot.
+  out = applyModelsCatalog(provider, out);
   out.sort((a, b) => a.id.localeCompare(b.id));
   return Response.json({
     provider,

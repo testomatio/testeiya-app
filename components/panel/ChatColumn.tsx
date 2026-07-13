@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils";
 import { usePanel } from "@/lib/panel/PanelContext";
 import { ChatRail } from "./ChatRail";
+import { useLayoutNode } from "@/lib/debug/layout-registry";
 
 const WIDTH_STORAGE_KEY = "testeiya.chat.width";
 const DEFAULT_WIDTH = 480;
@@ -31,6 +32,14 @@ export function ChatColumn({
 }) {
   const { chatOpen, setChatOpen } = usePanel();
   const asideRef = useRef<HTMLElement>(null);
+  const layoutRef = useLayoutNode("ChatColumn");
+  const setAside = useCallback(
+    (el: HTMLElement | null) => {
+      asideRef.current = el;
+      layoutRef(el);
+    },
+    [layoutRef]
+  );
 
   // Start from the deterministic default so the first client render matches the
   // server; apply the persisted width after mount (reading localStorage in the
@@ -118,7 +127,7 @@ export function ChatColumn({
 
   if (collapsed) {
     return (
-      <aside ref={asideRef} className="relative flex shrink-0">
+      <aside ref={setAside} className="relative flex shrink-0">
         <ChatRail />
         {handle}
       </aside>
@@ -127,7 +136,7 @@ export function ChatColumn({
 
   return (
     <aside
-      ref={asideRef}
+      ref={setAside}
       className={cn(
         "relative flex flex-col bg-muted/30",
         hasWidget ? "shrink-0 border-l" : "min-w-0 flex-1"

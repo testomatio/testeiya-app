@@ -96,13 +96,16 @@ function renderCell(
       if (Array.isArray(value)) {
         return (
           <div className="flex-no-wrap flex gap-1">
-            {value.map((item, i) => (
-              <DataTableCellBadge
-                key={i}
-                value={item}
-                color={colorMap?.[String(item)]}
-              />
-            ))}
+            {value.map((item, i) => {
+              const v = badgeValue(item);
+              return (
+                <DataTableCellBadge
+                  key={i}
+                  value={v}
+                  color={colorMap?.[String(v)]}
+                />
+              );
+            })}
           </div>
         );
       }
@@ -340,4 +343,16 @@ export function generateColumns<TData>(
       accessorKey: key,
     } as ColumnDef<TData>;
   });
+}
+
+// Array cells can carry objects (e.g. label records {title, color, …}); reduce
+// each to a primitive so a badge never receives an object as a React child.
+function badgeValue(item: unknown): string | number {
+  if (typeof item === "string" || typeof item === "number") return item;
+  if (item && typeof item === "object") {
+    const o = item as Record<string, unknown>;
+    const label = o.title ?? o.name ?? o.label ?? o.value ?? o.slug;
+    if (typeof label === "string" || typeof label === "number") return label;
+  }
+  return String(item ?? "");
 }

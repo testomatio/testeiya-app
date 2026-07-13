@@ -40,7 +40,9 @@ import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
-import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
+import { WorkflowPrompts } from "@/components/workflows/WorkflowPrompts";
+import { WorkflowsDiagramDialog } from "@/components/workflows/WorkflowsDiagramDialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -49,7 +51,7 @@ import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
-import { KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
+import { Icon, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
@@ -64,6 +66,7 @@ import {
   useConnectionsService,
   useWidgetService,
   useSessionsService,
+  useWorkflowsService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import { WidgetCommandProvider, useWidgetBus } from "@/lib/widgets/command-bus";
@@ -263,14 +266,6 @@ function renderSegments(
     );
   });
 }
-
-const suggestions = [
-  "Analyze my test suite for coverage gaps",
-  "Find flaky or redundant tests",
-  "Suggest new test cases for this project",
-  "Review test quality and best practices",
-  "Map requirements to existing test cases",
-];
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
@@ -698,7 +693,9 @@ const ChatPage = observer(function ChatPage() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
+  const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
   const panel = usePanel();
+  const workflows = useWorkflowsService();
   const workspace = useWorkspaceService();
   const project = useProjectService();
   const providers = useProvidersService();
@@ -895,13 +892,18 @@ const ChatPage = observer(function ChatPage() {
     [sendMessage, status, attachments, clearAttachments]
   );
 
-  const handleSuggestionClick = useCallback(
-    (suggestion: string) => {
+  const runWorkflowPrompt = useCallback(
+    (text: string) => {
       if (status === "streaming" || status === "submitted") return;
-      sendMessage(suggestion);
+      sendMessage(text);
+      panel.setChatOpen(true);
     },
-    [sendMessage, status]
+    [sendMessage, status, panel]
   );
+
+  useEffect(() => {
+    workflows.setRunner(runWorkflowPrompt);
+  }, [workflows, runWorkflowPrompt]);
 
   const handleInsertSkill = useCallback((name: string) => {
     chatInputRef.current?.insertSkill(name);
@@ -1048,6 +1050,11 @@ const ChatPage = observer(function ChatPage() {
   })();
   const hasWidget = widgetBody !== null;
 
+  const activeCategory =
+    workflows.categories.find((c) => c.id === activeWorkflow) ??
+    workflows.categories[0] ??
+    null;
+
   return (
     <div className="flex h-full flex-col">
       {error && (
@@ -1077,6 +1084,8 @@ const ChatPage = observer(function ChatPage() {
       )}
 
       <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
+
+      <WorkflowsDiagramDialog />
 
       <TestomatioLogin
         open={switchProjectOpen}
@@ -1176,15 +1185,53 @@ const ChatPage = observer(function ChatPage() {
                   Ask anything about tests, the testing goddess will help you
                 </p>
               </div>
-              <Suggestions>
-                {suggestions.map((s) => (
-                  <Suggestion
-                    key={s}
-                    onClick={handleSuggestionClick}
-                    suggestion={s}
-                  />
-                ))}
-              </Suggestions>
+              {workflows.categories.length > 0 && (
+                <div className="flex w-full flex-col items-center gap-4">
+                  <div className="flex max-w-full items-center gap-1.5">
+                    <Tabs
+                      value={activeCategory?.id ?? ""}
+                      onValueChange={(value) => setActiveWorkflow(value as string)}
+                      className="items-center"
+                    >
+                      <TabsList className="h-auto max-w-full flex-wrap">
+                        {workflows.categories.map((category) => (
+                          <TabsTrigger
+                            key={category.id}
+                            value={category.id}
+                            className="flex-none gap-1.5 px-3 py-1"
+                          >
+                            <Icon name={category.icon} />
+                            {category.title}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="size-8 shrink-0 p-0 text-muted-foreground"
+                            onClick={() => workflows.setDialogOpen(true)}
+                            aria-label="Workflow overview"
+                          >
+                            <Icon name="more_horiz" className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <TooltipContent><p>Workflow overview</p></TooltipContent>
+                    </Tooltip>
+                  </div>
+                  {activeCategory && (
+                    <WorkflowPrompts
+                      category={activeCategory}
+                      onRun={runWorkflowPrompt}
+                      streaming={status === "streaming" || status === "submitted"}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           )}
           {messages.length === 0 && canConnectTestomatio && !sessionId && project.restoring && (

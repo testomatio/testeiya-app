@@ -166,6 +166,17 @@ function getClientReport(sessionId?: string | null): ClientReport | null {
   return null;
 }
 
+export function clientLayout(
+  sessionId?: string | null
+): { layout: unknown; reportedAt: string | null; url: string | null } | null {
+  const report = getClientReport(sessionId);
+  if (!report) return null;
+  let url: string | null = null;
+  const meta = report.meta as { url?: unknown } | null;
+  if (meta && typeof meta.url === "string") url = meta.url;
+  return { layout: report.layout ?? null, reportedAt: report.reportedAt, url };
+}
+
 function formatArgs(args: unknown[]): string {
   return args
     .map((a) => {
@@ -347,6 +358,7 @@ export interface ClientReport {
   entries: unknown[];
   store: unknown;
   meta: unknown;
+  layout?: unknown;
 }
 
 export interface DebugSnapshot {

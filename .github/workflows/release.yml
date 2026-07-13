@@ -63,6 +63,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Refresh the models catalog from live provider listings so every release
+      # ships current model lists (the committed cli/models.catalog.json is only
+      # a dev-time cache). More provider API keys in env = wider coverage.
+      - name: Collect models catalog (refresh from providers)
+        run: bunx bunosh harness:models
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
       - name: Build desktop installer
         run: bun run desktop:release
         env:
@@ -141,6 +149,13 @@ jobs:
         run: bun install --frozen-lockfile && bunx bunosh vendor:skills
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Refresh the models catalog so the published package ships current model
+      # lists (cli/models.catalog.json is included via package.json "files").
+      - name: Collect models catalog (refresh from providers)
+        run: bunx bunosh collect:models
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Sync version from release tag
         env:

@@ -260,6 +260,14 @@ const RUN_STATUS_COLOR: Record<string, string> = {
   running: "text-run-running",
 };
 
+// Result statuses render as a filled colored disc with a white glyph inside
+// (rather than an outlined ring), so passed/failed/skipped read at a glance.
+const FILLED_STATUS: Record<string, { bg: string; icon: string }> = {
+  passed: { bg: "bg-run-passed", icon: "check" },
+  failed: { bg: "bg-run-failed", icon: "close" },
+  skipped: { bg: "bg-run-skipped", icon: "remove" },
+};
+
 /**
  * Status icon that leads a row's title. Ports
  * frontend/app/components/run-status.hbs exactly:
@@ -288,6 +296,25 @@ export function RunStatusDot({
     return (
       <span className={slot} aria-label={tooltip} title={tooltip}>
         <span className="run-status-loader" />
+      </span>
+    );
+  }
+
+  const filled = FILLED_STATUS[s];
+  if (filled) {
+    return (
+      <span
+        className={cn(slot, "rounded-full text-white", filled.bg)}
+        aria-label={tooltip}
+        title={tooltip}
+      >
+        <span
+          className="material-symbols-rounded"
+          style={{ fontSize: 12, fontVariationSettings: "'FILL' 1" }}
+          aria-hidden
+        >
+          {filled.icon}
+        </span>
       </span>
     );
   }

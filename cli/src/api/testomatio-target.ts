@@ -3,8 +3,11 @@
 // thin DELETE helper. Shared by workspace sync (token + base URL only) and the
 // file-delete endpoint (which also needs the project identifier and method).
 
+import fs from "node:fs";
+import path from "node:path";
 import type { StoredSession } from "../session-store.js";
 import { readProjectMeta } from "../workspace-model.js";
+import { PROJECT_DIR } from "../project-dir.js";
 import {
   loadStoredAuth,
   getCachedProjects,
@@ -80,6 +83,44 @@ export async function resolveProjectCreds(
   return readEnvToken(cwd);
 }
 
+/**
+ * The `TESTOMATIO*` env vars a session's shell commands should run with —
+ * resolved from any workspace shape: managed session tokens, a linked folder,
+ * the connected account, the folder's own `.env`, or a `.testeiya/mcp.json`
+ * whose testomatio server already embeds the token in its `--token` arg.
+ */
+export async function resolveSessionShellEnv(
+  session: Pick<StoredSession, "tokens" | "backendUrl" | "projects">,
+  cwd: string
+): Promise<SessionShellEnv | null> {
+  const meta = readProjectMeta(cwd);
+  const target = await resolveProjectTarget(session, cwd);
+  if (target) {
+    const env: Record<string, string> = {
+      TESTOMATIO: target.token,
+      TESTOMATIO_URL: target.baseUrl,
+      TESTOMATIO_PROJECT_ID: target.project,
+    };
+    const slug = session.projects?.[0]?.slug;
+    let source: SessionShellEnv["source"] = "account";
+    if (slug && session.tokens?.[slug]) source = "managed";
+    else if (meta) source = "linked";
+    const resolved: SessionShellEnv = { env, source, projectId: target.project };
+    if (meta?.projectId === target.project && meta.title) resolved.title = meta.title;
+    return resolved;
+  }
+
+  const dotenv = readEnvToken(cwd);
+  if (dotenv) {
+    return {
+      env: { TESTOMATIO: dotenv.token, TESTOMATIO_URL: dotenv.baseUrl },
+      source: "dotenv",
+    };
+  }
+
+  return readMcpToken(cwd);
+}
+
 async function mutate(
   target: ProjectTarget,
   method: "DELETE" | "PUT",
@@ -123,8 +164,62 @@ async function projectApiKey(
   return project.apiKey;
 }
 
+function readMcpToken(cwd: string): SessionShellEnv | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(path.join(cwd, PROJECT_DIR, "mcp.json"), "utf8");
+  } catch {
+    return null;
+  }
+  let servers: Record<string, { args?: unknown; env?: Record<string, string> }>;
+  try {
+    servers = JSON.parse(raw)?.mcpServers ?? {};
+  } catch {
+    return null;
+  }
+
+  const found: { token: string; project?: string; baseUrl?: string }[] = [];
+  for (const [name, server] of Object.entries(servers)) {
+    if (!name.startsWith("testomatio-")) continue;
+    const args: string[] = [];
+    if (Array.isArray(server?.args)) {
+      for (const arg of server.args) args.push(String(arg));
+    }
+    const tokenIdx = args.indexOf("--token");
+    if (tokenIdx < 0 || !args[tokenIdx + 1]) continue;
+    const entry: { token: string; project?: string; baseUrl?: string } = {
+      token: args[tokenIdx + 1],
+      baseUrl: server.env?.TESTOMATIO_BASE_URL,
+    };
+    const projectIdx = args.indexOf("--project");
+    if (projectIdx >= 0) entry.project = args[projectIdx + 1];
+    found.push(entry);
+  }
+  // 2+ tokened servers = a multi-project workspace; no single TESTOMATIO is right.
+  if (found.length !== 1) return null;
+
+  const entry = found[0];
+  const env: Record<string, string> = {
+    TESTOMATIO: entry.token,
+    TESTOMATIO_URL: normalizeBaseUrl(entry.baseUrl),
+  };
+  const resolved: SessionShellEnv = { env, source: "mcp" };
+  if (entry.project) {
+    env.TESTOMATIO_PROJECT_ID = entry.project;
+    resolved.projectId = entry.project;
+  }
+  return resolved;
+}
+
 export interface ProjectTarget {
   token: string;
   baseUrl: string;
   project: string;
+}
+
+export interface SessionShellEnv {
+  env: Record<string, string>;
+  source: "managed" | "linked" | "account" | "dotenv" | "mcp";
+  projectId?: string;
+  title?: string;
 }

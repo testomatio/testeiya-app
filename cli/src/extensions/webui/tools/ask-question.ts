@@ -29,8 +29,12 @@ export function createAskQuestionTool(channel: AskChannel): ToolDefinition {
       "render checkboxes instead so the user can pick several items at once " +
       "(the result is the chosen labels, one per line) — use this to let the " +
       "user choose WHICH of many items to act on, e.g. 'pick which of these " +
-      "test cases to generate'. The call blocks until the user answers — do " +
-      "not write any 'waiting' text.",
+      "test cases to generate'. The UI always also offers a free-form field, " +
+      "so the result may be the user's own typed answer instead of any " +
+      "option, and a picked option may be followed by a 'Note: <comment>' " +
+      "line the user attached — treat whatever text comes back as the " +
+      "user's answer. The call blocks until the user answers — do not write " +
+      "any 'waiting' text.",
     parameters: Type.Object({
       question: Type.String({
         description:
@@ -54,7 +58,9 @@ export function createAskQuestionTool(channel: AskChannel): ToolDefinition {
           description:
             "When true, the options render as checkboxes with a Submit " +
             "button and the user can pick several at once. The result is the " +
-            "selected option labels joined by newlines (one per line).",
+            "selected option labels joined by newlines (one per line); a " +
+            "label may be followed by a 'Note: <comment>' line, and the " +
+            "user may append their own free-typed item.",
         })
       ),
       recommended: Type.Optional(

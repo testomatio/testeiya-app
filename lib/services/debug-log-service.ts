@@ -5,6 +5,7 @@ import {
   type DebugLogEntry,
 } from "@/lib/debug/external-log";
 import { serviceSnapshot } from "@/lib/debug/store-snapshot";
+import { captureLayoutTree } from "@/lib/debug/layout-registry";
 import type { RootStore } from "./root-store";
 
 const STORAGE_KEY = "testeiya.debug-panel.enabled";
@@ -101,6 +102,7 @@ export class DebugLogService {
       entries: this.entries,
       store: boundStore(store),
       meta: pageMeta(),
+      layout: captureLayoutTree(),
     });
     try {
       void fetch("/api/debug/report", {

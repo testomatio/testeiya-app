@@ -16,6 +16,7 @@
         "@testomatio/mcp": "^2.1.1",
         "check-tests": "^0.20.0",
         "dedent": "^1.7.2",
+        "ignore": "^5.3.2",
         "yaml": "^2.9.0",
       },
       "devDependencies": {

@@ -105,6 +105,17 @@ export async function skills() {
   }
 }
 
+/**
+ * Re-collect the vendored models catalog (cli/models.catalog.json) from each
+ * provider's live model listing via the SDK's descriptor fetchers. Prunes
+ * models a provider no longer serves (unless released within the last year)
+ * and adds models newer than the SDK's bundled models.json. Provider API keys
+ * from the environment/.env widen the coverage. Re-run on release.
+ */
+export async function collectModels() {
+  await shell`bun scripts/collect-models.ts`.cwd(CLI_ROOT);
+}
+
 /** Seed ~/.testeiya/.env with a commented Langfuse block (observability off by default). */
 export async function setupEnv() {
   await shell`bun scripts/setup-env.ts`.cwd(CLI_ROOT);
@@ -124,6 +135,15 @@ export async function debugTrace(target = null) {
  */
 export async function debugSnapshot(session = null) {
   await shell`bun scripts/debug-snapshot.ts ${session ?? ""}`.cwd(CLI_ROOT);
+}
+
+/**
+ * Print the browser's last-reported UI layout map (big components as a tree with
+ * coordinates + sizes) from the running app-server.
+ * @param {string} session - optional session id to target that browser
+ */
+export async function debugLayout(session = null) {
+  await shell`bun scripts/debug-layout.ts ${session ?? ""}`.cwd(CLI_ROOT);
 }
 
 /** Run the CLI/agent test suite (bun test). */

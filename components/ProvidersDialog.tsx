@@ -363,6 +363,7 @@ const ProviderRow = observer(function ProviderRow({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [selModel, setSelModel] = useState<string>("");
   const [modelOpen, setModelOpen] = useState(false);
+  const [modelQuery, setModelQuery] = useState("");
   const [keyVal, setKeyVal] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [using, setUsing] = useState(false);
@@ -379,7 +380,7 @@ const ProviderRow = observer(function ProviderRow({
         if (!active) return;
         const preferred = isActive && current ? current.model : p.defaultModel;
         const chosen =
-          preferred && list.some((m) => m.id === preferred)
+          preferred && (isActive || list.some((m) => m.id === preferred))
             ? preferred
             : list[0]?.id ?? "";
         setSelModel(chosen);
@@ -575,14 +576,16 @@ const ProviderRow = observer(function ProviderRow({
               <div className="flex items-center gap-2 text-muted-foreground text-xs">
                 <Spinner className="size-3" /> Loading models…
               </div>
-            ) : models.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">
-                No models found for this provider.
-              </p>
             ) : (
               <div className="flex gap-2 min-w-0">
                 <div className="min-w-0 flex-1">
-                  <Popover open={modelOpen} onOpenChange={setModelOpen}>
+                  <Popover
+                    open={modelOpen}
+                    onOpenChange={(open) => {
+                      setModelOpen(open);
+                      if (!open) setModelQuery("");
+                    }}
+                  >
                     <PopoverTrigger
                       render={
                         <button
@@ -601,13 +604,20 @@ const ProviderRow = observer(function ProviderRow({
                     </PopoverTrigger>
                     <PopoverContent className="w-80 p-0" align="start">
                       <Command>
-                        <CommandInput placeholder="Search model…" autoFocus />
+                        <CommandInput
+                          placeholder="Search or paste a model id…"
+                          autoFocus
+                          value={modelQuery}
+                          onValueChange={setModelQuery}
+                        />
                         <CommandList className="max-h-60">
-                          <CommandEmpty>No model found.</CommandEmpty>
+                          <CommandEmpty>
+                            No matching model — enter a full model id to use it.
+                          </CommandEmpty>
                           {models.map((m) => (
                             <CommandItem
                               key={m.id}
-                              value={m.name}
+                              value={`${m.id} ${m.name}`}
                               onSelect={() => {
                                 setSelModel(m.id);
                                 setModelOpen(false);
@@ -616,6 +626,19 @@ const ProviderRow = observer(function ProviderRow({
                               {m.name}
                             </CommandItem>
                           ))}
+                          {modelQuery.trim() &&
+                            !models.some((m) => m.id === modelQuery.trim()) && (
+                              <CommandItem
+                                forceMount
+                                value={`custom:${modelQuery.trim()}`}
+                                onSelect={() => {
+                                  setSelModel(modelQuery.trim());
+                                  setModelOpen(false);
+                                }}
+                              >
+                                Use “{modelQuery.trim()}”
+                              </CommandItem>
+                            )}
                         </CommandList>
                       </Command>
                     </PopoverContent>

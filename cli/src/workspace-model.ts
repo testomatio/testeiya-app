@@ -19,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJson, writeJson } from "./json-store.js";
+import { loadGitignore, type GitignoreChain } from "./gitignore.js";
 import {
   PROJECT_DIR,
   MANUAL_TESTS_SUBDIR,
@@ -84,6 +85,59 @@ export const TEST_FRAMEWORK_PKGS = new Set([
   "cucumber", "@cucumber/cucumber", "karma", "protractor", "ava", "wdio",
 ]);
 
+/**
+ * The subset of test tooling that marks a *test-automation* project (e2e /
+ * acceptance runners). Only these force the `automated` type — a unit-test
+ * config (rspec, pytest, phpunit, jest, …) legitimately lives inside an
+ * application, so it must not override an otherwise-code repo.
+ */
+export const AUTOMATION_CONFIG_RES = [
+  /^playwright\.config\.[cm]?[jt]s$/i,
+  /^codecept(\.[\w-]+)?\.conf\.[jt]s$/i,
+  /^codecept\.json$/i,
+  /^cypress\.config\.[cm]?[jt]s$/i,
+  /^cypress\.json$/i,
+  /^wdio(\.[\w-]+)?\.conf\.[jt]s$/i,
+  /^nightwatch\.conf\.[jt]s$/i,
+  /^\.testcaferc\.(jsx?|json)$/i,
+  /^protractor\.conf\.js$/i,
+  /^behat\.yml(\.dist)?$/i,
+  /^cucumber\.(jsx?|json|ya?ml)$/i,
+  /^robot\.toml$/i,
+];
+
+export const AUTOMATION_FRAMEWORK_PKGS = new Set([
+  "playwright", "@playwright/test", "codeceptjs", "cypress", "webdriverio",
+  "@wdio/cli", "wdio", "nightwatch", "testcafe", "protractor",
+  "cucumber", "@cucumber/cucumber",
+]);
+
+/**
+ * Root manifests that mark a software project. A real app is mostly templates,
+ * styles, config and data (only a minority of files carry a code extension), so
+ * a manifest — not a ≥50% code ratio — is what keeps it classified as `code`.
+ */
+export const CODE_MANIFEST_RES = [
+  /^package\.json$/i,
+  /^tsconfig(\.[\w-]+)?\.json$/i,
+  /^deno\.jsonc?$/i,
+  /^Gemfile$/,
+  /^Rakefile$/,
+  /^config\.ru$/,
+  /^[\w-]+\.gemspec$/,
+  /^go\.mod$/,
+  /^Cargo\.toml$/i,
+  /^pom\.xml$/i,
+  /^build\.(gradle|sbt)(\.kts)?$/i,
+  /^composer\.json$/i,
+  /^(requirements[\w-]*\.txt|pyproject\.toml|setup\.py|setup\.cfg|Pipfile|manage\.py)$/i,
+  /^mix\.exs$/i,
+  /^Package\.swift$/i,
+  /^[\w.-]+\.(csproj|fsproj|vbproj|sln)$/i,
+  /^(Makefile|CMakeLists\.txt)$/i,
+  /^pubspec\.yaml$/i,
+];
+
 /** Source-code extensions (lowercase, incl. dot). */
 export const CODE_EXTS = new Set([
   ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts",
@@ -107,7 +161,7 @@ const RESERVED_PROJECT_SUBDIRS = new Set([MANUAL_TESTS_SUBDIR, CUSTOM_SKILLS_SUB
 
 /** Classify a directory by scanning its files (dotfiles + vendor dirs excluded). */
 export function detectWorkspaceType(dir: string): WorkspaceType {
-  return classifyCounts(scanCounts(dir), hasTestConfig(dir));
+  return classifyCounts(scanCounts(dir), hasAutomationConfig(dir), hasCodeManifest(dir));
 }
 
 /** True when the filename matches any automated-test convention. */
@@ -120,16 +174,19 @@ export function isTestConfigFile(name: string): boolean {
   return TEST_CONFIG_RES.some((re) => re.test(name));
 }
 
-/** True when the dir's root holds a testing-framework config or dependency. */
+/** True when the dir's root holds any testing-framework config or dependency. */
 export function hasTestConfig(dir: string): boolean {
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(dir);
-  } catch {
-    return false;
-  }
-  if (entries.some((name) => TEST_CONFIG_RES.some((re) => re.test(name)))) return true;
-  return hasTestFrameworkDep(dir);
+  return matchesRoot(dir, TEST_CONFIG_RES) || hasFrameworkDep(dir, TEST_FRAMEWORK_PKGS);
+}
+
+/** True when the dir's root marks an e2e / acceptance *automation* project. */
+export function hasAutomationConfig(dir: string): boolean {
+  return matchesRoot(dir, AUTOMATION_CONFIG_RES) || hasFrameworkDep(dir, AUTOMATION_FRAMEWORK_PKGS);
+}
+
+/** True when the dir looks like a source project — a manifest (Gemfile, go.mod, …) or a git repo. */
+export function hasCodeManifest(dir: string): boolean {
+  return matchesRoot(dir, CODE_MANIFEST_RES) || fs.existsSync(path.join(dir, ".git"));
 }
 
 /** True when ≥90% of the folder's (non-asset) files are `*.test.md`. */
@@ -165,7 +222,7 @@ export function writeProjectMeta(cwd: string, meta: ProjectMeta): void {
 export function describeWorkspace(cwd: string): WorkspaceInfo {
   const manualTestsDir = resolveManualTestsDir(cwd);
   const counts = scanCounts(cwd);
-  const type = classifyCounts(counts, hasTestConfig(cwd));
+  const type = classifyCounts(counts, hasAutomationConfig(cwd), hasCodeManifest(cwd));
   return {
     manualTestsDir,
     isProject: manualTestsDir === "",
@@ -177,25 +234,21 @@ export function describeWorkspace(cwd: string): WorkspaceInfo {
 
 function scanCounts(dir: string): TypeCounts {
   const acc: TypeCounts = { manual: 0, automated: 0, code: 0, asset: 0, total: 0, nodes: 0 };
-  countFiles(dir, acc);
+  countFiles(dir, "", acc, loadGitignore(dir));
   return acc;
 }
 
-function countFiles(dir: string, acc: TypeCounts): void {
+function countFiles(dir: string, relDir: string, acc: TypeCounts, ig: GitignoreChain): void {
   if (acc.nodes >= MAX_SCAN_NODES) return;
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
+  for (const entry of readdirSafe(dir)) {
     if (acc.nodes >= MAX_SCAN_NODES) return;
     if (entry.name.startsWith(".")) continue;
     if (VENDOR_DIRS.has(entry.name)) continue;
+    const childRel = relDir ? `${relDir}/${entry.name}` : entry.name;
+    if (ig.ignores(childRel)) continue;
     acc.nodes++;
     if (entry.isDirectory()) {
-      countFiles(path.join(dir, entry.name), acc);
+      countFiles(path.join(dir, entry.name), childRel, acc, ig.descend(childRel));
       continue;
     }
     if (!entry.isFile()) continue;
@@ -218,13 +271,18 @@ function countFiles(dir: string, acc: TypeCounts): void {
 }
 
 /** Turn bucket counts into a type. Rules run in order; the order IS the tie-break. */
-function classifyCounts(c: TypeCounts, hasConfig: boolean): WorkspaceType {
-  if (c.total === 0) return hasConfig ? "automated" : "files";
+function classifyCounts(c: TypeCounts, hasAutomation: boolean, hasManifest: boolean): WorkspaceType {
+  if (c.total === 0) return hasAutomation ? "automated" : "files";
   if (c.manual / c.total >= MANUAL_THRESHOLD) return "manual";
-  if (c.manual > 0 && (c.automated > 0 || hasConfig)) return "mixed";
-  if (hasConfig) return "automated";
+  if (c.manual > 0 && (c.automated > 0 || hasAutomation)) return "mixed";
+  if (hasAutomation) return "automated";
   if (c.automated / c.total >= AUTOMATED_THRESHOLD) return "automated";
-  if (c.code / c.total >= CODE_THRESHOLD) return "code";
+  // Code wins when it is the dominant test-bucket and the repo is either
+  // code-dense or carries a source-project marker — a manifest or a `.git` repo
+  // (apps are mostly templates, config and data, so their code ratio is low
+  // despite clearly being code).
+  const codeDominant = c.code > 0 && c.code >= c.automated && c.code >= c.manual;
+  if (codeDominant && (c.code / c.total >= CODE_THRESHOLD || hasManifest)) return "code";
   return "files";
 }
 
@@ -247,56 +305,56 @@ function listWorkspaceTypes(
   if (manualTestsDir === `${PROJECT_DIR}/${MANUAL_TESTS_SUBDIR}`) {
     add("manual", manualTestsDir);
   }
-  let subEntries: fs.Dirent[] = [];
-  try {
-    subEntries = fs.readdirSync(path.join(cwd, PROJECT_DIR), { withFileTypes: true });
-  } catch {
-    subEntries = [];
-  }
-  for (const entry of subEntries) {
+  for (const entry of readdirSafe(path.join(cwd, PROJECT_DIR))) {
     if (!entry.isDirectory()) continue;
     if (RESERVED_PROJECT_SUBDIRS.has(entry.name)) continue;
     const subDir = path.join(cwd, PROJECT_DIR, entry.name);
     const subCounts = scanCounts(subDir);
     if (subCounts.total + subCounts.asset === 0) continue;
-    add(classifyCounts(subCounts, hasTestConfig(subDir)), `${PROJECT_DIR}/${entry.name}`);
+    add(
+      classifyCounts(subCounts, hasAutomationConfig(subDir), hasCodeManifest(subDir)),
+      `${PROJECT_DIR}/${entry.name}`
+    );
   }
   const hasHiddenFiles = counts.total > counts.manual + counts.automated || counts.asset > 0;
   if ((rootType === "automated" || rootType === "mixed") && hasHiddenFiles) {
     add("files", "");
   }
+  // A code repo with a manual-tests overlay splits into Code (source only) and
+  // Manual (the tests); a Files tab reunites them so you can browse everything.
+  if (rootType === "code" && manualTestsDir === `${PROJECT_DIR}/${MANUAL_TESTS_SUBDIR}`) {
+    add("files", "");
+  }
   return [...byType.values()];
 }
 
-function hasTestFrameworkDep(dir: string): boolean {
-  let raw: string;
-  try {
-    raw = fs.readFileSync(path.join(dir, "package.json"), "utf8");
-  } catch {
-    return false;
-  }
-  let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
-  try {
-    pkg = JSON.parse(raw);
-  } catch {
-    return false;
-  }
+function matchesRoot(dir: string, res: RegExp[]): boolean {
+  return readdirSafe(dir).some((entry) => res.some((re) => re.test(entry.name)));
+}
+
+function hasFrameworkDep(dir: string, pkgs: Set<string>): boolean {
+  const pkg = readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  }>(path.join(dir, "package.json"), {});
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  return Object.keys(deps).some((name) => TEST_FRAMEWORK_PKGS.has(name));
+  return Object.keys(deps).some((name) => pkgs.has(name));
 }
 
 function hasMarkdown(dir: string): boolean {
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return false;
-  }
-  for (const entry of entries) {
+  for (const entry of readdirSafe(dir)) {
     if (entry.isFile() && entry.name.endsWith(".md")) return true;
     if (entry.isDirectory() && hasMarkdown(path.join(dir, entry.name))) return true;
   }
   return false;
+}
+
+function readdirSafe(dir: string): fs.Dirent[] {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
 }
 
 export type WorkspaceType = "manual" | "automated" | "mixed" | "code" | "files";

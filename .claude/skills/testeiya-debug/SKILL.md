@@ -20,7 +20,7 @@ UI (React + MobX)  ──/api/*──►  Bun app-server (cli/)  ──REST─�
 Every process start writes one app log — `~/.testeiya/logs/app-<yyyyMMdd-HHmmss>-<pid>.log` — as plain, greppable, timestamped lines. It captures the **basic** interactions needed to debug LLM connection/usage and API/connection issues (it is *not* a full transcript — the deep per-session detail lives in Langfuse, Step 1b). It holds:
 
 - A `[start]` header (mode + runtime) and a `[config]` block near the top: the resolved provider/model/permissions + an env presence summary (**no keys**).
-- Every teed `console.*` line: `[api]` (noisy polling endpoints like `/api/playwright/status` are suppressed), `[testomatio→]` outbound REST, `[session]` (session creation, `[session] prompt error:` on a failed turn), `[webview]` browser errors, and `[error]` for thrown errors + `uncaughtException`.
+- Every teed `console.*` line: `[api]` (noise is suppressed — the `/api/playwright/status` poll and all `/api/debug/*` plumbing), `[testomatio→]` outbound REST, `[session]` (session creation, `[session] prompt error:` on a failed turn), `[webview]` browser errors, and `[error]` for thrown errors + `uncaughtException`.
 - `[ai]` LLM events — the key line for usage/connection debugging. A response looks like:
   `[ai] response — gpt-5.6-terra · stop · 5 chars · 370/5 tok · session:152c18412a32650d`
   (model · stopReason · output chars · input/output tokens · **Langfuse session id**). Retries, fallbacks, compaction, and turn errors show as `[ai] retry|fallback|compaction|error FAIL — …`.
@@ -82,6 +82,27 @@ Saves `cli/log/langfuse-trace-*.json` (prompts, per-call messages, tool args+res
 ### 1c. Re-runnable REST log (when a Testomat.io call looks wrong)
 
 `cli/log/testomatio.http` captures each outbound Testomat.io request **with its response** as a re-runnable `.http` block. Populated while debug mode is on (Debug panel open **or** `TESTEIYA_DEBUG=1`). Read it to confirm real URLs, params, and status codes instead of guessing. It holds a live `Authorization` token — never commit or paste it.
+
+### 1d. UI layout map (understand the rendered UI without a browser)
+
+```bash
+bun run debug:layout   # prints the big components as an indented tree
+```
+
+Pulls `GET /api/debug/layout` — the browser's last-reported map of the **meaningful container components**, nested container → child, each with size + on-screen coordinates. It is deliberately **not** the DOM: leaves/controls (button, span, svg…), thin list rows, and anonymous wrappers are dropped; single-child wrapper chains are merged; repeated siblings (lists/trees) collapse to one `N×` line. Nodes are named by their `data-slot` (the shadcn/Base UI component name), else id/role. Example:
+
+```
+div 1440×900 @0,0
+  header 1440×56 @0,0
+  main 1440×844 @0,56
+    div 380×844 @0,56          ← sidebar region
+      collapsible 380×308 @56,2052
+        collapsible-content 380×280 @56,2080
+    section 1060×844 @380,56
+      4× card 500×300 @480,120
+```
+
+Use it to see the page's structure — where a panel/section/dialog sits, what's on screen, whether something rendered off-screen or collapsed. The map is client-captured, so it's only as fresh as the last report (page load, panel-open, or every 15s with the Debug panel on) — if it says "no layout reported yet", open the app / the Debug panel. The same tree is also in the snapshot's `client.layout`.
 
 ## Step 2 — Correlate the layers
 

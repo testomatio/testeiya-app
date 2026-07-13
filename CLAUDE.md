@@ -76,7 +76,7 @@ This is the core domain model — read it before touching the workspace/sidebar/
   2. else ≥ **90%** of files (recursive, minus `VENDOR_DIRS`) are `*.test.md` → the **root** is the source (`isProject`);
   3. else `null` — nothing loaded; a pull seeds `.testeiya/manual-tests/`.
 
-**Sidebar tree** (`GET /api/files/tree`, `files-tree.ts`): all non-vendor, non-dot **folders** are shown; **only `*.test.md` files** outside the manual-tests dir; **all files** inside it (and the dir is auto-expanded, even when it lives under `.testeiya/`). The response carries `{ manualTestsDir, isProject, project }`.
+**Sidebar tree** (`GET /api/files/tree`, `files-tree.ts`): all non-vendor, non-dot, **non-git-ignored** **folders** are shown; **only `*.test.md` files** outside the manual-tests dir; **all files** inside it (and the dir is auto-expanded, even when it lives under `.testeiya/`). The response carries `{ manualTestsDir, isProject, project }`. **Git-ignored paths are hidden** — the walk (and the `workspace-model` classifier) honors every `.gitignore` up the tree via `cli/src/gitignore.ts` (a lazy nested-aware matcher over the `ignore` package), so a repo's `node_modules`-style caches (e.g. a Rails `storage/` blob dir) neither render nor blow the node budget. The surfaced `.testeiya/manual-tests` cache is the one exception (it's git-ignored but deliberately folded into the **Files** view). Views for an overlay repo (code repo + a pulled `.testeiya/manual-tests` cache): **Code** = the source repo only (no `.testeiya`), **Manual** = the tests, **Files** = both together. The Files tab is added for a `code` root only when that overlay exists (`listWorkspaceTypes`); a pure code repo shows just `code` (Code already lists everything).
 
 **Sync** (`POST /api/workspace/sync` `{session, action}`): runs `check-tests` (`cli/src/check-tests.ts`, `npx check-tests[@latest] pull|push -d <dir>`) for the resolved manual-tests dir. Token resolution: a managed session's `tokens[slug]` → else the linked project's `apiKey` via the connected account (`.testeiya/testeiya.json` + `loadStoredAuth`) → else the folder's own `.env` `TESTOMATIO`. The Workspace sidebar section has Pull/Push buttons (`WorkspaceService.sync`). Sync semantics follow the vendored `cli/skills/Test Management/sync-test-cases-with-tms/SKILL.md` (from `testomatio/skills`).
 
@@ -143,7 +143,9 @@ The hook has a **stall watchdog**: if no event arrives for 45s after a send it s
 
 ### The debug snapshot (server + browser, one JSON)
 
-`GET /api/debug/snapshot?session=<id>` merges everything into one dump. The **server** side (`cli/src/debug-bus.ts`) already held outbound Testomat.io REST (`server.requests`) and LLM events (`server.ai`); `captureServerConsole()` adds the app-server's own stdout (`server.console`). The **browser** pushes what the server can't see via `POST /api/debug/report` — its unified `/api/*` + agent-WS log, captured `console.error`/`warn` + uncaught errors, and a MobX store snapshot (`client.entries` / `client.store` / `client.meta`). The client reports **errors always** (even with the Debug panel closed) and a full snapshot on load, on panel-open, and every 15s while the panel is on (`lib/services/debug-log-service.ts`).
+`GET /api/debug/snapshot?session=<id>` merges everything into one dump. The **server** side (`cli/src/debug-bus.ts`) already held outbound Testomat.io REST (`server.requests`) and LLM events (`server.ai`); `captureServerConsole()` adds the app-server's own stdout (`server.console`). The **browser** pushes what the server can't see via `POST /api/debug/report` — its unified `/api/*` + agent-WS log, captured `console.error`/`warn` + uncaught errors, a MobX store snapshot (`client.entries` / `client.store` / `client.meta`), and a **UI layout map** (`client.layout`). The client reports **errors always** (even with the Debug panel closed) and a full snapshot on load, on panel-open, and every 15s while the panel is on (`lib/services/debug-log-service.ts`).
+
+**UI layout map** (`lib/debug/layout-map.ts` → `GET /api/debug/layout`, `bun run debug:layout`): the browser walks its own DOM (`getBoundingClientRect`) and reports a **compact** tree of the meaningful **container components** — leaves/controls, thin rows, and anonymous wrappers dropped; single-child wrapper chains merged; repeated siblings collapsed to `N×`; capped depth/breadth. Nodes are named by `data-slot` (the shadcn/Base UI component name). Lets an agent see the rendered layout without driving a browser — only as fresh as the last client report.
 
 The running server publishes its (possibly random, desktop) port + pid to `~/.testeiya/server.json` (`cli/src/server-info.ts`, removed on exit) so the tooling finds it. Pull a snapshot with:
 
@@ -185,7 +187,7 @@ Look for **mismatches**: what the model's `llm-generation` output claimed vs. wh
 - `lib/host-bridge.tsx` — iframe-embed context (host theme/JWT via postMessage)
 - `lib/services/` — MobX service layer (business logic): `WorkspaceService` (tree load, classification, `sync(pull|push)`, `openDefault`), `ProjectService`, `ConnectionsService`, `ProvidersService`; consumed via `useXService()` from `observer` views
 - `components/panel/sections/WorkspaceSection.tsx` — file tree + Open-folder / Pull / Push / Refresh actions (thin `observer` over `WorkspaceService`)
-- `lib/debug/{external-log,store-snapshot}.ts` + `lib/services/debug-log-service.ts` — client debug capture: unified `/api/*` + agent-WS + console log, MobX store snapshot, and the `report()` that pushes them to the server (see "Debugging"); `components/panel/sections/DebugSection.tsx` renders the panel
+- `lib/debug/{external-log,store-snapshot,layout-map}.ts` + `lib/services/debug-log-service.ts` — client debug capture: unified `/api/*` + agent-WS + console log, MobX store snapshot, UI layout map (`captureLayoutMap`), and the `report()` that pushes them to the server (see "Debugging"); `components/panel/sections/DebugSection.tsx` renders the panel
 - `components/SettingsDialog.tsx` — provider key + MCP toggles + workspace section
 - `components/workspace/MarkdownEditor.tsx` — file editor (theme-synced)
 - `components/themed-toaster.tsx` — theme-bound sonner toasts
@@ -203,10 +205,10 @@ Look for **mismatches**: what the model's `llm-generation` output claimed vs. wh
 - `load-env.ts` — `.env` loader for the bundled app
 - `api/*.ts` — ported HTTP handlers (framework-agnostic `(req) => Response`)
 - `bridge.ts` — maps pi-coding-agent events → WS messages
-- `debug-bus.ts` · `ai-debug.ts` · `api/debug-{stream,snapshot,report}.ts` — the debug pipeline: server ring buffer + console capture + `buildSnapshot`, LLM-event recorder, and the SSE/pull/push endpoints (see "Debugging")
+- `debug-bus.ts` · `ai-debug.ts` · `api/debug-{stream,snapshot,report,layout}.ts` — the debug pipeline: server ring buffer + console capture + `buildSnapshot`, LLM-event recorder, and the SSE/pull/push/layout endpoints (see "Debugging")
 - `file-log.ts` — durable `~/.testeiya/logs/` app log (shared by all surfaces): console tee, config header, `[ai]` usage lines, 7-day + 30-file prune (see "Debugging")
 - `server-info.ts` — writes/reads `~/.testeiya/server.json` so out-of-band tooling finds the running server
-- `scripts/{debug-snapshot,langfuse-trace,setup-env}.ts` — the `debug:snapshot` / `debug:trace` / `setup:env` helpers
+- `scripts/{debug-snapshot,debug-layout,langfuse-trace,setup-env}.ts` — the `debug:snapshot` / `debug:layout` / `debug:trace` / `setup:env` helpers
 
 **Desktop**
 - `src/bun/index.ts` — Electrobun main entry (boots server, opens window)

@@ -20,9 +20,6 @@ import { rmSync } from "node:fs";
 import { HOME_DIR } from "./project-dir.js";
 import { readJson, writeJson } from "./json-store.js";
 import { join } from "node:path";
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
-import chalk from "chalk";
 
 const AUTH_FILE = join(HOME_DIR, "testomatio-auth.json");
 // Persistent precache of the (slow) project list — survives app restarts, so
@@ -262,127 +259,41 @@ export function maskToken(token: string): string {
   return `${token.slice(0, 4)}…${token.slice(-4)}`;
 }
 
-// ── CLI (TUI) auth flow ──────────────────────────────────────────────────────
-// Interactive JWT bootstrap + project picker for `bun src/cli.ts`. The web/app
-// flow above drives login over HTTP; these read/write the terminal directly and
-// reuse the same storage + fetchProjects so both surfaces stay in sync.
+// ── CLI (TUI) auth restore ───────────────────────────────────────────────────
+// Non-interactive: reuse the stored token + last selected project when they
+// resolve, else return null so the TUI starts unconnected and the in-session
+// `/connect` command takes over. Never prompts, never throws.
 
-export async function promptForJwt(baseUrl: string): Promise<string> {
-  const rl = createInterface({ input, output });
-  try {
-    console.log("");
-    console.log(chalk.bold("  Testomat.io authorization required"));
-    console.log("");
-    console.log(`  Open in your browser: ${chalk.cyan(`${baseUrl}/users/sign_in?auth=jwt`)}`);
-    console.log("  Sign in, click Authorize, copy the token.");
-    console.log("");
-
-    while (true) {
-      const answer = (await rl.question("  Paste the token here: ")).trim();
-      if (!answer) {
-        console.log(chalk.yellow("  Empty input. Try again."));
-        continue;
-      }
-      if (!answer.startsWith("eyJ")) {
-        console.log(chalk.yellow("  That doesn't look like a JWT (expected to start with 'eyJ'). Try again."));
-        continue;
-      }
-      return answer;
-    }
-  } finally {
-    rl.close();
+export async function restoreTestomatioAuth(
+  opts: RestoreAuthOptions = {}
+): Promise<RestoredAuth | null> {
+  const stored = loadStoredAuth();
+  if (!stored?.projectId) return null;
+  if (opts.baseUrl && normalizeBaseUrl(opts.baseUrl) !== normalizeBaseUrl(stored.baseUrl)) {
+    return null;
   }
+
+  let projects = getCachedProjects(stored.token, stored.baseUrl);
+  if (!projects) {
+    try {
+      projects = await fetchProjects(stored.token, stored.baseUrl);
+    } catch {
+      return null;
+    }
+  }
+
+  const project = projects.find((p) => p.id === stored.projectId);
+  if (!project) return null;
+  return { token: stored.token, baseUrl: stored.baseUrl, project, projects };
 }
 
-export async function pickProject(projects: Project[]): Promise<Project> {
-  if (projects.length === 0) {
-    throw new Error("No Testomat.io projects available for this account.");
-  }
-  if (projects.length === 1) {
-    const only = projects[0]!;
-    console.log(chalk.dim(`  Using the only available project: ${only.title} (${only.id})`));
-    return only;
-  }
-
-  console.log("");
-  console.log(chalk.bold("  Select a Testomat.io project:"));
-  projects.forEach((p, idx) => {
-    const fw = p.framework ? chalk.dim(` · ${p.framework}`) : "";
-    console.log(`    ${chalk.cyan(String(idx + 1).padStart(2))}. ${p.title} ${chalk.dim(`(${p.id})`)}${fw}`);
-  });
-  console.log("");
-
-  const rl = createInterface({ input, output });
-  try {
-    while (true) {
-      const answer = (await rl.question(`  Enter number (1-${projects.length}): `)).trim();
-      const n = Number.parseInt(answer, 10);
-      if (Number.isInteger(n) && n >= 1 && n <= projects.length) {
-        return projects[n - 1]!;
-      }
-      console.log(chalk.yellow(`  Please enter a number between 1 and ${projects.length}.`));
-    }
-  } finally {
-    rl.close();
-  }
-}
-
-export interface EnsureAuthOptions {
+export interface RestoreAuthOptions {
   baseUrl?: string;
-  forceProjectPick?: boolean;
 }
 
-export interface EnsureAuthResult {
+export interface RestoredAuth {
   token: string;
   baseUrl: string;
   project: Project;
   projects: Project[];
-}
-
-export async function ensureTestomatioAuth(opts: EnsureAuthOptions = {}): Promise<EnsureAuthResult> {
-  const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-  let stored = loadStoredAuth();
-
-  if (!stored) {
-    const token = await promptForJwt(baseUrl);
-    stored = { token, baseUrl };
-    saveStoredAuth(stored);
-  } else if (stored.baseUrl !== baseUrl) {
-    stored = { ...stored, baseUrl };
-    saveStoredAuth(stored);
-  }
-
-  let projects: Project[];
-  try {
-    projects = await fetchProjects(stored.token, baseUrl);
-  } catch (err) {
-    if (err instanceof UnauthorizedError) {
-      console.log(chalk.yellow("  Stored token was rejected. Re-authorizing…"));
-      const token = await promptForJwt(baseUrl);
-      stored = { token, baseUrl };
-      saveStoredAuth(stored);
-      projects = await fetchProjects(stored.token, baseUrl);
-    } else {
-      throw err;
-    }
-  }
-
-  if (projects.length === 0) {
-    throw new Error("No Testomat.io projects available for this account. Create one at the Testomat.io app, then re-run testeiya.");
-  }
-
-  let project: Project | undefined;
-  if (!opts.forceProjectPick && stored.projectId) {
-    project = projects.find((p) => p.id === stored!.projectId);
-  }
-  if (!project) {
-    project = await pickProject(projects);
-  }
-
-  if (stored.projectId !== project.id) {
-    stored = { ...stored, projectId: project.id };
-    saveStoredAuth(stored);
-  }
-
-  return { token: stored.token, baseUrl, project, projects };
 }

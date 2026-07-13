@@ -23,11 +23,26 @@ export function writeServerInfo(info: ServerInfo): void {
 }
 
 export function readServerInfo(): ServerInfo | null {
+  let info: ServerInfo;
   try {
     if (!existsSync(SERVER_INFO_FILE)) return null;
-    return JSON.parse(readFileSync(SERVER_INFO_FILE, "utf8")) as ServerInfo;
+    info = JSON.parse(readFileSync(SERVER_INFO_FILE, "utf8")) as ServerInfo;
   } catch {
     return null;
+  }
+  // A server killed with SIGKILL (or a crash) never runs the exit cleanup, so a
+  // stale file can point at a dead port. Ignore it unless its pid is alive.
+  if (!isProcessAlive(info.pid)) return null;
+  return info;
+}
+
+function isProcessAlive(pid: number): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as { code?: string })?.code === "EPERM";
   }
 }
 

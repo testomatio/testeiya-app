@@ -37,7 +37,7 @@ const SECTION_IDS: PanelSectionId[] = [
   "workspace",
   "project",
   "connections",
-  "pipelines",
+  "workflows",
 ];
 
 /** Read persisted open state; null when nothing is stored. */

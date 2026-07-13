@@ -27,6 +27,8 @@ export interface TreeNode {
   emoji?: string;
   /** Set when the file differs from the last Testomat.io sync (un-pushed). */
   status?: FileStatus;
+  /** True when the file is tracked by git and unmodified — safely restorable. */
+  committed?: boolean;
   children?: TreeNode[];
 }
 
@@ -48,6 +50,8 @@ export interface WorkspaceTypeEntry {
 /** GET /api/files/tree response: the tree plus workspace classification. */
 export interface WorkspaceTree {
   cwd: string;
+  /** The workspace's checked-out git branch; null when not a git repo / detached. */
+  branch?: string | null;
   nodes: TreeNode[];
   /** Manual-test files changed since the last Testomat.io sync. */
   changedCount?: number;

@@ -66,6 +66,9 @@ const config = {
       // probe for these next to the bundled entry.
       "cli/skills": "skills",
       "cli/skills.yaml": "skills.yaml",
+      // The vendored models catalog produced by `bunosh collect:models`;
+      // resolveModelsCatalogPath() probes for it next to the bundled entry.
+      "cli/models.catalog.json": "models.catalog.json",
       // Ship the cli package's full node_modules so the externalized imports
       // above resolve, and so the agent's dynamic require()/readFile/subprocess
       // loads (@testomatio/mcp bin, check-tests, @playwright/cli skill) find
