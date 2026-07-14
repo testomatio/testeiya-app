@@ -45,6 +45,21 @@ export async function testomatioAuthGet(): Promise<Response> {
     });
   }
 
+  // A token authorized on one host is meaningless on another (the other
+  // instance may even accept it and return an empty project list) — treat a
+  // host switch as "re-authorize against the new host".
+  if (stored.baseUrl && normalizeBaseUrl(stored.baseUrl) !== baseUrl) {
+    console.warn(
+      `[tio-auth] status: stored token is for ${stored.baseUrl} but host is ${baseUrl} — re-authorize`
+    );
+    return Response.json({
+      connected: false,
+      rejected: true,
+      baseUrl,
+      signInUrl: signInUrl(baseUrl),
+    });
+  }
+
   try {
     const projects = await fetchProjects(stored.token, baseUrl);
     const selectedProjectId =

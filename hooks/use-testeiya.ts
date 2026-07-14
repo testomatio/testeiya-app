@@ -52,14 +52,12 @@ export interface TesteiyaParams {
  */
 function getWsBase(): string {
   // Web dev (`next dev`): the UI is served by Next on a different origin than the
-  // Bun agent server, so honor the explicit WS URL (e.g. ws://localhost:3210).
-  // HTTP `/api/*` is proxied by Next rewrites, but WebSocket upgrades can't be —
-  // hence connecting to the agent server directly here.
-  if (
-    process.env.NODE_ENV === "development" &&
-    process.env.NEXT_PUBLIC_TESTEIYA_WS_URL
-  ) {
-    return process.env.NEXT_PUBLIC_TESTEIYA_WS_URL;
+  // Bun agent server, so connect to the agent server directly (default dev port
+  // 3210; override with NEXT_PUBLIC_TESTEIYA_WS_URL). HTTP `/api/*` is proxied
+  // by Next rewrites, but WebSocket upgrades can't be — a same-origin socket
+  // against `next dev` never connects.
+  if (process.env.NODE_ENV === "development") {
+    return process.env.NEXT_PUBLIC_TESTEIYA_WS_URL || "ws://localhost:3210";
   }
   // Production/static build: the unified server serves the UI *and* the agent
   // WebSocket on one origin (desktop random port, embedded web), so connect
