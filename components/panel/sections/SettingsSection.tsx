@@ -21,6 +21,7 @@ import {
   useDebugLogService,
   useMemoryService,
   useProjectService,
+  useProvidersService,
 } from "@/lib/services/StoreProvider";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
@@ -33,6 +34,7 @@ export const SettingsSection = observer(function SettingsSection({
   const debug = useDebugLogService();
   const memory = useMemoryService();
   const project = useProjectService();
+  const providers = useProvidersService();
   const [folder, setFolder] = useState("");
   const [opening, setOpening] = useState(false);
   const [memoryExpanded, setMemoryExpanded] = useState(false);
@@ -46,6 +48,10 @@ export const SettingsSection = observer(function SettingsSection({
   useEffect(() => {
     if (active) void project.refreshStatus();
   }, [active, project]);
+
+  useEffect(() => {
+    if (active) void providers.refresh();
+  }, [active, providers]);
 
   useEffect(() => {
     setHost(project.baseUrl);
@@ -80,6 +86,26 @@ export const SettingsSection = observer(function SettingsSection({
     <SectionShell title="Settings" active={active} onToggle={onToggle}>
       <div className="space-y-4 p-4">
         <div className="space-y-3">
+          <h3 className="text-sm font-semibold">AI Provider &amp; Model</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">
+              {providers.label ?? "No model selected"}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => providers.setDialogOpen(true)}
+            >
+              Change
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Pick the LLM provider and model the agent uses. Applies on the next
+            session.
+          </p>
+        </div>
+
+        <div className="space-y-3 border-t pt-4">
           <h3 className="text-sm font-semibold">Workspace</h3>
           <div className="flex gap-2">
             <Input

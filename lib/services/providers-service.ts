@@ -29,6 +29,9 @@ export class ProvidersService {
   thinkingLevels: ThinkingLevel[] = [];
   /** Set after a sign-in auto-selects a provider — surfaces a "reload" banner. */
   applied: Current | null = null;
+  /** Providers & Models dialog visibility — openable from the chat input, the
+   * error banner, and the Settings section. */
+  dialogOpen = false;
 
   // public so it can be excluded in the overrides map (`keyof this` omits privates)
   pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -43,6 +46,10 @@ export class ProvidersService {
 
   get label(): string | null {
     return this.current ? `${this.current.provider}/${this.current.model}` : null;
+  }
+
+  setDialogOpen(open: boolean): void {
+    this.dialogOpen = open;
   }
 
   async refresh(): Promise<void> {

@@ -691,7 +691,6 @@ const ChatPage = observer(function ChatPage() {
   const chatInputRef = useRef<ChatInputHandle>(null);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
   const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
   const panel = usePanel();
@@ -795,7 +794,7 @@ const ChatPage = observer(function ChatPage() {
   // model from the WS still takes precedence once a session exists.)
   useEffect(() => {
     void providers.refresh();
-  }, [providers, providersOpen]);
+  }, [providers, providers.dialogOpen]);
 
   // Embedded hosts (and the dev-embed simulation with a default project slug)
   // supply their own project context, so only a standalone desktop/web instance
@@ -1069,7 +1068,7 @@ const ChatPage = observer(function ChatPage() {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  setProvidersOpen(true);
+                  providers.setDialogOpen(true);
                   clearError();
                 }}
               >
@@ -1083,7 +1082,10 @@ const ChatPage = observer(function ChatPage() {
         </div>
       )}
 
-      <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
+      <ProvidersDialog
+        open={providers.dialogOpen}
+        onOpenChange={providers.setDialogOpen}
+      />
 
       <WorkflowsDiagramDialog />
 
@@ -1361,7 +1363,7 @@ const ChatPage = observer(function ChatPage() {
           onInsertSkill={handleInsertSkill}
           skillsDisabled={status === "streaming" || status === "submitted"}
           modelLabel={model ? model.split("/").slice(1).join("/") || model : providers.label || "Select model"}
-          onModelClick={() => setProvidersOpen(true)}
+          onModelClick={() => providers.setDialogOpen(true)}
           mentionFiles={mentionFiles}
           sessionId={sessionId ?? null}
           voiceEnabled={project.currentProject != null}
