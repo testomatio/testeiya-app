@@ -661,7 +661,6 @@ const ChatPage = observer(function ChatPage() {
   const workspace = useWorkspaceService();
   const project = useProjectService();
   const providers = useProvidersService();
-  const [providersOpen, setProvidersOpen] = useState(false);
   const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
   const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
 
@@ -678,7 +677,7 @@ const ChatPage = observer(function ChatPage() {
   // model from the WS still takes precedence once a session exists.)
   useEffect(() => {
     void providers.refresh();
-  }, [providers, providersOpen]);
+  }, [providers, providers.dialogOpen]);
 
   // Embedded hosts (and the dev-embed simulation with a default project slug)
   // supply their own project context, so only a standalone desktop/web instance
@@ -702,7 +701,7 @@ const ChatPage = observer(function ChatPage() {
     })();
   }, [sessionId, canConnectTestomatio, workspace, project]);
 
-  const openProviders = useCallback(() => setProvidersOpen(true), []);
+  const openProviders = useCallback(() => providers.setDialogOpen(true), [providers]);
   const openSwitchProject = useCallback(() => setSwitchProjectOpen(true), []);
 
   const activeTab = tabs.activeTab;
@@ -817,7 +816,10 @@ const ChatPage = observer(function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
+      <ProvidersDialog
+        open={providers.dialogOpen}
+        onOpenChange={providers.setDialogOpen}
+      />
 
       <WorkflowsDiagramDialog />
 

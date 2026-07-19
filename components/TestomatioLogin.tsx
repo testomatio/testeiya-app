@@ -82,6 +82,11 @@ export const TestomatioLogin = observer(function TestomatioLogin({
           );
         } else if (!state.connected) {
           setPhase("signin");
+        } else {
+          setError(
+            "No projects are available for this account. Create one in Testomat.io, then reconnect."
+          );
+          setPhase("signin");
         }
       })
       .catch((err) => {
