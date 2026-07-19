@@ -1,7 +1,13 @@
 import { getSystemPrompt } from "./system-prompt.js";
-import { testomatioTms, testomatioConnection, testomatioNotConnected } from "./testomatio.js";
+import {
+  testomatioTms,
+  testomatioConnection,
+  testomatioNotConnected,
+  projectSettings,
+} from "./testomatio.js";
 import { appUiGuidance } from "./app-ui.js";
 import { browserControl } from "./browser.js";
+import type { TestomatioProjectInfo } from "../project-info.js";
 
 export function buildSystemPrompt(options?: SystemPromptOptions): string {
   // The base prompt (role, workspace, tools, goals) comes first — it defines who
@@ -17,6 +23,9 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
 
   if (options?.promptContext) {
     parts.push(`## Project Test Context\n\n${options.promptContext}`);
+  }
+  if (options?.projectInfo) {
+    parts.push(projectSettings(options.projectInfo));
   }
   if (tokenAvailable || tokenSlugs.length > 0) {
     parts.push(testomatioConnection(tokenSlugs, options?.backendUrl, options?.connection));
@@ -35,4 +44,5 @@ export interface SystemPromptOptions {
   connection?: { tokenAvailable?: boolean; projectId?: string; title?: string };
   mode?: "tui" | "web";
   browser?: boolean;
+  projectInfo?: TestomatioProjectInfo | null;
 }

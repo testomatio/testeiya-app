@@ -14,7 +14,9 @@ const PER_PAGE = 50;
 export function useTableRows<T>(
   resource: string,
   params: QueryParams,
+  opts?: { skip?: boolean },
 ): TableRowsResult<T> {
+  const skip = opts?.skip ?? false;
   const store = useStores();
   const [sessionId, setSessionId] = useState<string | null>(store.sessionId);
   useEffect(
@@ -43,7 +45,7 @@ export function useTableRows<T>(
   const key = JSON.stringify(params);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || skip) {
       setRows([]);
       setMeta(null);
       return;
@@ -77,10 +79,10 @@ export function useTableRows<T>(
     return () => {
       cancelled = true;
     };
-  }, [resource, key, sessionId, refreshTick, reload]);
+  }, [resource, key, sessionId, refreshTick, reload, skip]);
 
   const fetchNextPage = useCallback(async () => {
-    if (!sessionId || inFlightRef.current) return;
+    if (!sessionId || skip || inFlightRef.current) return;
     const total = meta?.total;
     if (total != null && rows.length >= total) return;
     const next = pageRef.current + 1;
@@ -99,7 +101,7 @@ export function useTableRows<T>(
       setIsFetching(false);
       inFlightRef.current = false;
     }
-  }, [sessionId, resource, meta, rows.length]);
+  }, [sessionId, skip, resource, meta, rows.length]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
@@ -117,7 +119,7 @@ export function useTableRows<T>(
   };
 }
 
-interface TableRowsResult<T> {
+export interface TableRowsResult<T> {
   rows: T[];
   filterRows: number;
   totalRows: number;

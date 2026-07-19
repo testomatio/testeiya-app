@@ -5,7 +5,8 @@
   "scripts": {
     "postinstall": "cd cli && bun install",
     "setup:env": "bunosh harness:setup",
-    "vendor:skills": "bunosh harness:vendor",
+    "skills:update": "bunosh skills:update",
+    "skills:list": "bunosh skills:list",
     "debug:trace": "bunosh harness:trace",
     "debug:snapshot": "bunosh harness:snapshot",
     "debug:layout": "bunosh harness:layout",

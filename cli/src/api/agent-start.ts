@@ -4,11 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { readJson } from "../json-store.js";
-import { loggedServerFetch } from "../debug-bus.js";
 import { createSession } from "../session-store.js";
 import { PROJECT_DIR, MANUAL_TESTS_SUBDIR, WORKSPACES_DIR } from "../project-dir.js";
 import { runCheckTests } from "../check-tests.js";
 import { writeProjectMeta } from "../workspace-model.js";
+import {
+  fetchProjectInfo,
+  writeProjectInfo,
+  type TestomatioProjectInfo,
+} from "../project-info.js";
 
 const require = createRequire(import.meta.url);
 
@@ -292,7 +296,16 @@ export async function createProjectSession(
     tokens[p.slug] = p.token;
   }
 
-  const mcpServers = await buildTestomatioMcpServers(projects, backendUrl);
+  // One `/info` fetch per project serves both the MCP package choice below and
+  // the persisted settings cache the system prompt + sidebar read.
+  const infos = await Promise.all(
+    projects.map((p) => fetchProjectInfo(backendUrl, p.slug, p.token))
+  );
+  if (single && infos[0]) {
+    writeProjectInfo(tempDir, infos[0]);
+  }
+
+  const mcpServers = await buildTestomatioMcpServers(projects, backendUrl, infos);
   const projectDir = path.join(tempDir, PROJECT_DIR);
   fs.mkdirSync(projectDir, { recursive: true });
   // `mcp.json` is what the SDK reads (the *enabled* set). `mcp.all.json` is the
@@ -339,15 +352,18 @@ export async function createProjectSession(
  */
 export async function buildTestomatioMcpServers(
   projects: Array<{ slug: string; token: string }>,
-  backendUrl: string
+  backendUrl: string,
+  infos?: Array<TestomatioProjectInfo | null>
 ): Promise<Record<string, unknown>> {
-  const subscriptions = await Promise.all(
-    projects.map((p) => fetchProjectSubscription(backendUrl, p.slug, p.token))
-  );
+  const resolved =
+    infos ??
+    (await Promise.all(
+      projects.map((p) => fetchProjectInfo(backendUrl, p.slug, p.token))
+    ));
   const mcpServers: Record<string, unknown> = {};
   for (let i = 0; i < projects.length; i++) {
     const p = projects[i];
-    const enterprise = (subscriptions[i] ?? "").toLowerCase() === "enterprise";
+    const enterprise = (resolved[i]?.subscription ?? "").toLowerCase() === "enterprise";
     const pkg = enterprise ? "@testomatio/mcp-enterprise" : "@testomatio/mcp";
     const binKey = enterprise ? "testomatio-mcp-enterprise" : "testomatio-mcp";
     const mcpBin = resolveTestomatioMcpBin(pkg, binKey);
@@ -365,34 +381,4 @@ export async function buildTestomatioMcpServers(
         };
   }
   return mcpServers;
-}
-
-/**
- * Read a project's `subscription` from `GET /api/v2/{slug}/info`. Returns null
- * on any failure so session creation falls back to the regular MCP package.
- */
-async function fetchProjectSubscription(
-  baseUrl: string,
-  slug: string,
-  token: string
-): Promise<string | null> {
-  const url = new URL(
-    `/api/v2/${encodeURIComponent(slug)}/info`,
-    baseUrl.replace(/\/$/, "")
-  ).toString();
-  try {
-    const { res, text } = await loggedServerFetch(
-      url,
-      {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        cache: "no-store",
-      },
-      null
-    );
-    if (!res.ok) return null;
-    const parsed = JSON.parse(text) as { data?: { subscription?: string | null } };
-    return parsed.data?.subscription ?? null;
-  } catch {
-    return null;
-  }
 }

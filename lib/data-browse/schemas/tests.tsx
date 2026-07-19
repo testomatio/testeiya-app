@@ -1,7 +1,7 @@
 "use client";
 
 import { col, createTableSchema } from "@/lib/table-schema";
-import { MetaPill, OverflowBadgeList } from "@/components/widgets/status-pill";
+import { LabelsRow, MetaPill } from "@/components/widgets/status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "@/components/widgets/type-icons";
 import type { FilterMap } from "../params";
 import type { Option } from "../use-filter-options";
@@ -113,9 +113,7 @@ function TestTitleCell({ test }: { test: Test }) {
 }
 
 function TagsCell({ test }: { test: Test }) {
-  const items = collectTags(test);
-  if (items.length === 0) return null;
-  return <OverflowBadgeList items={items} />;
+  return <LabelsRow labels={test.labels} tags={test.tags} />;
 }
 
 function StateCell({ test }: { test: Test }) {
@@ -129,26 +127,6 @@ function StateCell({ test }: { test: Test }) {
       ) : null}
     </div>
   );
-}
-
-function collectTags(test: Test): string[] {
-  const out: string[] = [];
-  if (Array.isArray(test.labels)) {
-    for (const l of test.labels) {
-      const title =
-        typeof l === "string"
-          ? l
-          : (l as { title?: string; name?: string })?.title ??
-            (l as { name?: string })?.name;
-      if (title) out.push(title);
-    }
-  }
-  if (Array.isArray(test.tags)) {
-    for (const t of test.tags) {
-      if (typeof t === "string") out.push(t.startsWith("#") ? t : `#${t}`);
-    }
-  }
-  return out;
 }
 
 interface Test {

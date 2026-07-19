@@ -26,6 +26,7 @@ const ALLOWED_RESOURCES = new Set([
   "rungroups",
   "issues", // backs the UI "Requirements" view
   "info", // project configuration (subscription, features, framework, …)
+  "labels", // label definitions (title, color, visibility) for the config view
 ]);
 
 const WRITABLE_RESOURCES = new Set(["testruns", "runs"]);
@@ -88,6 +89,7 @@ const RESOURCE_FILTERS: Record<string, string[]> = {
   rungroups: [],
   issues: ["test_id", "suite_id", "run_id", "testrun_id", "plan_id", "source"],
   info: [],
+  labels: [],
 };
 
 export async function testomatioProxy(

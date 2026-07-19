@@ -3,6 +3,7 @@ import { HOME_DIR } from "../project-dir.js";
 import { mkdirSync } from "node:fs";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { loadConfig } from "../config.js";
+import { readUserEnvText, saveUserEnvText } from "../user-env.js";
 
 /**
  * Settings API for the desktop app — lets the user supply the LLM provider
@@ -59,4 +60,29 @@ export async function settingsPost(request: Request): Promise<Response> {
   await auth.set(provider, { type: "api_key", key: apiKey });
 
   return Response.json({ ok: true, provider, configured: true });
+}
+
+/**
+ * ENV Variables — raw `KEY=value` text the user manages in Settings, persisted
+ * to `~/.testeiya/.env`. GET returns the current file (or a default template);
+ * POST saves it and applies the vars to the process so agent bash commands and
+ * the next session's provider-key resolution pick them up. Values are stored in
+ * a local file the user controls, so unlike provider keys they round-trip here.
+ */
+export function settingsEnvGet(): Response {
+  return Response.json({ env: readUserEnvText() });
+}
+
+export async function settingsEnvPost(request: Request): Promise<Response> {
+  let body: { env?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+  if (typeof body.env !== "string") {
+    return Response.json({ error: "env is required" }, { status: 400 });
+  }
+  const keys = saveUserEnvText(body.env);
+  return Response.json({ ok: true, keys });
 }

@@ -18,31 +18,60 @@ const CLI_ROOT = import.meta.dir;
 const SKILLS_MANIFEST = join(CLI_ROOT, "skills.yaml");
 const SKILLS_OUTPUT = join(CLI_ROOT, "skills");
 const SKILLS_LOCK = join(CLI_ROOT, "skills.lock.json");
+const INTERNAL_SKILLS_DIR = join(SKILLS_OUTPUT, "testeiya");
 
 /**
- * Vendor the prebuilt skills declared in cli/skills.yaml into a committed tree
- * cli/skills/<category>/<skill>/ — organized by category folder. The category is
- * decided by the repo: each plugin in its Claude-plugin marketplace is a category
- * (so testomatio/skills → test-management / test-automation / explorbot), or the
- * repo name when there's no marketplace; it is slugified into the folder name. A
- * skill in the repo but not in any plugin is skipped. Every source is a GitHub
- * repo (owner/repo) fetched via the GitHub tarball (no git binary); resolved SHAs
- * are pinned in cli/skills.lock.json. Re-run on release.
+ * Update the vendored external skills declared in cli/skills.yaml into the
+ * committed tree cli/skills/<vendor>/ — one folder per vendor (the repo name,
+ * or the owner when the repo is just "skills"). Marketplace categories nest as
+ * cli/skills/<vendor>/<category>/<skill>/ (so testomatio/skills →
+ * testomatio/test-management + test-automation + explorbot); a repo without a
+ * marketplace puts its skills right under the vendor folder; a single-skill
+ * repo is vendored flat as cli/skills/<vendor>/SKILL.md. Only manifest-owned
+ * folders are replaced — any other folder in cli/skills (e.g. testeiya/, this
+ * repo's first-party skills) is internal and never touched. Every source is a
+ * GitHub repo (owner/repo) fetched via the GitHub tarball (no git binary);
+ * resolved SHAs + owned folders are pinned in cli/skills.lock.json. Re-run on
+ * release.
+ * @param {string} vendor - only update this vendor (folder, owner, or owner/repo)
  */
-export async function vendorSkills() {
+export async function skillsUpdate(vendor = "") {
   if (!existsSync(SKILLS_MANIFEST)) {
     yell(`No manifest at ${SKILLS_MANIFEST}`);
     return;
   }
   const parsed = parseYaml(readFileSync(SKILLS_MANIFEST, "utf-8")) ?? [];
-  const sources = Array.isArray(parsed) ? parsed : Object.values(parsed).flat();
-  say(`Vendoring skills from ${SKILLS_MANIFEST}`);
-  rmSync(SKILLS_OUTPUT, { recursive: true, force: true });
+  const allSources = (Array.isArray(parsed) ? parsed : Object.values(parsed).flat()).map(normalizeEntry);
+  let entries = allSources;
+  if (vendor) entries = allSources.filter((e) => matchesVendor(e, vendor));
+  if (entries.length === 0) {
+    yell(`No manifest source matches "${vendor}"`);
+    say(`Known vendors: ${allSources.map((e) => vendorFolder(e.source)).join(", ")}`);
+    return;
+  }
+  say(`Updating ${entries.length} of ${allSources.length} source(s) from ${SKILLS_MANIFEST}`);
 
-  const lock = [];
+  const prevLock = readLock();
+  const managed = new Set(prevLock.map((l) => l.folder).filter(Boolean));
+  if (!vendor) removeStaleFolders(prevLock, allSources);
+
+  // Slugs already taken by sources not updated in this run, so a filtered run
+  // still detects cross-vendor duplicates.
   const seen = new Set();
-  for (const raw of sources) {
-    const entry = normalizeEntry(raw);
+  for (const locked of prevLock) {
+    if (entries.some((e) => e.source === locked.source)) continue;
+    for (const slug of locked.skills ?? []) seen.add(slug);
+  }
+  const internal = skillSlugsOnDisk(managed);
+
+  const updatedLock = [];
+  for (const entry of entries) {
+    const folder = vendorFolder(entry.source);
+    const target = join(SKILLS_OUTPUT, folder);
+    if (existsSync(target) && !managed.has(folder)) {
+      yell(`  ! ${entry.source} → skills/${folder} exists but is not managed by the lock — treating the folder as internal, skipping this source`);
+      continue;
+    }
     const from = isLocal(entry.source) ? resolveLocalSource(entry) : await fetchGitSource(entry);
     if (!from) continue;
     const found = findSkills(from.root, entry.include, repoCategory(entry.source));
@@ -50,59 +79,84 @@ export async function vendorSkills() {
       say(`  ! ${entry.source} — no SKILL.md found`);
       continue;
     }
+    rmSync(target, { recursive: true, force: true });
     const vendored = [];
     for (const skill of found) {
       if (seen.has(skill.slug)) {
         yell(`  ! duplicate skill "${skill.slug}" (${entry.source}) — keeping the first, skipping this one`);
         continue;
       }
-      const categoryDir = slugify(skill.category);
-      // A single-skill repo is its own category — vendor it flat as
-      // cli/skills/<category>/ (no redundant <category>/<skill>/ nesting).
-      const rel = skill.single ? categoryDir : join(categoryDir, skill.slug);
+      if (internal.has(skill.slug)) say(`  ! "${skill.slug}" (${entry.source}) collides with a skill in an internal folder`);
+      const rel = skillRelPath(folder, skill);
       copySkill(skill.dir, join(SKILLS_OUTPUT, rel));
       seen.add(skill.slug);
       vendored.push(skill.slug);
       say(`  ✓ ${rel}`);
     }
-    lock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, skills: vendored });
+    updatedLock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, folder, skills: vendored });
+    managed.add(folder);
     if (from.cleanup) rmSync(from.cleanup, { recursive: true, force: true });
   }
 
-  writeFileSync(SKILLS_LOCK, JSON.stringify({ sources: lock }, null, 2) + "\n");
-  say(`\nWrote ${seen.size} skill(s) to ${SKILLS_OUTPUT} by category; pinned ${lock.length} source(s) in ${SKILLS_LOCK}.`);
+  const sources = mergeLock(allSources, prevLock, updatedLock, !vendor);
+  writeFileSync(SKILLS_LOCK, JSON.stringify({ sources }, null, 2) + "\n");
+  say(`\nUpdated ${updatedLock.length} vendor(s) in ${SKILLS_OUTPUT}; pinned in ${SKILLS_LOCK}.`);
 }
 
-/** List the vendored skills grouped by category (reads cli/skills + categories.json). */
-export async function skills() {
-  if (!existsSync(SKILLS_OUTPUT)) {
-    yell(`No vendored skills at ${SKILLS_OUTPUT} — run "bunosh vendor:skills" first.`);
+/**
+ * Scaffold a new first-party skill at cli/skills/testeiya/<name>/SKILL.md and
+ * print how to try it. The name is slugified — it becomes the /mention token.
+ * @param {string} name - the new skill's name (slug)
+ */
+export async function skillsCreate(name) {
+  const slug = slugify(name ?? "");
+  if (!slug) {
+    yell("Usage: bunosh skills:create <skill-name>");
     return;
   }
-  const groups = {};
+  const dir = join(INTERNAL_SKILLS_DIR, slug);
+  if (existsSync(join(dir, "SKILL.md"))) {
+    yell(`Skill already exists: ${dir}`);
+    return;
+  }
+  if (skillSlugsOnDisk(new Set()).has(slug)) {
+    say(`  ! "${slug}" already exists elsewhere in ${SKILLS_OUTPUT} — which one wins at load time is not deterministic, pick another name`);
+  }
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), skillTemplate(slug));
+  say(`Created ${join(dir, "SKILL.md")}`);
+  say(`
+Next steps:
+  1. Fill in the description + instructions in SKILL.md
+  2. Start a new chat session (skills load at session start), or hit Refresh in the Skills menu
+  3. Invoke it by typing /${slug} in the prompt`);
+}
+
+/** List the skills tree (cli/skills) grouped by vendor; folders not managed by the lock are marked internal. */
+export async function skillsList() {
+  if (!existsSync(SKILLS_OUTPUT)) {
+    yell(`No skills at ${SKILLS_OUTPUT} — run "bunosh skills:update" first.`);
+    return;
+  }
+  const managed = new Set(readLock().map((l) => l.folder).filter(Boolean));
   let total = 0;
-  for (const cat of readdirSync(SKILLS_OUTPUT, { withFileTypes: true })) {
-    if (!cat.isDirectory()) continue;
-    const category = prettifyCategory(cat.name);
-    const catDir = join(SKILLS_OUTPUT, cat.name);
-    if (existsSync(join(catDir, "SKILL.md"))) {
-      (groups[category] ??= []).push(cat.name);
-      total++;
-      continue;
-    }
-    for (const skill of readdirSync(catDir, { withFileTypes: true })) {
-      if (!skill.isDirectory()) continue;
-      if (!existsSync(join(catDir, skill.name, "SKILL.md"))) continue;
-      (groups[category] ??= []).push(skill.name);
-      total++;
+  let vendors = 0;
+  const entries = readdirSync(SKILLS_OUTPUT, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const paths = vendorSkillPaths(join(SKILLS_OUTPUT, entry.name));
+    if (paths.length === 0) continue;
+    vendors++;
+    total += paths.length;
+    let label = entry.name;
+    if (!managed.has(entry.name)) label += " (internal)";
+    say(`  ${label} (${paths.length})`);
+    for (const p of paths.sort()) {
+      if (p === ".") continue;
+      say(`    · ${p}`);
     }
   }
-  const names = Object.keys(groups).sort();
-  say(`${total} skills in ${names.length} categories:\n`);
-  for (const category of names) {
-    say(`  ${category} (${groups[category].length})`);
-    for (const slug of groups[category].sort()) say(`    · ${slug}`);
-  }
+  say(`\n${total} skill(s) from ${vendors} vendor(s) in ${SKILLS_OUTPUT}`);
 }
 
 /**
@@ -156,6 +210,119 @@ function normalizeEntry(raw) {
   if (raw.source) return raw;
   const [source, value] = Object.entries(raw)[0];
   return { source, include: Array.isArray(value) ? value : undefined };
+}
+
+// The vendor folder is the repo name; an org's generic "skills" repo uses the
+// owner instead (testomatio/skills → testomatio, codeceptjs/skills → codeceptjs).
+function vendorFolder(source) {
+  if (isLocal(source)) return slugify(basename(source));
+  const { owner, repo } = parseGitSource(source);
+  if (repo === "skills") return slugify(owner);
+  return slugify(repo);
+}
+
+function matchesVendor(entry, vendor) {
+  if (vendorFolder(entry.source) === vendor) return true;
+  if (entry.source === vendor) return true;
+  if (isLocal(entry.source)) return false;
+  const { owner, repo } = parseGitSource(entry.source);
+  return owner === vendor || `${owner}/${repo}` === vendor;
+}
+
+// Where a skill lands inside its vendor folder: single-skill repos are flat
+// (<vendor>/SKILL.md); a category matching the vendor collapses so a repo
+// without a marketplace doesn't nest as <vendor>/<vendor>/<skill>.
+function skillRelPath(folder, skill) {
+  if (skill.single) return folder;
+  const categoryDir = slugify(skill.category);
+  if (categoryDir === folder) return join(folder, skill.slug);
+  return join(folder, categoryDir, skill.slug);
+}
+
+function readLock() {
+  if (!existsSync(SKILLS_LOCK)) return [];
+  try {
+    return JSON.parse(readFileSync(SKILLS_LOCK, "utf-8")).sources ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// A full run drops lock entries for sources gone from the manifest (their
+// folders were removed); a filtered run keeps them so a later full run still
+// knows which folders it owns.
+function mergeLock(allSources, prevLock, updatedLock, fullRun) {
+  const updatedBySource = new Map(updatedLock.map((l) => [l.source, l]));
+  const prevBySource = new Map(prevLock.map((l) => [l.source, l]));
+  const sources = [];
+  for (const entry of allSources) {
+    const locked = updatedBySource.get(entry.source) ?? prevBySource.get(entry.source);
+    if (locked) sources.push(locked);
+  }
+  if (fullRun) return sources;
+  for (const locked of prevLock) {
+    if (allSources.some((e) => e.source === locked.source)) continue;
+    sources.push(locked);
+  }
+  return sources;
+}
+
+function removeStaleFolders(prevLock, sources) {
+  const current = new Set(sources.map((e) => vendorFolder(e.source)));
+  for (const locked of prevLock) {
+    if (!locked.folder || current.has(locked.folder)) continue;
+    rmSync(join(SKILLS_OUTPUT, locked.folder), { recursive: true, force: true });
+    say(`  - removed skills/${locked.folder} (${locked.source} no longer in the manifest)`);
+  }
+}
+
+// Skill slugs present in the tree, minus the excluded vendor folders — with the
+// managed folders excluded this is the internal (first-party) skills.
+function skillSlugsOnDisk(excludeFolders) {
+  const slugs = new Set();
+  if (!existsSync(SKILLS_OUTPUT)) return slugs;
+  for (const entry of readdirSync(SKILLS_OUTPUT, { withFileTypes: true })) {
+    if (!entry.isDirectory() || excludeFolders.has(entry.name)) continue;
+    for (const p of vendorSkillPaths(join(SKILLS_OUTPUT, entry.name))) {
+      if (p === ".") slugs.add(entry.name);
+      else slugs.add(basename(p));
+    }
+  }
+  return slugs;
+}
+
+function skillTemplate(slug) {
+  return `---
+name: ${slug}
+description: TODO — one sentence saying when the agent should use this skill.
+---
+
+# ${prettifyCategory(slug)}
+
+TODO: write the instructions the agent follows when this skill is invoked.
+`;
+}
+
+// Relative skill paths inside one vendor folder: "." for a flat single-skill
+// folder, "<skill>" for skills right under the vendor, "<category>/<skill>"
+// for nested ones.
+function vendorSkillPaths(vendorDir) {
+  if (existsSync(join(vendorDir, "SKILL.md"))) return ["."];
+  const paths = [];
+  for (const child of readdirSync(vendorDir, { withFileTypes: true })) {
+    if (!child.isDirectory()) continue;
+    const childDir = join(vendorDir, child.name);
+    if (existsSync(join(childDir, "SKILL.md"))) {
+      paths.push(child.name);
+      continue;
+    }
+    for (const nested of readdirSync(childDir, { withFileTypes: true })) {
+      if (!nested.isDirectory()) continue;
+      if (!existsSync(join(childDir, nested.name, "SKILL.md"))) continue;
+      paths.push(join(child.name, nested.name));
+    }
+  }
+  return paths;
 }
 
 function isLocal(source) {
@@ -265,9 +432,10 @@ function collectFromMarketplace(root, marketplace) {
   return [...bySlug.values()];
 }
 
+// The fallback category (no marketplace) mirrors the vendor folder, so
+// skillRelPath collapses it and the skills sit right under the vendor.
 function repoCategory(source) {
-  if (isLocal(source)) return prettifyCategory(basename(source));
-  return prettifyCategory(parseGitSource(source).repo ?? source);
+  return prettifyCategory(vendorFolder(source));
 }
 
 // A plugin's skills/ entry is usually a symlink to the repo's real skill folder

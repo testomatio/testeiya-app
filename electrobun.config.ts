@@ -60,10 +60,11 @@ const config = {
     // Paths are <source on disk> : <destination in bundle>.
     copy: {
       out: "out",
-      // The prebuilt skills vendored by `bunosh vendor:skills` (loaded at
-      // runtime as files by loadBundledSkills) + the manifest the skills API
-      // reads for category names. resolveBundledSkillsDir()/resolveSkillsManifestPath()
-      // probe for these next to the bundled entry.
+      // The skills tree (external vendors written by `bunosh skills:update`
+      // plus internal folders like cli/skills/testeiya, loaded at runtime as
+      // files by loadBundledSkills) + the external-skills manifest.
+      // resolveBundledSkillsDir()/resolveSkillsManifestPath() probe for these
+      // next to the bundled entry.
       "cli/skills": "skills",
       "cli/skills.yaml": "skills.yaml",
       // The vendored models catalog produced by `bunosh collect:models`;

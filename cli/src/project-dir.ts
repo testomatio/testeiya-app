@@ -37,13 +37,15 @@ export const CUSTOM_SKILLS_DIR = join(HOME_DIR, CUSTOM_SKILLS_SUBDIR);
 
 /**
  * Folder name (shipped inside the CLI package / desktop bundle) that holds the
- * vendored, prebuilt skills as a flat tree `<skill>/SKILL.md` (one folder per
- * skill) plus a `categories.json` sidecar mapping each skill to its UI category.
- * Produced by `bunosh vendor:skills` from the `skills.yaml` manifest.
+ * skills tree organized by vendor: `<vendor>/<skill>/SKILL.md`, with an extra
+ * category level for marketplace repos (`<vendor>/<category>/<skill>/`).
+ * External vendors are written by `bunosh skills:update` from the `skills.yaml`
+ * manifest; folders it does not manage (e.g. `testeiya/`) are first-party
+ * skills authored in this repo.
  */
 export const BUNDLED_SKILLS_SUBDIR = "skills";
 
-/** The prebuilt-skills manifest file name (source of truth for `bunosh vendor:skills`). */
+/** The external-skills manifest file name (source of truth for `bunosh skills:update`). */
 export const SKILLS_MANIFEST_FILE = "skills.yaml";
 
 /** The vendored models catalog produced by `bunosh collect:models` (see models-catalog.ts). */
@@ -51,6 +53,9 @@ export const MODELS_CATALOG_FILE = "models.catalog.json";
 
 /** Records which Testomat.io project a workspace represents (id + base URL). */
 export const PROJECT_META_FILE = "testeiya.json";
+
+/** Cached project configuration from `GET /api/v2/{id}/info` (see project-info.ts). */
+export const PROJECT_INFO_FILE = "project-info.json";
 
 /** Hashes of the manual-test files as of the last Testomat.io sync (pull/push). */
 export const SYNC_SNAPSHOT_FILE = "sync-snapshot.json";
@@ -68,6 +73,11 @@ export function projectSkillsDir(cwd: string): string {
 /** Absolute path to the project-association metadata file inside `cwd`. */
 export function projectMetaPath(cwd: string): string {
   return join(cwd, PROJECT_DIR, PROJECT_META_FILE);
+}
+
+/** Absolute path to the cached project-configuration file inside `cwd`. */
+export function projectInfoPath(cwd: string): string {
+  return join(cwd, PROJECT_DIR, PROJECT_INFO_FILE);
 }
 
 /** Absolute path to the last-sync snapshot file inside `cwd`. */
@@ -95,7 +105,7 @@ export function migrateLegacyHomeDir(): void {
 }
 
 /**
- * Locate the vendored bundled-skills tree (`cli/skills/<category>/<skill>/`).
+ * Locate the bundled skills tree (`cli/skills/<vendor>/...`).
  * Mirrors `resolveStaticDir()` in `src/bun/index.ts`: an env override, then the
  * dev / npm-package layout (a sibling of `cli/src`), then the desktop-bundle
  * layout where `electrobun.config` copies `cli/skills` to `skills` next to the

@@ -27,6 +27,7 @@ export const ProjectSection = observer(function ProjectSection({
   const [authOpen, setAuthOpen] = useState(false);
   const current = project.currentProject;
   const links = project.currentLinks;
+  const info = project.projectInfo;
 
   return (
     <SectionShell
@@ -96,6 +97,46 @@ export const ProjectSection = observer(function ProjectSection({
               loading={project.countsLoading}
               active={project.openResource === "requirements"}
               onClick={() => project.showResource("requirements")}
+            />
+            <StatTile
+              icon="label"
+              label="Labels"
+              count={info ? (info.labels?.length ?? 0) : null}
+              loading={project.countsLoading}
+              active={project.openResource === "labels"}
+              onClick={() => project.showResource("labels")}
+            />
+            <StatTile
+              icon="sell"
+              label="Tags"
+              count={info ? (info.tags?.length ?? 0) : null}
+              loading={project.countsLoading}
+              active={project.openResource === "tags"}
+              onClick={() => project.showResource("tags")}
+            />
+            <StatTile
+              icon="cloud"
+              label="Environments"
+              count={info ? (info.environments?.length ?? 0) : null}
+              loading={project.countsLoading}
+              active={project.openResource === "environments"}
+              onClick={() => project.showResource("environments")}
+            />
+            <StatTile
+              icon="rocket_launch"
+              label="CI Profiles"
+              count={info ? (info.ci_profiles?.length ?? 0) : null}
+              loading={project.countsLoading}
+              active={project.openResource === "ci"}
+              onClick={() => project.showResource("ci")}
+            />
+            <StatTile
+              icon="tune"
+              label="Configuration"
+              count={info ? (info.features?.length ?? 0) : null}
+              loading={project.countsLoading}
+              active={project.openResource === "settings"}
+              onClick={() => project.showResource("settings")}
             />
           </div>
 

@@ -129,6 +129,7 @@ export function ChatColumn({
     return (
       <aside ref={setAside} className="relative flex shrink-0">
         <ChatRail />
+        <div className="hidden">{children}</div>
         {handle}
       </aside>
     );

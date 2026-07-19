@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
  * `.env` up the tree, so it's a harmless no-op and the user uses Settings.
  */
 
-function parseEnv(content: string): Record<string, string> {
+export function parseEnv(content: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const raw of content.split(/\r?\n/)) {
     const line = raw.trim();

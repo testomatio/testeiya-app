@@ -13,7 +13,8 @@ import {
 } from "../workspace-model.js";
 import { computeChangedFiles, ensureSyncBaseline, type FileStatus } from "../sync-snapshot.js";
 import { loadGitignore, type GitignoreChain } from "../gitignore.js";
-import { gitCommittedFiles, gitBranch } from "../git-tracked.js";
+import { PROJECT_DIR, LEGACY_PROJECT_DIR } from "../project-dir.js";
+import { gitCommittedFiles, gitChangedFiles, gitBranch } from "../git-tracked.js";
 import { suiteId, suiteEmoji } from "../workspace/test-md.js";
 
 const MAX_DEPTH = 8;
@@ -59,7 +60,13 @@ export async function filesTree(request: Request): Promise<Response> {
   };
 
   ensureSyncBaseline(cwd);
-  const changed = computeChangedFiles(cwd);
+  // Manual tests flag files un-synced since the last Testomat.io pull/push; code
+  // files flag what changed since the last git commit. The manual view keeps the
+  // sync baseline only; other views add git status, with sync markers (the folded
+  // manual-tests) winning where both apply.
+  const syncChanged = computeChangedFiles(cwd);
+  const gitChanged = view.type === "manual" ? {} : gitChangedFiles(cwd);
+  const changed = { ...gitChanged, ...syncChanged };
   const committed = gitCommittedFiles(cwd);
   const nodes = readDir(cwd, "", 0, { count: 0 }, view, changed, committed, loadGitignore(cwd));
   return Response.json({
@@ -90,7 +97,8 @@ function readDir(
     return [];
   }
 
-  const inDotPath = relDir.startsWith(".");
+  const configTop = relDir.split("/")[0];
+  const inConfigDir = configTop === PROJECT_DIR || configTop === LEGACY_PROJECT_DIR;
   const folders: TreeNode[] = [];
   const files: TreeNode[] = [];
   for (const entry of entries) {
@@ -110,12 +118,13 @@ function readDir(
     if (!leads && !inside && ig.ignores(childRel)) continue;
 
     if (entry.isDirectory()) {
-      // Hide dot folders unless they lead to a surfaced dir (e.g. surface
-      // `.testeiya/manual-tests` or `.testeiya/code`). Inside such a dot path,
-      // keep only the branch heading to it so `mcp.json`-style siblings stay
-      // out. A subdir view (`branchOnly`) prunes everything else.
-      if (entry.name.startsWith(".") && !leads) continue;
-      if (inDotPath && !leads && !inside) continue;
+      // Hide only the internal config dir (`.testeiya`/`.omp`) unless it leads
+      // to a surfaced dir (e.g. `.testeiya/manual-tests`). Other non-git-ignored
+      // dot folders (`.github`, `.circleci`, …) are valuable and render normally.
+      // Inside the config dir, keep only the branch heading to a surfaced dir so
+      // `mcp.json`-style siblings stay out. A subdir view (`branchOnly`) prunes the rest.
+      if ((entry.name === PROJECT_DIR || entry.name === LEGACY_PROJECT_DIR) && !leads) continue;
+      if (inConfigDir && !leads && !inside) continue;
       if (view.branchOnly && !leads && !inside) continue;
       state.count++;
       const children = readDir(childAbs, childRel, depth + 1, state, view, changed, committed, ig.descend(childRel));
@@ -127,9 +136,9 @@ function readDir(
       continue;
     }
     if (!entry.isFile() || entry.name.startsWith(".")) continue;
-    // Inside a dot path (e.g. `.testeiya`), only show files that live inside a
+    // Inside the config dir (`.testeiya`), only show files that live inside a
     // surfaced dir — keep `mcp.json`/`testeiya.json` siblings out of every view.
-    if (inDotPath && !inside) continue;
+    if (inConfigDir && !inside) continue;
     // Files inside a surfaced dir always show. Outside it: nothing in a subdir
     // view, only `*.test.md` in a manual view, automated tests + the framework
     // config in an automated view, everything in a code/files view.

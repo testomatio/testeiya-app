@@ -63,6 +63,7 @@ export const useSkillsService = () => useRootStore().skills;
 export const useBrowserService = () => useRootStore().browser;
 export const useMemoryService = () => useRootStore().memory;
 export const useSessionsService = () => useRootStore().sessions;
+export const useChatTabsService = () => useRootStore().chatTabs;
 export const useWidgetService = () => useRootStore().widget;
 export const useDebugLogService = () => useRootStore().debug;
 export const useWorkflowsService = () => useRootStore().workflows;

@@ -13,6 +13,8 @@ export interface PanelSectionProps {
   active: boolean;
   onToggle: () => void;
   initializing: boolean;
+  onOpenProviders?: () => void;
+  onSwitchProject?: () => void;
 }
 
 export interface PanelSectionDef {

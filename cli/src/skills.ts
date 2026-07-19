@@ -25,11 +25,13 @@ export function hasPlaywrightCli(): boolean {
 }
 
 /**
- * The prebuilt skills vendored into the CLI package / desktop bundle by
- * `bunosh vendor:skills`, laid out as `<category>/<skill>/SKILL.md`. Source
- * `"bundled"`; each skill's `category` is the (prettified) name of the folder it
- * sits in — the vendor slugifies the category (from the repo's Claude-plugin
- * marketplace, or the repo name) into that folder.
+ * The skills tree shipped with the CLI package / desktop bundle, organized by
+ * vendor folder: external vendors written by `bunosh skills:update` plus
+ * first-party folders authored in this repo (e.g. `testeiya/`). Inside a vendor
+ * folder — a root SKILL.md makes the folder one flat skill; a child folder with
+ * a SKILL.md is a skill whose `category` is the (prettified) vendor folder; a
+ * child folder without one is a category folder whose skill children get that
+ * folder as `category`. Source `"bundled"`.
  */
 export function loadBundledSkills(): CategorizedSkill[] {
   const dir = resolveBundledSkillsDir();
@@ -37,20 +39,7 @@ export function loadBundledSkills(): CategorizedSkill[] {
   const skills: CategorizedSkill[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const entryDir = join(dir, entry.name);
-    const category = prettifyCategory(entry.name);
-    // A top-level folder that is itself a skill (a whole repo that's one skill,
-    // vendored flat) — its category is the folder; no nested skill folder.
-    const single = readSkill(entryDir, entry.name, "bundled");
-    if (single) {
-      single.category = category;
-      skills.push(single);
-      continue;
-    }
-    for (const skill of readSkillsDir(entryDir, "bundled")) {
-      skill.category = category;
-      skills.push(skill);
-    }
+    skills.push(...readVendorDir(join(dir, entry.name), entry.name));
   }
   return skills;
 }
@@ -83,6 +72,32 @@ export function dedupeSkillsByName<T extends Skill>(skills: T[]): T[] {
   const byName = new Map<string, T>();
   for (const skill of skills) byName.set(skill.name, skill);
   return [...byName.values()];
+}
+
+/** One vendor folder of the bundled tree — see `loadBundledSkills` for the layout. */
+function readVendorDir(vendorDir: string, vendorName: string): CategorizedSkill[] {
+  const vendorCategory = prettifyCategory(vendorName);
+  const single = readSkill(vendorDir, vendorName, "bundled");
+  if (single) {
+    single.category = vendorCategory;
+    return [single];
+  }
+  const skills: CategorizedSkill[] = [];
+  for (const entry of readdirSync(vendorDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    const entryDir = join(vendorDir, entry.name);
+    const skill = readSkill(entryDir, entry.name, "bundled");
+    if (skill) {
+      skill.category = vendorCategory;
+      skills.push(skill);
+      continue;
+    }
+    for (const nested of readSkillsDir(entryDir, "bundled")) {
+      nested.category = prettifyCategory(entry.name);
+      skills.push(nested);
+    }
+  }
+  return skills;
 }
 
 /**

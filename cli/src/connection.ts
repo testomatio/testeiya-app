@@ -7,15 +7,17 @@ import { transformEvent } from "./bridge.js";
 import { attachAiDebug } from "./ai-debug.js";
 import { getSession } from "./session-store.js";
 import { resolveSessionShellEnv } from "./api/testomatio-target.js";
-import { loadBundledSkills } from "./skills.js";
+import { dedupeSkillsByName, loadBundledSkills, loadCustomSkills } from "./skills.js";
 import { browserStateNotice } from "./api/playwright-cli.js";
 
-// Skills are static for the process; load once. Each entry has name +
-// description + filePath (see skills.ts).
-let skillsCache: ReturnType<typeof loadBundledSkills> | null = null;
-function getSkills() {
-  if (!skillsCache) skillsCache = loadBundledSkills();
-  return skillsCache;
+// Bundled skills are static for the process; load once. Custom skills are
+// re-read per prompt (cheap dir scan) so a freshly dropped-in skill is
+// mentionable without a restart. Custom last — it overrides by name, matching
+// session-factory. Each entry has name + description + filePath (see skills.ts).
+let bundledSkillsCache: ReturnType<typeof loadBundledSkills> | null = null;
+function getSkills(cwd: string) {
+  if (!bundledSkillsCache) bundledSkillsCache = loadBundledSkills();
+  return dedupeSkillsByName([...bundledSkillsCache, ...loadCustomSkills(cwd)]);
 }
 
 /** While a prompt is being processed the server emits a lightweight `ping`
@@ -236,7 +238,8 @@ export function createConnection(
           // prompt (the model receives the workflow, the UI keeps showing the
           // short command). Announce it so the UI can render a "using skill"
           // banner on the agent's reply.
-          const skill = matchSkillCommand(msg.message);
+          const skills = getSkills(sessionCwd);
+          const skill = matchSkillCommand(msg.message, skills);
           if (skill) {
             send({
               type: "skill",
@@ -252,6 +255,17 @@ export function createConnection(
             break;
           }
 
+          // `/<skill-name>` mentioned anywhere else in the message keeps the
+          // user's text intact and appends each mentioned skill's instructions.
+          const mentioned = matchSkillMentions(msg.message, skills);
+          for (const entry of mentioned) {
+            send({
+              type: "skill",
+              name: entry.name,
+              description: entry.description ?? "",
+            });
+          }
+
           // Images go to the model natively; other files are written into the
           // workspace so the agent can read them with its file tools.
           const { text, images } = prepareAttachments(
@@ -261,7 +275,10 @@ export function createConnection(
             messageId
           );
           await session.prompt(
-            withActiveWidget(widgetNotice, withBrowserState(browserNotice, text)),
+            withActiveWidget(
+              widgetNotice,
+              withBrowserState(browserNotice, withSkillMentions(text, mentioned))
+            ),
             images.length > 0 ? { images } : undefined
           );
         } catch (err: any) {
@@ -419,16 +436,38 @@ type SkillEntry = ReturnType<typeof loadBundledSkills>[number];
 
 /** Match a leading `/<skill-name>` against the loaded skills; null if none. */
 function matchSkillCommand(
-  message: string
+  message: string,
+  skills: SkillEntry[]
 ): { entry: SkillEntry; args: string } | null {
   const text = (message ?? "").trimStart();
   if (!text.startsWith("/")) return null;
   const match = /^\/([^\s]+)\s*([\s\S]*)$/.exec(text);
   if (!match) return null;
   const name = match[1].toLowerCase();
-  const entry = getSkills().find((s) => s.name.toLowerCase() === name);
+  const entry = skills.find((s) => s.name.toLowerCase() === name);
   if (!entry) return null;
   return { entry, args: match[2].trim() };
+}
+
+/** Collect every `/<skill-name>` at a word boundary anywhere in the message. */
+function matchSkillMentions(message: string, skills: SkillEntry[]): SkillEntry[] {
+  const found = new Map<string, SkillEntry>();
+  for (const match of (message ?? "").matchAll(/(?:^|\s)\/([a-z0-9][a-z0-9-]*)/gi)) {
+    const name = match[1].toLowerCase();
+    if (found.has(name)) continue;
+    const entry = skills.find((s) => s.name.toLowerCase() === name);
+    if (entry) found.set(name, entry);
+  }
+  return [...found.values()];
+}
+
+/** Append each mentioned skill's instructions after the user's message. */
+function withSkillMentions(text: string, entries: SkillEntry[]): string {
+  if (entries.length === 0) return text;
+  const blocks = entries.map(
+    (entry) => `<skill name="${entry.name}">\n${readSkillBody(entry)}\n</skill>`
+  );
+  return `${text}\n\nThe /<name> tokens in the message above reference skills. Follow each referenced skill's instructions for this request:\n\n${blocks.join("\n\n")}`;
 }
 
 /** Append the `<browser_state>` notice (when present) to a prompt. */
@@ -445,6 +484,13 @@ function withActiveWidget(notice: string | null, text: string): string {
 
 /** Expand a skill into a prompt: its workflow content plus any user args. */
 function buildSkillPrompt(entry: SkillEntry, args: string): string {
+  const parts = [readSkillBody(entry)];
+  if (args) parts.push(`---\n\nUser request: ${args}`);
+  return parts.join("\n\n");
+}
+
+/** The skill's SKILL.md content with the YAML frontmatter stripped. */
+function readSkillBody(entry: SkillEntry): string {
   let content = "";
   try {
     content = readFileSync(entry.filePath, "utf8");
@@ -452,9 +498,7 @@ function buildSkillPrompt(entry: SkillEntry, args: string): string {
     content = "";
   }
   const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
-  const parts = [body || `Apply the "${entry.name}" skill.`];
-  if (args) parts.push(`---\n\nUser request: ${args}`);
-  return parts.join("\n\n");
+  return body || `Apply the "${entry.name}" skill.`;
 }
 
 interface PromptFile {

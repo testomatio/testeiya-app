@@ -3,7 +3,10 @@
 import { observer } from "mobx-react-lite";
 import { mdiChatOutline, mdiChatPlusOutline } from "@mdi/js";
 import { usePanel } from "@/lib/panel/PanelContext";
-import { useSessionsService } from "@/lib/services/StoreProvider";
+import {
+  useSessionsService,
+  useChatTabsService,
+} from "@/lib/services/StoreProvider";
 import { MdiIcon } from "@/components/icons";
 import { BrowserControls } from "@/components/BrowserControls";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +21,7 @@ const RAIL_W = 48;
 export const ChatRail = observer(function ChatRail() {
   const { setChatOpen } = usePanel();
   const sessions = useSessionsService();
+  const tabs = useChatTabsService();
 
   return (
     <nav
@@ -45,8 +49,8 @@ export const ChatRail = observer(function ChatRail() {
         <TooltipTrigger render={
           <button
             type="button"
-            onClick={() => sessions.createNew()}
-            disabled={!sessions.sessionId}
+            onClick={() => tabs.openTab()}
+            disabled={!sessions.sessionId || !tabs.canOpen}
             aria-label="New chat"
             className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
           >

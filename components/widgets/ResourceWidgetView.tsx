@@ -16,6 +16,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CreateRunDialog } from "./CreateRunDialog";
+import {
+  ConfigurationView,
+  EnvironmentsView,
+  LabelsView,
+  TagsView,
+} from "./ProjectConfigView";
 import { ResourceDataTable } from "./ResourceDataTable";
 import { ListPager } from "./list-row";
 import PlansListRenderer from "./PlansListRenderer";
@@ -74,6 +80,41 @@ const RESOURCE_CONFIG: Record<
     render: (json) => <RequirementsListRenderer json={json} />,
     table: true,
   },
+  labels: {
+    label: "Labels",
+    api: "labels",
+    render: () => null,
+  },
+  tags: {
+    label: "Tags",
+    api: "info",
+    render: () => null,
+  },
+  environments: {
+    label: "Environments",
+    api: "info",
+    render: () => null,
+  },
+  ci: {
+    label: "CI Profiles",
+    api: "info",
+    render: () => null,
+    table: true,
+  },
+  settings: {
+    label: "Configuration",
+    api: "info",
+    render: () => null,
+  },
+};
+
+// Pages whose body is a dedicated view over the store's projectInfo — they
+// fetch nothing through the generic list pipeline.
+const CUSTOM_VIEWS: Partial<Record<ProjectResource, () => ReactNode>> = {
+  labels: () => <LabelsView />,
+  tags: () => <TagsView />,
+  environments: () => <EnvironmentsView />,
+  settings: () => <ConfigurationView />,
 };
 
 /**
@@ -138,6 +179,7 @@ export function ResourceWidgetView({
     setPage(1);
   }
 
+  const customView = CUSTOM_VIEWS[resource];
   const { data, loading, error, meta } = useTestomatio<unknown[]>(
     api,
     {
@@ -145,7 +187,7 @@ export function ResourceWidgetView({
       per_page: PER_PAGE,
       query: query || undefined,
     },
-    { skip: isTable }
+    { skip: isTable || !!customView }
   );
 
   const items = data ?? [];
@@ -216,7 +258,9 @@ export function ResourceWidgetView({
   useRegisterWidget(widgetId, runCommand);
 
   let body;
-  if (isTable) {
+  if (customView) {
+    body = customView();
+  } else if (isTable) {
     body = <ResourceDataTable resource={resource} />;
   } else if (loading) {
     body = (
@@ -321,7 +365,13 @@ export function ResourceWidgetView({
           )}
         </div>
       </div>
-      <div className={cn("min-h-0 flex-1", !isTable && "overflow-auto p-3")}>
+      <div
+        className={cn(
+          "min-h-0 flex-1",
+          customView && "overflow-auto",
+          !isTable && !customView && "overflow-auto p-3"
+        )}
+      >
         {body}
       </div>
       {showPager && !isTable && (

@@ -10,7 +10,7 @@ import {
   ListRowHeader,
 } from "./list-row";
 import { PreviewPane } from "./preview-pane";
-import { MetaPill, OverflowBadgeList } from "./status-pill";
+import { LabelsRow, MetaPill } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
 
 interface McpTest {
@@ -145,33 +145,6 @@ export default function TestsListRenderer({
   );
 }
 
-function resolveTagTitle(tag: unknown): string {
-  if (typeof tag === "string") return tag;
-  return String(
-    (tag as { name?: string; title?: string })?.name ??
-      (tag as { title?: string })?.title ??
-      ""
-  );
-}
-
 function TagsCell({ labels, tags }: { labels?: unknown; tags?: unknown }) {
-  const labelTitles = (Array.isArray(labels) ? (labels as unknown[]) : [])
-    .map((l) =>
-      typeof l === "string"
-        ? l
-        : String(
-            (l as { title?: string; name?: string })?.title ??
-              (l as { name?: string })?.name ??
-              ""
-          )
-    )
-    .filter(Boolean);
-
-  const tagTitles = (Array.isArray(tags) ? (tags as unknown[]) : [])
-    .map((t) => `#${resolveTagTitle(t)}`)
-    .filter((t) => t !== "#");
-
-  const all = [...labelTitles, ...tagTitles];
-  if (all.length === 0) return null;
-  return <OverflowBadgeList items={all} />;
+  return <LabelsRow labels={labels} tags={tags} />;
 }

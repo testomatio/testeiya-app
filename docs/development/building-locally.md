@@ -90,14 +90,16 @@ Dev servers use **3050** (web UI) and **3210** (agent server); the desktop app p
 
 ## Bundled skills
 
-The QA skills the agent ships with are vendored from GitHub repos listed in `cli/skills.yaml`, pinned in `cli/skills.lock.json`. To update or add skills, edit the manifest and re-vendor:
+The skills tree `cli/skills/` is organized by vendor folder. External vendors come from GitHub repos listed in `cli/skills.yaml` (pinned in `cli/skills.lock.json`); folders the manifest does not own — like `cli/skills/testeiya/` — hold Testeiya's own first-party skills and are never touched by updates. To update or add external skills, edit the manifest and run:
 
 ```bash
-bunosh harness:vendor    # re-vendor skills into cli/skills/
-bunosh harness:skills    # list the vendored skills by category
+bunosh skills:update             # refresh every external vendor's folder
+bunosh skills:update codeceptjs  # refresh a single vendor
+bunosh skills:create my-skill    # scaffold an internal skill in cli/skills/testeiya/
+bunosh skills:list               # list the skills tree by vendor
 ```
 
-Release CI re-runs the vendor step, so shipped skills are always current.
+Release CI re-runs the update step, so shipped external skills are always current.
 
 ## Releasing
 

@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { LabelChip } from "./label-chip";
 
 export type TestStatus = "passed" | "failed" | "skipped" | "running";
 
@@ -51,16 +52,21 @@ export function MetaPill({
 const BADGE_GAP = 4;
 const OVERFLOW_BADGE_W = 32;
 
-export function OverflowBadgeList({
-  items,
+/**
+ * Width-aware chip row: shows as many of `nodes` as fit, collapses the rest
+ * behind a "+N" badge whose tooltip lists them. Each node must render exactly
+ * one measurable element.
+ */
+export function OverflowNodeList({
+  nodes,
   className,
 }: {
-  items: string[];
+  nodes: ReactNode[];
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(items.length);
+  const [visibleCount, setVisibleCount] = useState(nodes.length);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -87,25 +93,17 @@ export function OverflowBadgeList({
     observer.observe(container);
     recalc();
     return () => observer.disconnect();
-  }, [items]);
+  }, [nodes]);
 
-  const visible = items.slice(0, visibleCount);
-  const hidden = items.slice(visibleCount);
+  const visible = nodes.slice(0, visibleCount);
+  const hidden = nodes.slice(visibleCount);
 
   return (
     <div ref={containerRef} className={cn("relative flex min-w-0 items-center gap-1 overflow-hidden", className)}>
       <div ref={measureRef} className="pointer-events-none invisible absolute flex gap-1" aria-hidden>
-        {items.map((item, i) => (
-          <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
-            {item}
-          </Badge>
-        ))}
+        {nodes}
       </div>
-      {visible.map((item, i) => (
-        <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
-          {item}
-        </Badge>
-      ))}
+      {visible}
       {hidden.length > 0 && (
         <Tooltip>
           <TooltipTrigger render={
@@ -117,13 +115,9 @@ export function OverflowBadgeList({
             align="start"
             side="bottom"
             hideArrow
-            className="flex flex-col gap-1 bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+            className="flex flex-col items-start gap-1 bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-foreground/10"
           >
-            {hidden.map((item, i) => (
-              <Badge key={i} variant="outline" className="h-5 w-fit rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
-                {item}
-              </Badge>
-            ))}
+            {hidden}
           </TooltipContent>
         </Tooltip>
       )}
@@ -131,27 +125,107 @@ export function OverflowBadgeList({
   );
 }
 
+export function OverflowBadgeList({
+  items,
+  className,
+}: {
+  items: string[];
+  className?: string;
+}) {
+  const nodes = items.map((item, i) => (
+    <Badge key={i} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+      {item}
+    </Badge>
+  ));
+  return <OverflowNodeList nodes={nodes} className={className} />;
+}
+
+/**
+ * Labels (and optionally #tags) of an entity as a width-aware chip row.
+ * Full label objects from the v2 API ({title, color, value, short}) render as
+ * product-colored LabelChips — a `short` label shows only its value; plain
+ * strings and tags render as neutral badges.
+ */
 export function LabelsRow({
   labels,
+  tags,
   className,
 }: {
   labels?: unknown;
+  tags?: unknown;
   className?: string;
 }) {
-  const list = Array.isArray(labels) ? (labels as unknown[]) : [];
-  if (list.length === 0) return null;
-  const titles = list
-    .map((l) =>
-      typeof l === "string"
-        ? l
-        : String(
-            (l as { title?: string; name?: string })?.title ??
-              (l as { name?: string })?.name ??
-              ""
-          )
-    )
-    .filter(Boolean);
-  return <OverflowBadgeList items={titles} className={className} />;
+  const parsed = parseLabels(labels);
+  const tagTitles = parseTags(tags);
+  if (parsed.length + tagTitles.length === 0) return null;
+  const nodes: ReactNode[] = [
+    ...parsed.map((label, i) => (
+      <LabelChip
+        key={`l-${i}`}
+        title={label.title}
+        value={label.value}
+        color={label.color}
+        short={label.short}
+        className="h-5 shrink-0 px-1.5 text-[11px] leading-none"
+      />
+    )),
+    ...tagTitles.map((tag, i) => (
+      <Badge key={`t-${i}`} variant="outline" className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[11px] font-normal leading-none">
+        {tag}
+      </Badge>
+    )),
+  ];
+  return <OverflowNodeList nodes={nodes} className={className} />;
+}
+
+function parseLabels(labels?: unknown): ParsedLabel[] {
+  if (!Array.isArray(labels)) return [];
+  const out: ParsedLabel[] = [];
+  for (const raw of labels) {
+    if (typeof raw === "string") {
+      if (raw) out.push({ title: raw });
+      continue;
+    }
+    const obj = raw as {
+      title?: string;
+      name?: string;
+      color?: string;
+      value?: string | null;
+      short?: boolean | null;
+    } | null;
+    const title = obj?.title ?? obj?.name;
+    if (!title) continue;
+    const entry: ParsedLabel = { title: String(title) };
+    if (obj?.color) entry.color = obj.color;
+    if (obj?.value) entry.value = String(obj.value);
+    if (obj?.short) entry.short = true;
+    out.push(entry);
+  }
+  return out;
+}
+
+function parseTags(tags?: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  const out: string[] = [];
+  for (const raw of tags) {
+    let title = "";
+    if (typeof raw === "string") title = raw;
+    else {
+      const obj = raw as { name?: string; title?: string } | null;
+      title = String(obj?.name ?? obj?.title ?? "");
+    }
+    if (!title) continue;
+    if (!title.startsWith("#")) title = `#${title}`;
+    out.push(title);
+  }
+  return out;
+}
+
+interface ParsedLabel {
+  title: string;
+  color?: string;
+  value?: string;
+  short?: boolean;
 }
 
 export function formatDuration(v?: number | string | null): string | null {

@@ -36,10 +36,12 @@ function saveWidth(w: number): void {
 export const SidebarPanel = observer(function SidebarPanel({
   cwd,
   onSwitchProject,
+  onOpenProviders,
   className,
 }: {
   cwd?: string | null;
   onSwitchProject?: () => void;
+  onOpenProviders?: () => void;
   className?: string;
 }) {
   const { open, activeSection, setActiveSection, togglePanel } = usePanel();
@@ -242,18 +244,20 @@ export const SidebarPanel = observer(function SidebarPanel({
                   active={isActive}
                   onToggle={() => setActiveSection(isActive ? null : def.id)}
                   initializing={initializing}
+                  onOpenProviders={onOpenProviders}
+                  onSwitchProject={onSwitchProject}
                 />
               );
             })}
           </div>
 
-          {/* Bottom: cwd path → opens settings section */}
+          {/* Bottom: cwd path → opens workspace section */}
           {cwd && (
             <Tooltip>
               <TooltipTrigger render={
                 <button
                   type="button"
-                  onClick={() => setActiveSection("settings")}
+                  onClick={() => setActiveSection("workspace")}
                   className="flex h-7 shrink-0 items-center gap-1.5 border-t px-3 text-left text-[11px] font-mono text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <FolderGlyph className="size-3 shrink-0" />
@@ -271,7 +275,7 @@ export const SidebarPanel = observer(function SidebarPanel({
                 {workspace.branch && (
                   <p className="font-mono text-xs">on branch {workspace.branch}</p>
                 )}
-                <p className="text-muted-foreground text-xs">Open workspace settings</p>
+                <p className="text-muted-foreground text-xs">Open workspace</p>
               </TooltipContent>
             </Tooltip>
           )}

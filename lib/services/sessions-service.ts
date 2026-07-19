@@ -76,13 +76,24 @@ export class SessionsService {
     }
   }
 
-  async select(conversationId: string): Promise<void> {
+  async fetchMessages(conversationId: string): Promise<ChatMessage[]> {
     const sessionId = this.root.sessionId;
-    if (!sessionId) return;
+    if (!sessionId) return [];
     const data = await getJson<{ messages: ChatMessage[] }>(
       `/api/sessions/${encodeURIComponent(conversationId)}/messages?session=${encodeURIComponent(sessionId)}`
     );
-    this.applyConversation(conversationId, data.messages);
+    return data.messages;
+  }
+
+  async select(conversationId: string): Promise<void> {
+    if (!this.root.sessionId) return;
+    const openTab = this.root.chatTabs.findByConversation(conversationId);
+    if (openTab) {
+      this.root.chatTabs.activate(openTab.key);
+      return;
+    }
+    const messages = await this.fetchMessages(conversationId);
+    this.applyConversation(conversationId, messages);
   }
 
   createNew(): void {
@@ -116,7 +127,12 @@ export class SessionsService {
       runInAction(() => {
         this.conversations = this.conversations.filter((c) => c.id !== conversationId);
       });
-      if (conversationId === this.activeId) this.startNew();
+      const openTab = this.root.chatTabs.findByConversation(conversationId);
+      if (openTab) {
+        this.root.chatTabs.close(openTab.key);
+      } else if (conversationId === this.activeId) {
+        this.startNew();
+      }
       toast.success("Chat deleted");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete chat");

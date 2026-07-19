@@ -1,15 +1,5 @@
 import * as cli from "./cli/Bunoshfile.js";
 
-/** Vendor the prebuilt skills (cli/skills.yaml) into a flat cli/skills/<skill>/ tree. */
-export function vendor() {
-  return cli.vendorSkills();
-}
-
-/** List the vendored skills grouped by category. */
-export function skills() {
-  return cli.skills();
-}
-
 /** Re-collect the vendored models catalog (cli/models.catalog.json) from live provider listings. */
 export function models() {
   return cli.collectModels();

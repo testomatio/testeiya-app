@@ -2,53 +2,56 @@
 
 import { useState, type ReactNode } from "react";
 import { observer } from "mobx-react-lite";
-import {
-  mdiChatOutline,
-  mdiChatPlusOutline,
-  mdiPencilOutline,
-} from "@mdi/js";
-import { ChevronDownIcon, Trash2Icon } from "lucide-react";
-import { Icon } from "@/lib/icons";
-import { cn } from "@/lib/utils";
+import { mdiChatOutline, mdiPencilOutline } from "@mdi/js";
+import { Icon, PlusIcon, XIcon } from "@/lib/icons";
 import { usePanel } from "@/lib/panel/PanelContext";
 import { MdiIcon } from "@/components/icons";
 import { BrowserControls } from "@/components/BrowserControls";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useSessionsService } from "@/lib/services/StoreProvider";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ChatHistoryDialog } from "@/components/ChatHistoryDialog";
+import {
+  useSessionsService,
+  useChatTabsService,
+} from "@/lib/services/StoreProvider";
 import { useLayoutNode } from "@/lib/debug/layout-registry";
+import { cn } from "@/lib/utils";
 
 /**
- * The chat column's header: shows the active conversation's summary as the
- * title and a dropdown to switch between, create, delete, or rename chats.
- * A thin `observer` over SessionsService (which the page wires to the live
- * agent socket). Replaces the old "Chats" sidebar section.
+ * The chat column's header: the active conversation's title, one square per
+ * open chat tab (colored initial, pulsating while that chat is processing),
+ * a history button opening the Chat History modal, and a "+" that spawns a
+ * new parallel chat tab. A thin `observer` over ChatTabsService +
+ * SessionsService.
  */
 export const ChatPanelHeader = observer(function ChatPanelHeader({
   mcpStatus,
   canCollapse,
 }: {
-  /** Live MCP connection badge, rendered at the head of the panel. */
+  /** Live MCP connection badge, rendered before the right-side actions. */
   mcpStatus?: ReactNode;
   /** Whether the chat can be collapsed (only when a widget fills the row). */
   canCollapse?: boolean;
 }) {
   const sessions = useSessionsService();
+  const tabs = useChatTabsService();
   const { setChatOpen } = usePanel();
   const layoutRef = useLayoutNode("ChatPanelHeader");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const activeConv = sessions.conversations.find(
     (c) => c.id === sessions.activeId
   );
   const title = activeConv?.title || activeConv?.firstMessage || "New chat";
+
+  let newChatLabel = "New chat";
+  if (!tabs.canOpen) newChatLabel = "New chat (max 5)";
 
   const commit = () => {
     const id = sessions.activeId;
@@ -77,82 +80,102 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
 
   return (
     <div ref={layoutRef} className="flex h-12 shrink-0 items-center gap-1 border-b pr-1">
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open) void sessions.load();
-        }}
+      <button
+        type="button"
+        onClick={() => setHistoryOpen(true)}
+        className="flex min-w-0 shrink items-center gap-1.5 px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60"
+        title="Chat history"
       >
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60"
-              title="Switch chat"
-            />
-          }
-        >
-          <MdiIcon
-            path={mdiChatOutline}
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {title}
-          </span>
-          <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-80">
-          <DropdownMenuItem
-            disabled={!sessions.sessionId}
-            onClick={() => sessions.createNew()}
-          >
-            <MdiIcon path={mdiChatPlusOutline} className="size-4" />
-            New chat
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {sessions.conversations.length === 0 && (
-            <div className="px-2 py-2 text-xs text-muted-foreground">
-              {sessions.loading ? "Loading chats…" : "No chats yet."}
-            </div>
-          )}
-          {sessions.conversations.map((conv) => {
-            const isActive = conv.id === sessions.activeId;
-            const label = conv.title || conv.firstMessage || "Untitled chat";
-            return (
-              <DropdownMenuItem
-                key={conv.id}
-                className={cn("group/row gap-2", isActive && "bg-primary/10")}
-                onClick={() => void sessions.select(conv.id)}
-              >
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={cn(
-                      "truncate text-sm",
-                      isActive && "font-medium text-primary"
-                    )}
-                  >
-                    {label}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {relativeTime(conv.modified)} · {conv.messageCount} msg
-                  </p>
-                </div>
+        <MdiIcon
+          path={mdiChatOutline}
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+        <span className="min-w-0 truncate text-sm font-medium">
+          {title}
+        </span>
+      </button>
+
+      {tabs.visibleTabs.map((tab) => {
+        const conv = sessions.conversations.find(
+          (c) => c.id === tab.conversationId
+        );
+        const label = conv?.title || conv?.firstMessage || "New chat";
+        const letter = (label.match(/[a-zA-Z0-9]/)?.[0] ?? "N").toUpperCase();
+        const busy = tab.status === "submitted" || tab.status === "streaming";
+        return (
+          <Tooltip key={tab.key}>
+            <TooltipTrigger
+              render={
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void sessions.remove(conv.id);
-                  }}
-                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/row:opacity-100"
-                  aria-label="Delete chat"
-                  title="Delete chat"
+                  onClick={() => tabs.activate(tab.key)}
+                  className={cn(
+                    "group/tab relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold",
+                    tabColor(tab.key),
+                    busy && "animate-pulse",
+                    tab.key === tabs.activeKey && "ring-2 ring-primary"
+                  )}
+                  aria-label={label}
                 >
-                  <Trash2Icon className="size-3.5" />
+                  <span>{letter}</span>
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      tabs.close(tab.key);
+                    }}
+                    className="absolute -top-1 -right-1 hidden size-3.5 items-center justify-center rounded-full border bg-background text-muted-foreground group-hover/tab:flex hover:text-destructive"
+                    aria-label="Close chat"
+                    title="Close chat"
+                  >
+                    <XIcon className="size-3" />
+                  </span>
                 </button>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              }
+            />
+            <TooltipContent>{label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 p-0"
+              disabled={!sessions.sessionId}
+              onClick={() => setHistoryOpen(true)}
+              aria-label="Chat history"
+            >
+              <Icon name="history" className="size-4" />
+            </Button>
+          }
+        />
+        <TooltipContent>Chat history</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 p-0"
+              disabled={!sessions.sessionId || !tabs.canOpen}
+              onClick={() => tabs.openTab()}
+              aria-label={newChatLabel}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          }
+        />
+        <TooltipContent>{newChatLabel}</TooltipContent>
+      </Tooltip>
+
+      <div className="min-w-0 flex-1" />
 
       {mcpStatus}
 
@@ -170,17 +193,6 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
       >
         <MdiIcon path={mdiPencilOutline} className="size-3.5" />
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-6 w-6 shrink-0 p-0"
-        disabled={!sessions.sessionId}
-        onClick={() => sessions.createNew()}
-        title="New chat"
-        aria-label="New chat"
-      >
-        <MdiIcon path={mdiChatPlusOutline} className="size-3.5" />
-      </Button>
       <BrowserControls />
       {canCollapse && (
         <Button
@@ -194,19 +206,21 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
           <Icon name="dock_to_right" className="size-4" />
         </Button>
       )}
+      <ChatHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </div>
   );
 });
 
-function relativeTime(value: string): string {
-  const then = new Date(value).getTime();
-  if (!Number.isFinite(then)) return "";
-  const diff = Date.now() - then;
-  const mins = Math.round(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
+const TAB_COLORS = [
+  "bg-primary text-primary-foreground",
+  "bg-primary/20 text-primary",
+  "bg-muted text-foreground",
+  "bg-primary/40 text-primary",
+  "bg-foreground/80 text-background",
+];
+
+function tabColor(key: string): string {
+  const n = Number(key.slice(4));
+  if (!Number.isFinite(n)) return TAB_COLORS[0];
+  return TAB_COLORS[n % TAB_COLORS.length];
 }

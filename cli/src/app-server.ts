@@ -20,7 +20,7 @@ import {
   testomatioAuthSession,
   testomatioHostPost,
 } from "./api/testomatio-auth.js";
-import { settingsGet, settingsPost } from "./api/settings.js";
+import { settingsGet, settingsPost, settingsEnvGet, settingsEnvPost } from "./api/settings.js";
 import { skillsList, skillsOpen } from "./api/skills.js";
 import {
   mcpList,
@@ -189,6 +189,10 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   }
   if (pathname === "/api/debug/layout" && method === "GET") {
     return debugLayout(req);
+  }
+  if (pathname === "/api/settings/env") {
+    if (method === "GET") return settingsEnvGet();
+    if (method === "POST") return settingsEnvPost(req);
   }
   if (pathname === "/api/settings") {
     if (method === "GET") return settingsGet();

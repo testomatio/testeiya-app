@@ -38,12 +38,14 @@ export const LabelsRow: Story = {
   render: () => (
     <StatusPill.LabelsRow
       labels={[
-        { title: "smoke" },
-        { title: "tier-1" },
-        { title: "a11y" },
+        { title: "To Review", color: "#e5b6e7" },
+        { title: "Automatable", color: "#c2e2ff" },
+        { title: "Severity", value: "critical", color: "#ffe9ad" },
+        { title: "Component", value: "checkout", color: "#e2eecd", short: true },
         "wcag-2.0",
         { name: "regression" },
       ]}
+      tags={["smoke", "nightly"]}
     />
   ),
 };

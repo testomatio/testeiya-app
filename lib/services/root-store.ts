@@ -8,6 +8,7 @@ import { SkillsService } from "./skills-service";
 import { BrowserService } from "./browser-service";
 import { MemoryService } from "./memory-service";
 import { SessionsService } from "./sessions-service";
+import { ChatTabsService } from "./chat-tabs-service";
 import { WidgetService } from "./widget-service";
 import { DebugLogService } from "./debug-log-service";
 import { WorkflowsService } from "./workflows-service";
@@ -32,6 +33,7 @@ export class RootStore {
   browser: BrowserService;
   memory: MemoryService;
   sessions: SessionsService;
+  chatTabs: ChatTabsService;
   widget: WidgetService;
   debug: DebugLogService;
   workflows: WorkflowsService;
@@ -49,6 +51,7 @@ export class RootStore {
     this.browser = new BrowserService(this);
     this.memory = new MemoryService(this);
     this.sessions = new SessionsService(this);
+    this.chatTabs = new ChatTabsService(this);
     this.widget = new WidgetService(this);
     this.debug = new DebugLogService(this);
     this.workflows = new WorkflowsService(this);

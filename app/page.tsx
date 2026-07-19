@@ -48,7 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
-import type { ChatStatus as TesteiyaStatus, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
+import type { ChatStatus as TesteiyaStatus, TesteiyaParams, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
 import { Icon, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
@@ -66,7 +66,9 @@ import {
   useConnectionsService,
   useWidgetService,
   useSessionsService,
+  useChatTabsService,
   useWorkflowsService,
+  useSkillsService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import { WidgetCommandProvider, useWidgetBus } from "@/lib/widgets/command-bus";
@@ -323,11 +325,11 @@ function ChatWithWorkspace() {
 }
 
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick, mentionFiles, sessionId, voiceEnabled },
+  { status, onStop, onSubmit, onPaste, onAttachClick, onInsertSkill, skillsDisabled, modelLabel, onModelClick, mentionFiles, mentionSkills, sessionId, voiceEnabled },
   ref
 ) {
   const [text, setText] = useState("");
-  const mentions = useFileMentions({ text, setText, items: mentionFiles });
+  const mentions = useFileMentions({ text, setText, items: mentionFiles, skills: mentionSkills });
   const { chatOpen } = usePanel();
   const voice = useVoiceInput({
     sessionId,
@@ -642,33 +644,26 @@ const MessageItem = observer(function MessageItem({
   );
 });
 
+/**
+ * The app shell: sidebar, widget pane, global dialogs, and the chat column
+ * hosting one mounted ChatView per open tab. Inactive views are hidden with
+ * CSS so their WebSocket, streaming, and local state stay alive — that's what
+ * makes parallel chats and instant switching work.
+ */
 const ChatPage = observer(function ChatPage() {
   const searchParams = useSearchParams();
   const projectIds = searchParams.getAll("projectIds");
   const sessionId = searchParams.get("session") ?? undefined;
 
   const widget = useWidgetService();
-  // Serialize the widget the user is currently viewing (id + its declared
-  // actions + title) so it rides every prompt and the agent can drive it via
-  // ui_widget. A drilled-in detail (a single run, the manual-run executor)
-  // overrides the reported kind/title via activeOverride, so the agent and the
-  // chat context chip name the specific item — not the list it came from. The
-  // user can remove it from context (the chip's X) — then nothing is sent.
-  const widgetTitle = widget.activeOverride?.title ?? widgetTitleFor(widget.current);
-  const widgetExtra = {
-    kind: widget.activeOverride?.kind,
-    state: widget.activeOverride?.state,
-    title: widgetTitle,
-    id: widget.activeOverride?.id,
-  };
-  const activeWidget = widget.contextDismissed
-    ? undefined
-    : serializeActiveWidget(widget.current, widgetExtra) ?? undefined;
-  const contextLabel = widget.contextDismissed
-    ? null
-    : widgetContextLabel(widget.current, widgetExtra);
-  let ContextIcon = ListChecksIcon;
-  if (contextLabel && /^(run|manual run)/i.test(contextLabel)) ContextIcon = PlayIcon;
+  const tabs = useChatTabsService();
+  const host = useHost();
+  const workspace = useWorkspaceService();
+  const project = useProjectService();
+  const providers = useProvidersService();
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
+  const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
 
   const params = useMemo(() => {
     const p: Record<string, unknown> = {};
@@ -677,118 +672,6 @@ const ChatPage = observer(function ChatPage() {
     return Object.keys(p).length > 0 ? p : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectIds.join(","), sessionId]);
-
-  const paramsWithContext = useMemo(
-    () => (activeWidget ? { ...(params ?? {}), activeWidget } : params),
-    [params, activeWidget]
-  );
-
-  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, currentConversationId, sendMessage, answerQuestion, sendWidgetResult, stop, clearSession, openConversation, clearError } =
-    useTesteiya(paramsWithContext);
-  const bus = useWidgetBus();
-  const host = useHost();
-  const isDev = host?.railsEnv === "development" || !host?.isEmbedded;
-  const chatInputRef = useRef<ChatInputHandle>(null);
-  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
-  const [attachOpen, setAttachOpen] = useState(false);
-  const [providersOpen, setProvidersOpen] = useState(false);
-  const [switchProjectOpen, setSwitchProjectOpen] = useState(false);
-  const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
-  const panel = usePanel();
-  const workflows = useWorkflowsService();
-  const workspace = useWorkspaceService();
-  const project = useProjectService();
-  const providers = useProvidersService();
-  const connections = useConnectionsService();
-  const sessions = useSessionsService();
-  const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
-
-  // Feed the running session's MCP tools into the connections service so the
-  // sidebar can show live connected/disconnected status per server.
-  useEffect(() => {
-    connections.setRuntime(mcpTools, mcpLoaded);
-  }, [connections, mcpTools, mcpLoaded]);
-
-  // The agent's rich renders move out of the chat stream into the widget pane:
-  // find the latest completed renderish tool and show it (deduped by toolCallId
-  // so a finished render replaces the previous one without churning). Empty list
-  // renders are skipped so a no-match agent query never replaces what the user
-  // is looking at with a "Nothing matched" dummy.
-  const latestRenderTool = useMemo(() => {
-    for (let m = messages.length - 1; m >= 0; m--) {
-      const tools = messages[m].tools ?? [];
-      for (let i = tools.length - 1; i >= 0; i--) {
-        const t = tools[i];
-        if (t.toolName === "ask_question") continue;
-        if (t.state !== "output-available") continue;
-        if (richViewMode(t.toolName) === null) continue;
-        if (isEmptyListRender(t.toolName, t.input, t.output)) continue;
-        return t;
-      }
-    }
-    return null;
-  }, [messages]);
-  useEffect(() => {
-    if (!latestRenderTool) return;
-    // Don't let an agent render hijack a widget the user explicitly opened
-    // (a resource view, the file editor, a manual run, search) — those stay put;
-    // the render is still reachable as a chat stub with its "View →" action.
-    if (widget.current && widget.current.source !== "tool") return;
-    widget.show({
-      source: "tool",
-      key: latestRenderTool.toolCallId,
-      toolName: latestRenderTool.toolName,
-      input: latestRenderTool.input,
-      output: latestRenderTool.output,
-    });
-  }, [latestRenderTool, widget]);
-
-  // The agent's `ui_widget` tool parks its turn until the client runs the
-  // command against the active widget and ships the result back. Dispatch each
-  // new ui_widget call into the command bus (the widget's buttons go through the
-  // same handler), then return the result; dedupe so each call fires once.
-  const handledWidgetCalls = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const message of messages) {
-      for (const tool of message.tools ?? []) {
-        if (tool.toolName !== "ui_widget") continue;
-        if (tool.state !== "input-available") continue;
-        if (handledWidgetCalls.current.has(tool.toolCallId)) continue;
-        handledWidgetCalls.current.add(tool.toolCallId);
-        const input = (tool.input ?? {}) as {
-          widget_id?: string;
-          action?: string;
-          params?: Record<string, unknown>;
-        };
-        const callId = tool.toolCallId;
-        // `get` is read-only: hand back the snapshot the active widget published
-        // (the rows the user sees) directly, so the agent doesn't re-query the API
-        // for on-screen data and a stale command handler can't get in the way.
-        if (input.action === "get") {
-          const data = widget.snapshot;
-          sendWidgetResult(
-            callId,
-            data == null
-              ? { ok: false, error: "This widget exposes no readable contents." }
-              : { ok: true, result: data }
-          );
-          continue;
-        }
-        void bus
-          .dispatch(input.widget_id ?? "", input.action ?? "", input.params ?? {})
-          .then((res) => sendWidgetResult(callId, res));
-      }
-    }
-  }, [messages, bus, sendWidgetResult, widget]);
-
-  // The plan evolves across turns; only the most recent message's todo panel is
-  // still relevant, so earlier ones render collapsed.
-  const lastTodoMessageId = useMemo(() => {
-    for (let m = messages.length - 1; m >= 0; m--) {
-      if ((messages[m].tools ?? []).some(isTodoWrite)) return messages[m].id;
-    }
-    return null;
-  }, [messages]);
 
   // Keep the header's provider/model label in sync — refresh when the Providers
   // dialog opens/closes so a new selection shows immediately. (The live session
@@ -819,134 +702,16 @@ const ChatPage = observer(function ChatPage() {
     })();
   }, [sessionId, canConnectTestomatio, workspace, project]);
 
-  const addAttachments = useCallback((files: File[]) => {
-    const accepted = files.filter((file) => {
-      if (file.size <= MAX_FILE_SIZE) return true;
-      toast.error(`${file.name} is too large (max 25 MB)`);
-      return false;
-    });
-    if (accepted.length === 0) return;
-    setAttachments((prev) => [
-      ...prev,
-      ...accepted.map((file) => ({
-        id: nanoid(),
-        file,
-        previewUrl: file.type.startsWith("image/")
-          ? URL.createObjectURL(file)
-          : undefined,
-      })),
-    ]);
-  }, []);
+  const openProviders = useCallback(() => setProvidersOpen(true), []);
+  const openSwitchProject = useCallback(() => setSwitchProjectOpen(true), []);
 
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => {
-      const found = prev.find((a) => a.id === id);
-      if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
-      return prev.filter((a) => a.id !== id);
-    });
-  }, []);
-
-  const clearAttachments = useCallback(() => {
-    setAttachments((prev) => {
-      for (const a of prev) {
-        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
-      }
-      return [];
-    });
-  }, []);
-
-  const handlePaste = useCallback(
-    (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = event.clipboardData?.items;
-      if (!items) return;
-      const pasted: File[] = [];
-      for (const item of items) {
-        if (item.kind !== "file") continue;
-        const file = item.getAsFile();
-        if (file) pasted.push(file);
-      }
-      if (pasted.length === 0) return;
-      event.preventDefault();
-      addAttachments(pasted);
-    },
-    [addAttachments]
-  );
-
-  const handleSubmit = useCallback(
-    async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!message.text.trim() && attachments.length === 0) return;
-      if (status === "streaming" || status === "submitted") return;
-
-      const files = await Promise.all(
-        attachments.map(async (a) => ({
-          filename: a.file.name,
-          mediaType: a.file.type || "application/octet-stream",
-          dataUrl: await fileToDataUrl(a.file),
-        }))
-      );
-      sendMessage(message.text, files);
-      chatInputRef.current?.clear();
-      clearAttachments();
-    },
-    [sendMessage, status, attachments, clearAttachments]
-  );
-
-  const runWorkflowPrompt = useCallback(
-    (text: string) => {
-      if (status === "streaming" || status === "submitted") return;
-      sendMessage(text);
-      panel.setChatOpen(true);
-    },
-    [sendMessage, status, panel]
-  );
-
-  useEffect(() => {
-    workflows.setRunner(runWorkflowPrompt);
-  }, [workflows, runWorkflowPrompt]);
-
-  const handleInsertSkill = useCallback((name: string) => {
-    chatInputRef.current?.insertSkill(name);
-  }, []);
-
-  const handleClear = useCallback(() => {
-    clearSession();
-    setTimeout(() => toast.success("Session cleared"), 0);
-  }, [clearSession]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === "KeyN" && e.altKey) {
-        e.preventDefault();
-        setTimeout(handleClear, 0);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handleClear]);
-
-  useEffect(() => {
-    sessions.setHandlers(openConversation, clearSession);
-  }, [sessions, openConversation, clearSession]);
-
-  // Mirror the live conversation id (highlights the active chat) and refresh the
-  // list when it changes — a brand-new chat appears once it has output.
-  useEffect(() => {
-    sessions.setActiveId(currentConversationId ?? null);
-    void sessions.load();
-  }, [sessions, currentConversationId]);
-
-  // Refresh project counters + chat list once each AI turn finishes (the agent
-  // may have created/edited tests or runs). Only on a busy→ready edge.
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = status;
-    if (status !== "ready") return;
-    if (prev !== "submitted" && prev !== "streaming") return;
-    project.refresh();
-    void sessions.load();
-  }, [status, project, sessions]);
+  const activeTab = tabs.activeTab;
+  const cwd = activeTab?.cwd ?? null;
+  const mcpTools = activeTab?.mcpTools ?? [];
+  const expectedMcpServers = activeTab?.expectedMcpServers ?? [];
+  const mcpLoaded = activeTab?.mcpLoaded ?? false;
+  const activeBusy =
+    activeTab?.status === "streaming" || activeTab?.status === "submitted";
 
   const widgetBody = (() => {
     const current = widget.current;
@@ -1033,7 +798,7 @@ const ChatPage = observer(function ChatPage() {
             path={file.path}
             initialContent={file.initialContent}
             scrollToText={file.scrollToText}
-            readOnly={status === "streaming" || status === "submitted"}
+            readOnly={activeBusy}
             onClose={workspace.close}
             onSaved={() => workspace.markChanged(file.path)}
             fillHeight
@@ -1050,39 +815,8 @@ const ChatPage = observer(function ChatPage() {
   })();
   const hasWidget = widgetBody !== null;
 
-  const activeCategory =
-    workflows.categories.find((c) => c.id === activeWorkflow) ??
-    workflows.categories[0] ??
-    null;
-
   return (
     <div className="flex h-full flex-col">
-      {error && (
-        <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-          <div className="min-w-0">
-            <div className="font-medium text-destructive">Agent error</div>
-            <div className="break-words text-destructive/90">{error}</div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {/api[ _]?key/i.test(error) && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setProvidersOpen(true);
-                  clearError();
-                }}
-              >
-                Open Providers
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={clearError}>
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      )}
-
       <ProvidersDialog open={providersOpen} onOpenChange={setProvidersOpen} />
 
       <WorkflowsDiagramDialog />
@@ -1092,15 +826,9 @@ const ChatPage = observer(function ChatPage() {
         onOpenChange={setSwitchProjectOpen}
       />
 
-      <AttachmentDialog
-        open={attachOpen}
-        onOpenChange={setAttachOpen}
-        onAdd={addAttachments}
-      />
-
       {/* Below-header region: sidebar | widget pane | chat column. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <SidebarPanel cwd={cwd} onSwitchProject={() => setSwitchProjectOpen(true)} />
+        <SidebarPanel cwd={cwd} onSwitchProject={openSwitchProject} onOpenProviders={openProviders} />
         <WidgetPane fill>{widgetBody}</WidgetPane>
         <ChatColumn hasWidget={hasWidget}>
           <ChatPanelHeader
@@ -1168,6 +896,386 @@ const ChatPage = observer(function ChatPage() {
               )
             }
           />
+          {tabs.tabs.map((tab) => (
+            <ChatView
+              key={tab.key}
+              tabKey={tab.key}
+              isActive={tab.key === tabs.activeKey}
+              params={params}
+              sessionId={sessionId}
+              canConnectTestomatio={canConnectTestomatio}
+              onOpenProviders={openProviders}
+              onOpenSwitchProject={openSwitchProject}
+            />
+          ))}
+        </ChatColumn>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * One chat tab: owns its own agent WebSocket (useTesteiya) and everything
+ * per-conversation — transcript, prompt input, attachments, error banner.
+ * Stays mounted while inactive (`hidden`) so a background chat keeps
+ * streaming; effects that drive app-wide singletons (widget pane, sidebar MCP
+ * status, session handlers, workflow runner) are gated on `isActive`.
+ */
+const ChatView = observer(function ChatView({
+  tabKey,
+  isActive,
+  params,
+  sessionId,
+  canConnectTestomatio,
+  onOpenProviders,
+  onOpenSwitchProject,
+}: ChatViewProps) {
+  const widget = useWidgetService();
+  // Serialize the widget the user is currently viewing (id + its declared
+  // actions + title) so it rides every prompt and the agent can drive it via
+  // ui_widget. A drilled-in detail (a single run, the manual-run executor)
+  // overrides the reported kind/title via activeOverride, so the agent and the
+  // chat context chip name the specific item — not the list it came from. The
+  // user can remove it from context (the chip's X) — then nothing is sent.
+  const widgetTitle = widget.activeOverride?.title ?? widgetTitleFor(widget.current);
+  const widgetExtra = {
+    kind: widget.activeOverride?.kind,
+    state: widget.activeOverride?.state,
+    title: widgetTitle,
+    id: widget.activeOverride?.id,
+  };
+  const activeWidget = widget.contextDismissed
+    ? undefined
+    : serializeActiveWidget(widget.current, widgetExtra) ?? undefined;
+  const contextLabel = widget.contextDismissed
+    ? null
+    : widgetContextLabel(widget.current, widgetExtra);
+  let ContextIcon = ListChecksIcon;
+  if (contextLabel && /^(run|manual run)/i.test(contextLabel)) ContextIcon = PlayIcon;
+
+  const paramsWithContext = useMemo(
+    () => (activeWidget ? { ...(params ?? {}), activeWidget } : params),
+    [params, activeWidget]
+  );
+
+  const { messages, status, model, cwd, mcpTools, expectedMcpServers, mcpLoaded, activeTool, error, currentConversationId, sendMessage, answerQuestion, sendWidgetResult, stop, clearSession, openConversation, clearError } =
+    useTesteiya(paramsWithContext);
+  const bus = useWidgetBus();
+  const tabs = useChatTabsService();
+  const chatInputRef = useRef<ChatInputHandle>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
+  const panel = usePanel();
+  const workflows = useWorkflowsService();
+  const workspace = useWorkspaceService();
+  const project = useProjectService();
+  const providers = useProvidersService();
+  const connections = useConnectionsService();
+  const sessions = useSessionsService();
+  const skills = useSkillsService();
+  const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
+  const mentionSkills = useMemo(
+    () =>
+      skills.skills.map<MentionItem>((s) => ({
+        name: s.name,
+        path: s.name,
+        kind: "skill",
+        description: s.description,
+      })),
+    [skills.skills]
+  );
+
+  // Preload the skills list so the "/" mention popup has data on first keystroke.
+  useEffect(() => {
+    if (!isActive) return;
+    void skills.load();
+  }, [isActive, skills, sessionId]);
+
+  // Feed the running session's MCP tools into the connections service so the
+  // sidebar can show live connected/disconnected status per server.
+  useEffect(() => {
+    if (!isActive) return;
+    connections.setRuntime(mcpTools, mcpLoaded);
+  }, [isActive, connections, mcpTools, mcpLoaded]);
+
+  // The agent's rich renders move out of the chat stream into the widget pane:
+  // find the latest completed renderish tool and show it (deduped by toolCallId
+  // so a finished render replaces the previous one without churning). Empty list
+  // renders are skipped so a no-match agent query never replaces what the user
+  // is looking at with a "Nothing matched" dummy.
+  const latestRenderTool = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      const tools = messages[m].tools ?? [];
+      for (let i = tools.length - 1; i >= 0; i--) {
+        const t = tools[i];
+        if (t.toolName === "ask_question") continue;
+        if (t.state !== "output-available") continue;
+        if (richViewMode(t.toolName) === null) continue;
+        if (isEmptyListRender(t.toolName, t.input, t.output)) continue;
+        return t;
+      }
+    }
+    return null;
+  }, [messages]);
+  useEffect(() => {
+    if (!isActive) return;
+    if (!latestRenderTool) return;
+    // Don't let an agent render hijack a widget the user explicitly opened
+    // (a resource view, the file editor, a manual run, search) — those stay put;
+    // the render is still reachable as a chat stub with its "View →" action.
+    if (widget.current && widget.current.source !== "tool") return;
+    widget.show({
+      source: "tool",
+      key: latestRenderTool.toolCallId,
+      toolName: latestRenderTool.toolName,
+      input: latestRenderTool.input,
+      output: latestRenderTool.output,
+    });
+  }, [isActive, latestRenderTool, widget]);
+
+  // The agent's `ui_widget` tool parks its turn until the client runs the
+  // command against the active widget and ships the result back. Dispatch each
+  // new ui_widget call into the command bus (the widget's buttons go through the
+  // same handler), then return the result; dedupe so each call fires once.
+  const handledWidgetCalls = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const message of messages) {
+      for (const tool of message.tools ?? []) {
+        if (tool.toolName !== "ui_widget") continue;
+        if (tool.state !== "input-available") continue;
+        if (handledWidgetCalls.current.has(tool.toolCallId)) continue;
+        handledWidgetCalls.current.add(tool.toolCallId);
+        const input = (tool.input ?? {}) as {
+          widget_id?: string;
+          action?: string;
+          params?: Record<string, unknown>;
+        };
+        const callId = tool.toolCallId;
+        if (!isActive) {
+          sendWidgetResult(callId, {
+            ok: false,
+            error:
+              "This chat is in a background tab — the widget pane is not available. Ask the user to switch to this chat.",
+          });
+          continue;
+        }
+        // `get` is read-only: hand back the snapshot the active widget published
+        // (the rows the user sees) directly, so the agent doesn't re-query the API
+        // for on-screen data and a stale command handler can't get in the way.
+        if (input.action === "get") {
+          const data = widget.snapshot;
+          sendWidgetResult(
+            callId,
+            data == null
+              ? { ok: false, error: "This widget exposes no readable contents." }
+              : { ok: true, result: data }
+          );
+          continue;
+        }
+        void bus
+          .dispatch(input.widget_id ?? "", input.action ?? "", input.params ?? {})
+          .then((res) => sendWidgetResult(callId, res));
+      }
+    }
+  }, [isActive, messages, bus, sendWidgetResult, widget]);
+
+  // The plan evolves across turns; only the most recent message's todo panel is
+  // still relevant, so earlier ones render collapsed.
+  const lastTodoMessageId = useMemo(() => {
+    for (let m = messages.length - 1; m >= 0; m--) {
+      if ((messages[m].tools ?? []).some(isTodoWrite)) return messages[m].id;
+    }
+    return null;
+  }, [messages]);
+
+  const addAttachments = useCallback((files: File[]) => {
+    const accepted = files.filter((file) => {
+      if (file.size <= MAX_FILE_SIZE) return true;
+      toast.error(`${file.name} is too large (max 25 MB)`);
+      return false;
+    });
+    if (accepted.length === 0) return;
+    setAttachments((prev) => [
+      ...prev,
+      ...accepted.map((file) => ({
+        id: nanoid(),
+        file,
+        previewUrl: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : undefined,
+      })),
+    ]);
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const found = prev.find((a) => a.id === id);
+      if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  const clearAttachments = useCallback(() => {
+    setAttachments((prev) => {
+      for (const a of prev) {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      }
+      return [];
+    });
+  }, []);
+
+  const handlePaste = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      const pasted: File[] = [];
+      for (const item of items) {
+        if (item.kind !== "file") continue;
+        const file = item.getAsFile();
+        if (file) pasted.push(file);
+      }
+      if (pasted.length === 0) return;
+      event.preventDefault();
+      addAttachments(pasted);
+    },
+    [addAttachments]
+  );
+
+  const handleSubmit = useCallback(
+    async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!message.text.trim() && attachments.length === 0) return;
+      if (status === "streaming" || status === "submitted") return;
+
+      const files = await Promise.all(
+        attachments.map(async (a) => ({
+          filename: a.file.name,
+          mediaType: a.file.type || "application/octet-stream",
+          dataUrl: await fileToDataUrl(a.file),
+        }))
+      );
+      sendMessage(message.text, files);
+      chatInputRef.current?.clear();
+      clearAttachments();
+    },
+    [sendMessage, status, attachments, clearAttachments]
+  );
+
+  const runWorkflowPrompt = useCallback(
+    (text: string) => {
+      if (status === "streaming" || status === "submitted") return;
+      sendMessage(text);
+      panel.setChatOpen(true);
+    },
+    [sendMessage, status, panel]
+  );
+
+  useEffect(() => {
+    if (!isActive) return;
+    workflows.setRunner(runWorkflowPrompt);
+  }, [isActive, workflows, runWorkflowPrompt]);
+
+  const handleInsertSkill = useCallback((name: string) => {
+    chatInputRef.current?.insertSkill(name);
+  }, []);
+
+  const handleClear = useCallback(() => {
+    clearSession();
+    setTimeout(() => toast.success("Session cleared"), 0);
+  }, [clearSession]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyN" && e.altKey) {
+        e.preventDefault();
+        setTimeout(handleClear, 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, handleClear]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    sessions.setHandlers(openConversation, clearSession);
+  }, [isActive, sessions, openConversation, clearSession]);
+
+  // Mirror the live conversation id (highlights the active chat) and refresh the
+  // list when it changes — a brand-new chat appears once it has output.
+  useEffect(() => {
+    if (!isActive) return;
+    sessions.setActiveId(currentConversationId ?? null);
+    void sessions.load();
+  }, [isActive, sessions, currentConversationId]);
+
+  // Sync this tab's live state into the tab strip. Reporting `stop` lets
+  // ChatTabsService.close() abort a busy tab while its socket is still open —
+  // an unmount-time abort would run after the hook already closed the socket.
+  useEffect(() => {
+    tabs.report(tabKey, {
+      status,
+      conversationId: currentConversationId,
+      mcpTools,
+      expectedMcpServers,
+      mcpLoaded,
+      cwd,
+      stop,
+    });
+  }, [tabs, tabKey, status, currentConversationId, mcpTools, expectedMcpServers, mcpLoaded, cwd, stop]);
+
+  // Refresh project counters + chat list once each AI turn finishes (the agent
+  // may have created/edited tests or runs). Only on a busy→ready edge.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status !== "ready") return;
+    if (prev !== "submitted" && prev !== "streaming") return;
+    project.refresh();
+    void sessions.load();
+  }, [status, project, sessions]);
+
+  const activeCategory =
+    workflows.categories.find((c) => c.id === activeWorkflow) ??
+    workflows.categories[0] ??
+    null;
+
+  return (
+    <div className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}>
+      {error && (
+        <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+          <div className="min-w-0">
+            <div className="font-medium text-destructive">Agent error</div>
+            <div className="break-words text-destructive/90">{error}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {/api[ _]?key/i.test(error) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  onOpenProviders();
+                  clearError();
+                }}
+              >
+                Open Providers
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={clearError}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <AttachmentDialog
+        open={attachOpen}
+        onOpenChange={setAttachOpen}
+        onAdd={addAttachments}
+      />
+
       <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
       <Conversation className={messages.length === 0 ? "flex-none" : "flex-1"}>
         <ConversationContent className="items-center">
@@ -1254,7 +1362,7 @@ const ChatPage = observer(function ChatPage() {
                   tests — or just start chatting below.
                 </p>
               </div>
-              <Button onClick={() => setSwitchProjectOpen(true)}>
+              <Button onClick={onOpenSwitchProject}>
                 <KeyRoundIcon className="size-4" />
                 Connect Testomat.io
               </Button>
@@ -1361,15 +1469,14 @@ const ChatPage = observer(function ChatPage() {
           onInsertSkill={handleInsertSkill}
           skillsDisabled={status === "streaming" || status === "submitted"}
           modelLabel={model ? model.split("/").slice(1).join("/") || model : providers.label || "Select model"}
-          onModelClick={() => setProvidersOpen(true)}
+          onModelClick={onOpenProviders}
           mentionFiles={mentionFiles}
+          mentionSkills={mentionSkills}
           sessionId={sessionId ?? null}
           voiceEnabled={project.currentProject != null}
         />
         </div>
       </div>
-      </div>
-        </ChatColumn>
       </div>
     </div>
   );
@@ -1442,6 +1549,7 @@ interface ChatInputProps {
   modelLabel: string;
   onModelClick: () => void;
   mentionFiles: MentionItem[];
+  mentionSkills: MentionItem[];
   sessionId: string | null;
   voiceEnabled: boolean;
 }
@@ -1453,5 +1561,15 @@ interface MessageItemProps {
   cwd: string | null;
   widget: ReturnType<typeof useWidgetService>;
   onAnswer: (toolCallId: string, value: string) => void;
+}
+
+interface ChatViewProps {
+  tabKey: string;
+  isActive: boolean;
+  params: TesteiyaParams | undefined;
+  sessionId: string | undefined;
+  canConnectTestomatio: boolean;
+  onOpenProviders: () => void;
+  onOpenSwitchProject: () => void;
 }
 

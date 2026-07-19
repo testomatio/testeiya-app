@@ -1,4 +1,5 @@
 import { Settings } from "@oh-my-pi/pi-coding-agent";
+import { userEnvKeys } from "./user-env.js";
 
 // Make the agent's shell commands see the CURRENT Testomat.io credentials.
 // The SDK's bash executor reads its shell env from `Settings.getShellConfig()`,
@@ -13,6 +14,9 @@ import { Settings } from "@oh-my-pi/pi-coding-agent";
 // token baked into the frozen snapshot at process start (e.g. a dev `.env`)
 // can't leak into a workspace that has none. The returned objects are spread
 // copies — procmgr hands out its cached object by reference; never mutate it.
+// The user's own env vars (Settings → ENV Variables, saved to ~/.testeiya/.env
+// via user-env.ts) are overlaid alongside these, so secrets like API keys reach
+// every agent bash command too.
 const SHELL_ENV_KEYS = ["TESTOMATIO", "TESTOMATIO_URL", "TESTOMATIO_PROJECT_ID"];
 
 const originalGetShellConfig = Settings.prototype.getShellConfig;
@@ -20,7 +24,7 @@ if (originalGetShellConfig) {
   Settings.prototype.getShellConfig = function (this: Settings) {
     const config = originalGetShellConfig.call(this);
     const env = { ...config.env };
-    for (const key of SHELL_ENV_KEYS) {
+    for (const key of [...SHELL_ENV_KEYS, ...userEnvKeys()]) {
       const value = process.env[key];
       if (value) env[key] = value;
       else delete env[key];

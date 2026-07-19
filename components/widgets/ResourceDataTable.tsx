@@ -18,6 +18,7 @@ import { useFilterActions } from "@/lib/store/hooks/useFilterActions";
 import { DataTableInfinite } from "@/components/data-table/data-table-infinite";
 import { buildParams, type FilterMap } from "@/lib/data-browse/params";
 import { useTableRows } from "@/lib/data-browse/use-table-rows";
+import { useInfoTableRows } from "@/lib/data-browse/info-rows";
 import {
   useProjectFilterOptions,
   useRungroupOptions,
@@ -28,6 +29,13 @@ import { buildTestsSchema } from "@/lib/data-browse/schemas/tests";
 import { buildTestrunsSchema } from "@/lib/data-browse/schemas/testruns";
 import { buildPlansSchema } from "@/lib/data-browse/schemas/plans";
 import { buildRequirementsSchema } from "@/lib/data-browse/schemas/requirements";
+import {
+  buildCiProfilesSchema,
+  configEntries,
+  passedEnvVars,
+  type CiProfileRow,
+} from "@/lib/data-browse/schemas/ci-profiles";
+import { MetaPill } from "./status-pill";
 import type { ProjectResource } from "@/lib/services/project-service";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { Button } from "@/components/ui/button";
@@ -117,6 +125,9 @@ function useBrowseSchema(resource: ProjectResource): BuiltSchema {
     if (resource === "requirements") {
       return buildRequirementsSchema();
     }
+    if (resource === "ci") {
+      return buildCiProfilesSchema();
+    }
     return buildRunsSchema({
       environments: project.environments,
       labels: project.labels,
@@ -149,7 +160,12 @@ function ResourceTableInner({
   );
 
   const uuid = typeof state.uuid === "string" ? state.uuid : null;
-  const rows = useTableRows<RowData>(resource, params);
+  // The ci resource is backed by the already-loaded `/info` object, not a
+  // paged API list — its rows come from the store, filtered locally.
+  const isInfo = resource === "ci";
+  const apiRows = useTableRows<RowData>(resource, params, { skip: isInfo });
+  const infoRows = useInfoTableRows(state);
+  const rows = isInfo ? infoRows : apiRows;
   const selected = uuid ? rows.rows.find((r) => String(r.id) === uuid) : null;
 
   if (selected) {
@@ -189,6 +205,7 @@ function renderDetail(resource: ProjectResource, row: RowData) {
   if (resource === "testruns") return <TestRunItemRenderer data={row} />;
   if (resource === "plans") return <PlanItemRenderer data={row} />;
   if (resource === "requirements") return <RequirementDetail req={row} />;
+  if (resource === "ci") return <CiProfileDetail row={row as unknown as CiProfileRow} />;
   return <RunItemRenderer data={row} />;
 }
 
@@ -201,6 +218,45 @@ function detailTitle(row: RowData): string {
       row.name ??
       row.id ??
       "Item",
+  );
+}
+
+function CiProfileDetail({ row }: { row: CiProfileRow }) {
+  const entries = configEntries(row.profile);
+  const vars = passedEnvVars(row.profile);
+  return (
+    <div className="space-y-3 p-1 text-sm">
+      {row.profile.service ? (
+        <div className="text-muted-foreground">
+          Service: <MetaPill className="capitalize">{row.profile.service}</MetaPill>
+        </div>
+      ) : null}
+      {entries.length > 0 ? (
+        <div className="space-y-1">
+          <div className="text-muted-foreground">Config</div>
+          <div className="space-y-0.5 rounded-md border bg-muted/20 px-3 py-2 font-mono text-xs">
+            {entries.map(([key, value]) => (
+              <div key={key} className="flex items-baseline gap-2">
+                <span className="text-muted-foreground">{key}</span>
+                <span className="min-w-0 break-all">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="text-muted-foreground">
+        Passes to CI:{" "}
+        {vars.length > 0 ? (
+          vars.map((v) => (
+            <MetaPill key={v} className="mr-1 font-mono">
+              {v}
+            </MetaPill>
+          ))
+        ) : (
+          <span>none</span>
+        )}
+      </div>
+    </div>
   );
 }
 

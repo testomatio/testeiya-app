@@ -29,6 +29,8 @@ export class ProvidersService {
   thinkingLevels: ThinkingLevel[] = [];
   /** Set after a sign-in auto-selects a provider — surfaces a "reload" banner. */
   applied: Current | null = null;
+  /** Raw `KEY=value` env text (Settings → ENV Variables), saved to ~/.testeiya/.env. */
+  envVars = "";
 
   // public so it can be excluded in the overrides map (`keyof this` omits privates)
   pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -127,6 +129,21 @@ export class ProvidersService {
     await postJson("/api/providers/key", { provider, apiKey });
     toast.success(`Key saved for ${provider}`);
     await this.refresh();
+  }
+
+  async loadEnv(): Promise<void> {
+    const data = await getJson<{ env?: string }>("/api/settings/env");
+    runInAction(() => {
+      this.envVars = data.env ?? "";
+    });
+  }
+
+  async saveEnv(text: string): Promise<void> {
+    await postJson("/api/settings/env", { env: text });
+    runInAction(() => {
+      this.envVars = text;
+    });
+    toast.success("Environment variables saved — applies on next session");
   }
 
   async logout(provider: string): Promise<void> {

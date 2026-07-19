@@ -127,6 +127,16 @@ export interface CurrentProject {
   requirementsCount: number | null;
 }
 
+/** One CI profile configured on the project (raw API shape). */
+export interface CiProfile {
+  profile_name: string;
+  service: string | null;
+  config: Record<string, unknown> | null;
+  pass_testomatio_key: boolean;
+  pass_testomatio_url: boolean;
+  pass_run_id: boolean;
+}
+
 /** Project configuration from `GET /api/v2/{project_id}/info` (raw API shape). */
 export interface ProjectInfo {
   title: string;
@@ -141,7 +151,7 @@ export interface ProjectInfo {
   tags: string[];
   subscription: string | null;
   features: string[];
-  ci_profiles: unknown[];
+  ci_profiles: CiProfile[];
 }
 
 export interface TestomatioAuthState {

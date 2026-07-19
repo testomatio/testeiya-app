@@ -75,6 +75,7 @@ const BASH_GUARD_RULES = [
 ];
 
 import { loadConfig, type TesteiyaConfig } from "./config.js";
+import { resolveProjectInfo } from "./project-info.js";
 import { buildSystemPrompt } from "./prompt/index.js";
 import { createPermissionExtension } from "./permissions.js";
 import type { AskChannel } from "./extensions/webui/ask-channel.js";
@@ -100,6 +101,8 @@ export interface SessionOptions {
    * have no managed `tokens` (linked folders, `.env`, mcp.json).
    */
   connection?: { tokenAvailable?: boolean; projectId?: string; title?: string };
+  /** The session's Testomat.io projects (from the session store), when managed. */
+  projects?: { slug: string; title: string; status: "ok" | "error" }[];
   /**
    * Which frontend is driving this session.
    *   - "tui"  → activates Pi's built-in `ask` tool via `hasUI: true`; no
@@ -238,6 +241,16 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     );
   }
 
+  // The linked project's settings (framework, labels, tags, CI profiles, …) —
+  // the `.testeiya/project-info.json` cache written on project select, refreshed
+  // here when stale and credentials resolve. Best-effort: null just omits the
+  // prompt section.
+  const projectInfo = await resolveProjectInfo(cwd, {
+    tokens: options?.tokens,
+    backendUrl: options?.backendUrl,
+    projects: options?.projects ?? [],
+  });
+
   // Gate the browser-automation guidance on whether the @playwright/cli tool is
   // actually installed (the playwright-cli skill itself is vendored from GitHub).
   const systemPrompt = buildSystemPrompt({
@@ -248,6 +261,7 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     connection: options?.connection,
     mode: options?.mode,
     browser: hasPlaywrightCli(),
+    projectInfo,
   });
 
   // Load skills: the prebuilt skills vendored from GitHub into cli/skills

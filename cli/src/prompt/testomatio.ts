@@ -1,4 +1,65 @@
 import dedent from "dedent";
+import type { TestomatioProjectInfo } from "../project-info.js";
+
+// Long lists would bloat every prompt; past these caps the agent is pointed at
+// the full cached JSON on disk instead.
+const MAX_PROMPT_LABELS = 20;
+const MAX_PROMPT_TAGS = 30;
+const MAX_PROMPT_ENVS = 15;
+
+/**
+ * Compact project-settings block for the system prompt, built from the cached
+ * `GET /api/v2/{id}/info` payload (`.testeiya/project-info.json`). Only present
+ * fields are rendered; labels/tags are capped with a pointer to the full file.
+ */
+export function projectSettings(info: TestomatioProjectInfo): string {
+  let heading = `**${info.title}** (\`${info.project_id}\`)`;
+  if (info.subscription) heading += ` — ${info.subscription} plan`;
+
+  const lines: string[] = [];
+  const stack: string[] = [];
+  if (info.framework) stack.push(`framework: ${info.framework}`);
+  if (info.language) stack.push(`language: ${info.language}`);
+  if (stack.length > 0) lines.push(`- Test stack — ${stack.join(", ")}`);
+  if (info.repository_url) lines.push(`- Repository: ${info.repository_url}`);
+  if (info.artifacts_storage_enabled) {
+    lines.push("- Artifacts storage is enabled (test runs can attach screenshots/videos/logs)");
+  }
+  if (info.environments?.length > 0) {
+    const shown = info.environments.slice(0, MAX_PROMPT_ENVS);
+    lines.push(`- Environments: ${capped(shown, info.environments.length)}`);
+  }
+  if (info.features?.length > 0) {
+    lines.push(`- Enabled features: ${info.features.join(", ")}`);
+  }
+  if (info.labels?.length > 0) {
+    const shown = info.labels
+      .slice(0, MAX_PROMPT_LABELS)
+      .map((l) => `${l.title} (\`${l.slug}\`)`);
+    lines.push(`- Labels defined in this project: ${capped(shown, info.labels.length)}`);
+  }
+  if (info.tags?.length > 0) {
+    const shown = info.tags.slice(0, MAX_PROMPT_TAGS).map((t) => `@${t}`);
+    lines.push(`- Tags in use: ${capped(shown, info.tags.length)}`);
+  }
+  if (info.ci_profiles?.length > 0) {
+    const profiles = info.ci_profiles.map((p) => {
+      if (p.service) return `"${p.profile_name}" (${p.service})`;
+      return `"${p.profile_name}"`;
+    });
+    lines.push(`- CI profiles configured (runs can be triggered through them): ${profiles.join(", ")}`);
+  }
+
+  let body = heading;
+  if (lines.length > 0) body += `\n\n${lines.join("\n")}`;
+
+  return dedent`
+## Project Settings (Testomat.io)
+
+${body}
+
+Use these when creating or editing tests: assign only labels that exist here, reuse the existing tags/environments before inventing new ones, and match the project's framework/language when generating automated tests. The full configuration JSON (every label, tag, and CI profile config) is cached at \`.testeiya/project-info.json\` — read that file when you need the complete lists.`;
+}
 
 export const testomatioTms = dedent`
 # Testomat.io-first operating rules (highest priority)
@@ -100,3 +161,11 @@ const renderNotes = dedent`
 ## Notes
 
 See the app interface rules for rendering. After any **single-entity** call — \`*_get\` **or a \`*_create\` / \`*_update\`** that returns one run, testrun, test, suite, or plan — render the returned entity with \`render_item({kind, data})\` instead of pasting its link or describing it in text (e.g. after creating a run, \`render_item({kind:"run", data:<run>})\`). Only responses \`render_item\` can't show (labels, issues, analytics, ci/ims config) should be quoted or described normally.`;
+
+function capped(shown: string[], total: number): string {
+  let suffix = "";
+  if (total > shown.length) {
+    suffix = ` … and ${total - shown.length} more (see \`.testeiya/project-info.json\`)`;
+  }
+  return shown.join(", ") + suffix;
+}

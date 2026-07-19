@@ -1,14 +1,19 @@
-# Prebuilt skills for Testeiya. ONE rule: every line is a GitHub repo.
+# External skills for Testeiya. ONE rule: every line is a GitHub repo.
 #
 #   owner/repo                        a skill repo (one skill, or many)
 #   owner/repo/tree/<ref>/<subdir>    pin a branch/tag/commit, or point at a subfolder
 #
+# Each source owns one vendor folder in cli/skills/ — the repo name, or the
+# owner when the repo is just "skills" (testomatio/skills -> testomatio/).
+# Updates replace only that folder; any folder this file does not own
+# (e.g. cli/skills/testeiya/) holds first-party skills and is never touched.
+#
 # Categories are decided by the repo, never by this file:
 #   - repo with a Claude-plugin marketplace (.claude-plugin/marketplace.json)
-#     -> one category per plugin  (testomatio/skills -> Test Management / Test Automation / Explorbot)
-#   - repo without one -> the repo name is the category
+#     -> one category subfolder per plugin  (testomatio/ -> test-management / test-automation / explorbot)
+#   - repo without one -> skills sit right under the vendor folder (the vendor is the category)
 #
-# Edit the list, then run:  bunosh harness:vendor      See the result:  bunosh harness:skills
+# Edit the list, then run:  bunosh skills:update [vendor]      See the result:  bunosh skills:list
 
 - testomatio/skills
 - codeceptjs/skills

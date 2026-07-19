@@ -27,7 +27,12 @@ export type ProjectResource =
   | "runs"
   | "testruns"
   | "plans"
-  | "requirements";
+  | "requirements"
+  | "labels"
+  | "tags"
+  | "environments"
+  | "ci"
+  | "settings";
 
 /**
  * Project (Testomat.io) business logic: connection status, connect/disconnect,
@@ -127,14 +132,7 @@ export class ProjectService {
     return this.authState?.signInUrl || buildSignInUrl(this.baseUrl);
   }
   /** External Testomat.io links for the current project (or null when none open). */
-  get currentLinks(): {
-    project: string;
-    tests: string;
-    runs: string;
-    testruns: string;
-    plans: string;
-    requirements: string;
-  } | null {
+  get currentLinks(): Record<ProjectResource | "project", string> | null {
     const p = this.currentProject;
     if (!p) return null;
     const root = `${p.baseUrl}/projects/${encodeURIComponent(p.id)}`;
@@ -146,6 +144,11 @@ export class ProjectService {
       testruns: `${root}/runs`,
       plans: `${root}/plans`,
       requirements: `${root}/requirements`,
+      labels: `${root}/settings/labels`,
+      tags: root,
+      environments: `${root}/settings/environments`,
+      ci: `${root}/settings/ci`,
+      settings: `${root}/settings`,
     };
   }
 
@@ -203,6 +206,10 @@ export class ProjectService {
   async disconnect(): Promise<void> {
     runInAction(() => {
       this.authState = null;
+      this.currentProject = null;
+      this.projectInfo = null;
+      this.openResource = null;
+      this.activeManualRun = null;
     });
     await del("/api/auth/testomatio").catch(() => {});
   }
