@@ -20,7 +20,7 @@ export function buildRequirementsSchema() {
     title: col
       .string()
       .label("Requirement")
-      .notFilterable()
+      .icon("rule")
       .size(440)
       .display("custom", { cell: (_v, row) => <RequirementCell req={row as Req} /> }),
     status: col
@@ -35,10 +35,11 @@ export function buildRequirementsSchema() {
       .notFilterable()
       .size(120)
       .display("custom", { cell: (_v, row) => <TestsCell req={row as Req} /> }),
-    source: col.enum(SOURCES).label("Source").hidden(),
+    source: col.enum(SOURCES).label("Source").icon("hub").hidden(),
   });
 
   const filterMap: FilterMap = {
+    title: { param: "search_text", kind: "search" },
     source: { param: "source", kind: "single" },
   };
 

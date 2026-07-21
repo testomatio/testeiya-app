@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   generateColumns,
@@ -17,8 +17,15 @@ import { useFilterState } from "@/lib/store/hooks/useFilterState";
 import { useFilterActions } from "@/lib/store/hooks/useFilterActions";
 import { DataTableInfinite } from "@/components/data-table/data-table-infinite";
 import { buildParams, type FilterMap } from "@/lib/data-browse/params";
+import { generateTqlFields } from "@/lib/data-browse/tql-fields";
+import type { TqlField } from "@/lib/data-browse/tql";
 import { useTableRows } from "@/lib/data-browse/use-table-rows";
-import { useInfoTableRows } from "@/lib/data-browse/info-rows";
+import { INFO_RESOURCES, useInfoTableRows } from "@/lib/data-browse/info-rows";
+import {
+  buildEnvironmentsSchema,
+  buildLabelsSchema,
+  buildTagsSchema,
+} from "@/lib/data-browse/schemas/project-info";
 import {
   useProjectFilterOptions,
   useRungroupOptions,
@@ -48,13 +55,41 @@ import PlanItemRenderer from "./items/PlanItemRenderer";
 
 type RowData = Record<string, unknown>;
 
+const HAS_DETAIL = new Set<ProjectResource>([
+  "tests",
+  "runs",
+  "testruns",
+  "plans",
+  "requirements",
+  "ci",
+]);
+
 interface BuiltSchema {
   tableSchema: { definition: TableSchemaDefinition };
   filterMap: FilterMap;
   baseParams: Record<string, string>;
 }
 
-export function ResourceDataTable({ resource }: { resource: ProjectResource }) {
+export function ResourceDataTable({
+  resource,
+  api,
+}: {
+  resource: ProjectResource;
+  api: string;
+}) {
+  // Filter state lives in a ref inside the memory adapter, which survives a
+  // prop change — remounting per resource stops one table's query from
+  // riding along into the next table's request.
+  return <ResourceTable key={resource} resource={resource} api={api} />;
+}
+
+function ResourceTable({
+  resource,
+  api,
+}: {
+  resource: ProjectResource;
+  api: string;
+}) {
   const built = useBrowseSchema(resource);
   const definition = built.tableSchema.definition;
 
@@ -66,11 +101,13 @@ export function ResourceDataTable({ resource }: { resource: ProjectResource }) {
     () => generateFilterFields<RowData>(definition),
     [definition],
   );
+  const tqlFields = useMemo(() => generateTqlFields(definition), [definition]);
   const filterSchema = useMemo(
     () =>
       generateFilterSchema(definition, {
         sort: field.sort(),
         uuid: field.string(),
+        q: field.string(),
       }),
     [definition],
   );
@@ -86,8 +123,10 @@ export function ResourceDataTable({ resource }: { resource: ProjectResource }) {
     <DataTableStoreProvider adapter={adapter}>
       <ResourceTableInner
         resource={resource}
+        api={api}
         columns={columns}
         filterFields={filterFields}
+        tqlFields={tqlFields}
         defaultColumnVisibility={defaultColumnVisibility}
         filterMap={built.filterMap}
         baseParams={built.baseParams}
@@ -128,6 +167,15 @@ function useBrowseSchema(resource: ProjectResource): BuiltSchema {
     if (resource === "ci") {
       return buildCiProfilesSchema();
     }
+    if (resource === "labels") {
+      return buildLabelsSchema();
+    }
+    if (resource === "tags") {
+      return buildTagsSchema();
+    }
+    if (resource === "environments") {
+      return buildEnvironmentsSchema();
+    }
     return buildRunsSchema({
       environments: project.environments,
       labels: project.labels,
@@ -138,15 +186,19 @@ function useBrowseSchema(resource: ProjectResource): BuiltSchema {
 
 function ResourceTableInner({
   resource,
+  api,
   columns,
   filterFields,
+  tqlFields,
   defaultColumnVisibility,
   filterMap,
   baseParams,
 }: {
   resource: ProjectResource;
+  api: string;
   columns: ColumnDef<RowData>[];
   filterFields: DataTableFilterField<RowData>[];
+  tqlFields: TqlField[];
   defaultColumnVisibility: Record<string, boolean>;
   filterMap: FilterMap;
   baseParams: Record<string, string>;
@@ -154,19 +206,42 @@ function ResourceTableInner({
   const state = useFilterState<Record<string, unknown>>((s) => s);
   const { setFilters } = useFilterActions();
 
+  // The toolbar search drives the resource's own text-search param, which the
+  // backend ANDs with `tql` — so it stays native even when the same field is
+  // also a TQL field.
+  const searchKey = useMemo(
+    () =>
+      Object.keys(filterMap).find((key) => filterMap[key].kind === "search"),
+    [filterMap],
+  );
+  // Fields the builder serialises into the `tql` param must not also be sent
+  // as native `filter[...]` params, or the backend filters them twice.
+  const tqlKeys = useMemo(
+    () => tqlFields.map((f) => f.key).filter((key) => key !== searchKey),
+    [tqlFields, searchKey],
+  );
   const params = useMemo(
-    () => ({ ...baseParams, ...buildParams(state, filterMap) }),
-    [state, filterMap, baseParams],
+    () => ({ ...baseParams, ...buildParams(state, filterMap, { skip: tqlKeys }) }),
+    [state, filterMap, baseParams, tqlKeys],
   );
 
   const uuid = typeof state.uuid === "string" ? state.uuid : null;
-  // The ci resource is backed by the already-loaded `/info` object, not a
-  // paged API list — its rows come from the store, filtered locally.
-  const isInfo = resource === "ci";
-  const apiRows = useTableRows<RowData>(resource, params, { skip: isInfo });
-  const infoRows = useInfoTableRows(state);
+  // Some resources are backed by the already-loaded `/info` object, not a
+  // paged API list — their rows come from the store, filtered locally.
+  const isInfo = INFO_RESOURCES.includes(resource);
+  const apiRows = useTableRows<RowData>(api, params, { skip: isInfo });
+  const infoRows = useInfoTableRows(resource, state);
   const rows = isInfo ? infoRows : apiRows;
-  const selected = uuid ? rows.rows.find((r) => String(r.id) === uuid) : null;
+  // A label / tag / environment is the whole record — there is nothing left to
+  // open, so those rows never swap the table for a detail pane.
+  const selectable = HAS_DETAIL.has(resource);
+  const selected =
+    uuid && selectable ? rows.rows.find((r) => String(r.id) === uuid) : null;
+  // Only a row that opens a detail pane gets the affordance.
+  const getRowClassName = useCallback(() => {
+    if (!selectable) return "cursor-default";
+    return "cursor-pointer";
+  }, [selectable]);
 
   if (selected) {
     return (
@@ -184,6 +259,8 @@ function ResourceTableInner({
       data={rows.rows}
       columns={columns}
       filterFields={filterFields}
+      tqlFields={tqlFields}
+      searchKey={searchKey}
       manualFiltering
       getRowId={(r) => String(r.id)}
       defaultColumnVisibility={defaultColumnVisibility}
@@ -196,6 +273,7 @@ function ResourceTableInner({
       fetchNextPage={rows.fetchNextPage}
       refetch={rows.refetch}
       tableId={`browse-${resource}`}
+      getRowClassName={getRowClassName}
     />
   );
 }

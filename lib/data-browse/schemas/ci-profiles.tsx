@@ -17,6 +17,7 @@ export function buildCiProfilesSchema() {
     name: col
       .string()
       .label("Profile")
+      .icon("rocket_launch")
       .size(240)
       .display("custom", { cell: (_v, row) => <ProfileCell row={row as CiProfileRow} /> }),
     service: col
@@ -39,7 +40,11 @@ export function buildCiProfilesSchema() {
       .display("custom", { cell: (_v, row) => <PassesCell row={row as CiProfileRow} /> }),
   });
 
-  const filterMap: FilterMap = {};
+  // Rows come from the already-loaded `/info` object, so `param` is never sent
+  // anywhere — `filterCiProfileRows` reads the same `name` key locally.
+  const filterMap: FilterMap = {
+    name: { param: "name", kind: "search" },
+  };
 
   return { tableSchema, filterMap, baseParams: {} };
 }

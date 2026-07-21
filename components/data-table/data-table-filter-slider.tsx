@@ -11,7 +11,10 @@ import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/hooks/use-debounce";
 import { isArrayOfNumbers } from "@/lib/is-array";
 import { useEffect, useState } from "react";
-import type { DataTableSliderFilterField } from "./types";
+import type {
+  ControlledFilterProps,
+  DataTableSliderFilterField,
+} from "./types";
 
 function getFilter(filterValue: unknown) {
   return typeof filterValue === "number"
@@ -29,11 +32,16 @@ export function DataTableFilterSlider<TData>({
   min: defaultMin,
   max: defaultMax,
   unit,
-}: DataTableSliderFilterField<TData>) {
+  filterValue: controlledValue,
+  onFilterChange,
+}: DataTableSliderFilterField<TData> & ControlledFilterProps) {
   const value = _value as string;
   const { table, columnFilters, getFacetedMinMaxValues } = useDataTable();
   const column = table.getColumn(value);
-  const filterValue = columnFilters.find((i) => i.id === value)?.value;
+  let filterValue = controlledValue;
+  if (!onFilterChange) {
+    filterValue = columnFilters.find((i) => i.id === value)?.value;
+  }
   const filters = getFilter(filterValue);
   const [input, setInput] = useState<number[] | null>(filters);
   const [min, max] = getFacetedMinMaxValues?.(table, value) ||
@@ -42,9 +50,12 @@ export function DataTableFilterSlider<TData>({
   const debouncedInput = useDebounce(input, 500);
 
   useEffect(() => {
-    if (debouncedInput?.length === 2) {
-      column?.setFilterValue(debouncedInput);
+    if (debouncedInput?.length !== 2) return;
+    if (onFilterChange) {
+      onFilterChange(debouncedInput);
+      return;
     }
+    column?.setFilterValue(debouncedInput);
   }, [debouncedInput]);
 
   useEffect(() => {

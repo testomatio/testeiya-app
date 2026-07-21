@@ -54,6 +54,8 @@ export type {
   SheetConfig,
   SheetDescriptor,
   TableSchemaDefinition,
+  TqlConfig,
+  TqlOperator,
 } from "./types";
 export { generateColumns } from "./generators/columns";
 export { generateFilterFields } from "./generators/filter-fields";

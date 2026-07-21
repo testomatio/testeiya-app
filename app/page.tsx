@@ -725,7 +725,7 @@ const ChatPage = observer(function ChatPage() {
       if (!rich) return null;
       return (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 border-b px-3 py-2">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
             <span className="shrink-0 text-muted-foreground">
               {rich.header.icon}
             </span>
@@ -772,7 +772,7 @@ const ChatPage = observer(function ChatPage() {
     if (current.source === "resource") {
       const url = project.currentLinks?.[current.resource];
       return (
-        <div className="flex min-h-0 flex-1 p-2">
+        <div className="flex min-h-0 flex-1">
           <ResourceWidgetView
             resource={current.resource}
             widgetId={current.key}
@@ -790,7 +790,7 @@ const ChatPage = observer(function ChatPage() {
       const sid = workspace.sessionId;
       if (!file || !sid) return null;
       return (
-        <div className="flex min-h-0 flex-1 p-2">
+        <div className="flex min-h-0 flex-1">
           <MarkdownEditor
             key={file.key}
             sessionId={sid}
@@ -807,7 +807,7 @@ const ChatPage = observer(function ChatPage() {
       );
     }
     return (
-      <div className="flex min-h-0 flex-1 p-2">
+      <div className="flex min-h-0 flex-1">
         <SearchResults className="min-w-0 flex-1" />
       </div>
     );

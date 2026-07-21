@@ -29,33 +29,46 @@ export function buildTestsSchema(opts: {
     title: col
       .string()
       .label("Test")
+      .icon("science")
       .size(400)
+      // The upstream `test` field only honours `%` — `==` never matches and
+      // `!=` matches everything, so neither is offered.
+      .tql("test", { operators: ["contains"] })
       .display("custom", { cell: (_v, row) => <TestTitleCell test={row as Test} /> }),
     labels: col
       .array(col.enum(labelValues))
       .label("Labels")
+      .icon("label")
       .size(220)
       .filterable("checkbox", { options: labelOptions })
+      .tql("label")
       .display("custom", { cell: (_v, row) => <TagsCell test={row as Test} /> }),
     state: col
       .enum(STATES)
       .label("State")
+      .icon("toggle_on")
       .size(120)
+      .tql("state")
       .display("custom", { cell: (_v, row) => <StateCell test={row as Test} /> }),
-    priority: col.enum(PRIORITIES).label("Priority").hidden(),
-    sync_status: col.enum(SYNC).label("Sync").hidden(),
+    priority: col.enum(PRIORITIES).label("Priority").icon("flag").tql("priority").hidden(),
+    sync_status: col.enum(SYNC).label("Sync").icon("sync").hidden(),
     suites: col
       .array(col.enum(suiteIds))
       .label("Suites")
+      .icon("folder")
       .hidden()
-      .filterable("checkbox", { options: opts.suites }),
+      .filterable("checkbox", { options: opts.suites })
+      // Matches on suite id, not title, and counts agree with `suites[]`.
+      .tql("suite"),
     tags: col
       .array(col.enum(opts.tags))
       .label("Tags")
+      .icon("sell")
       .hidden()
       .filterable("checkbox", {
         options: opts.tags.map((t) => ({ label: t, value: t })),
-      }),
+      })
+      .tql("tag"),
   });
 
   const filterMap: FilterMap = {
@@ -88,18 +101,17 @@ function TestTitleCell({ test }: { test: Test }) {
   const kind = resolveType({ state: test.state });
   return (
     <div className="flex min-w-0 items-center gap-x-2 overflow-hidden">
-      {test.emoji ? (
-        <span
-          className="flex h-6 w-5 shrink-0 items-center justify-center text-[15px] leading-none"
-          aria-hidden
-        >
-          {test.emoji}
-        </span>
-      ) : kind ? (
-        <TypeIcon type={kind} />
-      ) : (
-        <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
-      )}
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        {test.emoji ? (
+          <span className="text-[15px] leading-none" aria-hidden>
+            {test.emoji}
+          </span>
+        ) : kind ? (
+          <TypeIcon type={kind} />
+        ) : (
+          <SuiteGlyph className="size-4 text-muted-foreground" />
+        )}
+      </span>
       <span className="truncate font-medium" title={title}>
         {title}
       </span>

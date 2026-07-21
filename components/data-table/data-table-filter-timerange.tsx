@@ -5,16 +5,24 @@ import { useDataTable } from "@/components/data-table/data-table-provider";
 import { isArrayOfDates } from "@/lib/is-array";
 import { useMemo } from "react";
 import type { DateRange } from "react-day-picker";
-import type { DataTableTimerangeFilterField } from "./types";
+import type {
+  ControlledFilterProps,
+  DataTableTimerangeFilterField,
+} from "./types";
 
 export function DataTableFilterTimerange<TData>({
   value: _value,
   presets,
-}: DataTableTimerangeFilterField<TData>) {
+  filterValue: controlledValue,
+  onFilterChange,
+}: DataTableTimerangeFilterField<TData> & ControlledFilterProps) {
   const value = _value as string;
   const { table, columnFilters } = useDataTable();
   const column = table.getColumn(value);
-  const filterValue = columnFilters.find((i) => i.id === value)?.value;
+  let filterValue = controlledValue;
+  if (!onFilterChange) {
+    filterValue = columnFilters.find((i) => i.id === value)?.value;
+  }
 
   const date: DateRange | undefined = useMemo(
     () =>
@@ -26,16 +34,24 @@ export function DataTableFilterTimerange<TData>({
     [filterValue],
   );
 
+  const apply = (next: unknown) => {
+    if (onFilterChange) {
+      onFilterChange(next);
+      return;
+    }
+    column?.setFilterValue(next);
+  };
+
   const setDate = (date: DateRange | undefined) => {
     if (!date) {
-      column?.setFilterValue(undefined);
+      apply(undefined);
       return;
     }
     if (date.from && !date.to) {
-      column?.setFilterValue([date.from]);
+      apply([date.from]);
     }
     if (date.to && date.from) {
-      column?.setFilterValue([date.from, date.to]);
+      apply([date.from, date.to]);
     }
   };
 

@@ -1,16 +1,14 @@
 "use client";
 
 import { useDataTable } from "@/components/data-table/data-table-provider";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 import { useDebounce } from "@/hooks/use-debounce";
-import { SearchIcon } from "@/lib/icons";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import type { DataTableInputFilterField } from "./types";
+import type {
+  ControlledFilterProps,
+  DataTableInputFilterField,
+} from "./types";
 
 function getFilter(filterValue: unknown) {
   return typeof filterValue === "string" ? filterValue : null;
@@ -18,11 +16,20 @@ function getFilter(filterValue: unknown) {
 
 export function DataTableFilterInput<TData>({
   value: _value,
-}: DataTableInputFilterField<TData>) {
+  label,
+  filterValue: controlledValue,
+  onFilterChange,
+  placeholder = "Search",
+  className,
+}: DataTableInputFilterField<TData> &
+  ControlledFilterProps & { placeholder?: string; className?: string }) {
   const value = _value as string;
   const { table, columnFilters } = useDataTable();
   const column = table.getColumn(value);
-  const filterValue = columnFilters.find((i) => i.id === value)?.value;
+  let filterValue = controlledValue;
+  if (!onFilterChange) {
+    filterValue = columnFilters.find((i) => i.id === value)?.value;
+  }
   const filters = getFilter(filterValue);
   const [input, setInput] = useState<string | null>(filters);
 
@@ -31,6 +38,10 @@ export function DataTableFilterInput<TData>({
   useEffect(() => {
     const newValue = debouncedInput?.trim() === "" ? null : debouncedInput;
     if (debouncedInput === null) return;
+    if (onFilterChange) {
+      onFilterChange(newValue);
+      return;
+    }
     column?.setFilterValue(newValue);
   }, [debouncedInput]);
 
@@ -41,22 +52,15 @@ export function DataTableFilterInput<TData>({
   }, [filters]);
 
   return (
-    <div className="grid w-full gap-1.5">
-      <Label htmlFor={value} className="text-muted-foreground sr-only px-2">
-        {value}
-      </Label>
-      <InputGroup className="h-9 rounded-lg shadow-none">
-        <InputGroupAddon>
-          <SearchIcon className="size-4" />
-        </InputGroupAddon>
-        <InputGroupInput
-          placeholder="Search"
-          name={value}
-          id={value}
-          value={input || ""}
-          onChange={(e) => setInput(e.target.value)}
-        />
-      </InputGroup>
-    </div>
+    <InputGroup className={cn("h-9 rounded-lg shadow-none", className)}>
+      <InputGroupInput
+        placeholder={placeholder}
+        aria-label={label ?? value}
+        name={value}
+        id={value}
+        value={input || ""}
+        onChange={(e) => setInput(e.target.value)}
+      />
+    </InputGroup>
   );
 }

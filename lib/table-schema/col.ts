@@ -22,6 +22,10 @@ function createColBuilder<T, F extends FilterType = FilterType>(
       return createColBuilder<T, F>({ ...config, label: text });
     },
 
+    icon(name: string): ColBuilder<T, F> {
+      return createColBuilder<T, F>({ ...config, icon: name });
+    },
+
     description(text: string): ColBuilder<T, F> {
       return createColBuilder<T, F>({ ...config, description: text });
     },
@@ -56,6 +60,13 @@ function createColBuilder<T, F extends FilterType = FilterType>(
 
     notFilterable(): ColBuilder<T, never> {
       return createColBuilder<T, never>({ ...config, filter: null });
+    },
+
+    tql(field: string, options?: Record<string, unknown>): ColBuilder<T, F> {
+      return createColBuilder<T, F>({
+        ...config,
+        tql: { field, ...(options ?? {}) } as ColConfig["tql"],
+      });
     },
 
     defaultOpen(): ColBuilder<T, F> {
