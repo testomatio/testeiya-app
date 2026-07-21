@@ -51,6 +51,7 @@ import { useTesteiya } from "@/hooks/use-testeiya";
 import type { ChatStatus as TesteiyaStatus, TesteiyaParams, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
+import { useTheme } from "@/lib/theme";
 import { Icon, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
@@ -932,6 +933,7 @@ const ChatView = observer(function ChatView({
   onOpenProviders,
   onOpenSwitchProject,
 }: ChatViewProps) {
+  const { theme } = useTheme();
   const widget = useWidgetService();
   // Serialize the widget the user is currently viewing (id + its declared
   // actions + title) so it rides every prompt and the agent can drive it via
@@ -1245,7 +1247,7 @@ const ChatView = observer(function ChatView({
     null;
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}>
+    <div className={cn("@container flex min-h-0 flex-1 flex-col", !isActive && "hidden")}>
       {error && (
         <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
           <div className="min-w-0">
@@ -1281,14 +1283,14 @@ const ChatView = observer(function ChatView({
       <div className={cn("flex min-h-0 flex-1 flex-col", messages.length === 0 && "justify-center")}>
       <Conversation className={messages.length === 0 ? "flex-none" : "flex-1"}>
         <ConversationContent className="items-center">
-          <div className="flex w-full max-w-[960px] flex-col gap-8 px-[60px] py-4">
+          <div className="flex w-full max-w-[960px] flex-col gap-8 px-4 py-4 @2xl:px-[60px]">
           {messages.length === 0 && (!canConnectTestomatio || sessionId || cwd) && (
             <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/testeiya-logo.png"
+                src={theme === "dark" ? "/testeiya-logo-dark.svg" : "/testeiya-logo.svg"}
                 alt="Testeiya"
-                className="h-auto max-h-96 w-auto max-w-full shrink-0 object-contain"
+                className="h-auto max-h-40 w-auto max-w-full shrink-0 object-contain"
               />
               <div className="space-y-3">
                 <p className="text-base text-muted-foreground max-w-md mx-auto">
@@ -1401,7 +1403,7 @@ const ChatView = observer(function ChatView({
 
       {/* Input area */}
       <div className={cn("shrink-0 flex justify-center", (messages.length === 0 && canConnectTestomatio && !sessionId && !cwd) && "hidden")}>
-        <div className="grid w-full max-w-[960px] gap-3 px-[60px] pb-4">
+        <div className="grid w-full max-w-[960px] gap-3 px-4 pb-4 @2xl:px-[60px]">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
         {contextLabel && status !== "streaming" && status !== "submitted" && (

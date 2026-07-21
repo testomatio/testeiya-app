@@ -242,11 +242,11 @@ All icons use **Material Symbols Rounded** (weight 300, fill 0 — outline style
 
 ## Branding / design system
 
-The brand is **neutral grays + indigo only**, font **THICCCBOI**, light/dark themes. It's wired through the theme variables so it propagates to all shadcn components — don't hardcode colors.
+The brand is **neutral grays + violet only**, font **THICCCBOI**, light/dark themes. It's wired through the theme variables so it propagates to all shadcn components — don't hardcode colors.
 
 - **Font:** THICCCBOI (self-hosted `@font-face` in `app/globals.css`, files in `public/fonts/`). Set as `--font-sans`/`--font-heading`. JetBrains Mono (`--font-mono`) is kept for code blocks. **Never use italic** — emphasize with color/weight/gradient.
-- **Palette:** the `:root` / `.dark` blocks in `app/globals.css` map shadcn tokens to the brand hex — `--primary` = indigo-500 `#6366f1`, neutral surfaces (`#ffffff`/`#fafafa`/`#f5f5f5` light, `#0a0a0a`/`#171717`/`#262626` dark), neutral borders/text. Only `--destructive` (red) and the `--status-*`/`--run-*`/`--type-*` vars stay non-brand (functional status indicators). No `gray`/`zinc`/`slate`/`stone`; no hues other than indigo for accents.
-- **Headings:** compact scale in `@layer base` — H1 `text-2xl` (24px) → H6 `text-sm` (14px, the indigo uppercase "eyebrow"). Element defaults only; explicit `text-*` utilities still win.
+- **Palette:** the `:root` / `.dark` blocks in `app/globals.css` map shadcn tokens to the brand hex — `--primary` = violet-500 `#8b5cf6`, neutral surfaces (`#ffffff`/`#fafafa`/`#f5f5f5` light, `#0a0a0a`/`#171717`/`#262626` dark), neutral borders/text. Only `--destructive` (red) and the `--status-*`/`--run-*`/`--type-*` vars stay non-brand (functional status indicators). No `gray`/`zinc`/`slate`/`stone`; no hues other than violet for accents.
+- **Headings:** compact scale in `@layer base` — H1 `text-2xl` (24px) → H6 `text-sm` (14px, the violet uppercase "eyebrow"). Element defaults only; explicit `text-*` utilities still win.
 - To restyle, edit the variables/`@layer base` in `globals.css` — components inherit automatically.
 
 ## Storybook (component catalog)

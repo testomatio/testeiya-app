@@ -182,11 +182,11 @@ export const SidebarPanel = observer(function SidebarPanel({
       {open && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Sidebar header: project info */}
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
             <Tooltip>
               <TooltipTrigger render={
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src="/testeiya-icon.svg" alt="Testeiya" className="h-12 w-12 shrink-0" />
+                <img src="/testeiya-icon.svg" alt="Testeiya" className="h-7 w-auto shrink-0" />
               } />
               <TooltipContent side="bottom"><p>Testeiya</p></TooltipContent>
             </Tooltip>

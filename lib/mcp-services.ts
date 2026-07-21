@@ -5,7 +5,7 @@
  * config and presentation can't drift.
  *
  * Logos are SVGs in `public/mcp/<id>.svg` (served at `/mcp/<id>.svg`). Service
- * brand marks are a deliberate exception to the indigo-only palette.
+ * brand marks are a deliberate exception to the violet-only palette.
  */
 
 export interface McpServiceDisplay {

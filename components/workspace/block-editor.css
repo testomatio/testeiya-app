@@ -50,7 +50,7 @@
 
 /*
  * Transient highlight for a block scrolled to from a search result. Added for a
- * couple of seconds, then removed — a brief indigo wash that fades out.
+ * couple of seconds, then removed — a brief violet wash that fades out.
  */
 .testeiya-block-editor .testeiya-search-hit {
   border-radius: 0.375rem;

@@ -123,13 +123,13 @@ const tw = {
   n800: "var(--color-neutral-800)",
   n900: "var(--color-neutral-900)",
   n950: "var(--color-neutral-950)",
-  // indigo
-  i200: "var(--color-indigo-200)",
-  i300: "var(--color-indigo-300)",
-  i400: "var(--color-indigo-400)",
-  i500: "var(--color-indigo-500)",
-  i600: "var(--color-indigo-600)",
-  i700: "var(--color-indigo-700)",
+  // violet
+  i200: "var(--color-violet-200)",
+  i300: "var(--color-violet-300)",
+  i400: "var(--color-violet-400)",
+  i500: "var(--color-violet-500)",
+  i600: "var(--color-violet-600)",
+  i700: "var(--color-violet-700)",
 } as const;
 
 function overtypeTheme(theme: "light" | "dark") {

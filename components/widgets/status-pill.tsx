@@ -453,7 +453,7 @@ export function StatusFilterChip({
 
 /**
  * Thin progress bar matching `list-run/progress.hbs`:
- * `w-20 h-1.5 rounded-full bg-muted` + indigo fill.
+ * `w-20 h-1.5 rounded-full bg-muted` + violet fill.
  */
 export function RunProgress({
   percent,
