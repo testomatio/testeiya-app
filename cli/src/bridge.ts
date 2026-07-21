@@ -18,6 +18,17 @@ export function transformEvent(event: any, messageId: string): Record<string, an
         input: event.args,
       };
 
+    // Live tool progress (bash streams its output tail through this). Each
+    // event carries the full accumulated tail, so the client replaces, never
+    // appends. Sent as a non-standard `tool-output-partial` message.
+    case "tool_execution_update":
+      return {
+        type: "tool-output-partial",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        output: stringifyResult(event.partialResult),
+      };
+
     case "tool_execution_end":
       return {
         type: "tool-output-available",
@@ -158,6 +169,7 @@ function stringifyResult(result: any): string {
   if (typeof result === "string") return result;
   if (Array.isArray(result)) {
     return result
+      .filter((item: any) => !isUiNotice(item))
       .map((item: any) => {
         if (typeof item === "string") return item;
         if (item?.type === "text") return item.text;
@@ -165,7 +177,16 @@ function stringifyResult(result: any): string {
       })
       .join("\n");
   }
+  if (Array.isArray(result?.content)) return stringifyResult(result.content);
   return JSON.stringify(result);
+}
+
+// The webui extension appends a model-facing "[UI notice …]" text item to MCP
+// list results; forwarding it corrupts the JSON the client parses for the
+// expanded tool card's table.
+function isUiNotice(item: any): boolean {
+  if (item?.type !== "text" || typeof item.text !== "string") return false;
+  return item.text.trimStart().startsWith("[UI notice");
 }
 
 interface ToolCall {

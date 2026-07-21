@@ -10,6 +10,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -26,6 +32,7 @@ import {
   useProvidersService,
 } from "@/lib/services/StoreProvider";
 import type { PanelSectionProps } from "@/lib/panel/types";
+import type { EnvScope } from "@/lib/services/types";
 
 export const SettingsSection = observer(function SettingsSection({
   active,
@@ -41,8 +48,6 @@ export const SettingsSection = observer(function SettingsSection({
   const [memoryExpanded, setMemoryExpanded] = useState(false);
   const [host, setHost] = useState(project.baseUrl);
   const [savingHost, setSavingHost] = useState(false);
-  const [envText, setEnvText] = useState("");
-  const [savingEnv, setSavingEnv] = useState(false);
 
   useEffect(() => {
     if (active) void memory.load();
@@ -64,10 +69,6 @@ export const SettingsSection = observer(function SettingsSection({
     setHost(project.baseUrl);
   }, [project.baseUrl]);
 
-  useEffect(() => {
-    setEnvText(providers.envVars);
-  }, [providers.envVars]);
-
   const saveHost = useCallback(async () => {
     setSavingHost(true);
     try {
@@ -76,17 +77,6 @@ export const SettingsSection = observer(function SettingsSection({
       setSavingHost(false);
     }
   }, [project, host]);
-
-  const saveEnv = useCallback(async () => {
-    setSavingEnv(true);
-    try {
-      await providers.saveEnv(envText);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save env vars");
-    } finally {
-      setSavingEnv(false);
-    }
-  }, [providers, envText]);
 
   return (
     <SectionShell
@@ -141,29 +131,28 @@ export const SettingsSection = observer(function SettingsSection({
               </div>
             </div>
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-1 border-t pt-4">
               <h3 className="text-sm font-semibold">ENV Variables</h3>
-              <p className="text-muted-foreground text-xs">
-                Place secrets in environment variables format{" "}
-                <code className="font-mono">KEY=value</code>. Saved to
-                <code className="font-mono"> ~/.testeiya/.env</code> and passed
-                into every agent command. Applies on the next session.
-              </p>
-              <Textarea
-                value={envText}
-                onChange={(e) => setEnvText(e.target.value)}
-                spellCheck={false}
-                autoComplete="off"
-                wrap="off"
-                rows={6}
-                className="min-h-40 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed md:text-[11px]"
-              />
-              <div className="flex justify-end">
-                <Button onClick={() => void saveEnv()} disabled={savingEnv}>
-                  {savingEnv && <Spinner className="size-3.5" />}
-                  Save
-                </Button>
-              </div>
+              <Accordion>
+                <AccordionItem value="global">
+                  <AccordionTrigger>Global</AccordionTrigger>
+                  <AccordionContent>
+                    <EnvEditor
+                      scope="global"
+                      hint="All workspaces — saved to ~/.testeiya/.env"
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="project">
+                  <AccordionTrigger>Project</AccordionTrigger>
+                  <AccordionContent>
+                    <EnvEditor
+                      scope="project"
+                      hint="This workspace only — saved to .testeiya/.env, git-ignored"
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
 
             <div className="space-y-3 border-t pt-4">
@@ -336,6 +325,56 @@ export const SettingsSection = observer(function SettingsSection({
         )}
       </div>
     </SectionShell>
+  );
+});
+
+const EnvEditor = observer(function EnvEditor({
+  scope,
+  hint,
+}: {
+  scope: EnvScope;
+  hint: string;
+}) {
+  const providers = useProvidersService();
+  let stored = providers.globalEnv;
+  if (scope === "project") stored = providers.projectEnv;
+  const [text, setText] = useState(stored);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setText(stored);
+  }, [stored]);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    try {
+      await providers.saveEnv(scope, text);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save env vars");
+    } finally {
+      setSaving(false);
+    }
+  }, [providers, scope, text]);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground text-xs">{hint}</p>
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        spellCheck={false}
+        autoComplete="off"
+        wrap="off"
+        rows={6}
+        className="min-h-40 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed md:text-[11px]"
+      />
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => void save()} disabled={saving}>
+          {saving && <Spinner className="size-3.5" />}
+          Save
+        </Button>
+      </div>
+    </div>
   );
 });
 

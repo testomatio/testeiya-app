@@ -128,7 +128,7 @@ const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
         path={`${node.path}#${node.anchor}`}
         name={title}
         onClick={() => ws.openPath(node.path, node.anchor)}
-        icon={<TypeIcon type="manual" className="size-4" />}
+        icon={<TypeIcon type={node.testType ?? "manual"} className="size-4" />}
         menu={menu}
         badge={
           tags.length > 0 ? (
@@ -255,7 +255,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
               {ws.types.map((t) => (
                 <TabsTrigger key={t.type} value={t.type} className="gap-1 px-2 capitalize">
                   {typeGlyph(t.type)}
-                  {t.type}
+                  {t.label ?? t.type}
                 </TabsTrigger>
               ))}
             </TabsList>

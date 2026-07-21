@@ -7,11 +7,13 @@ import {
   FileTreeFolder,
   FileTreeIcon,
 } from "@/components/ai-elements/file-tree";
+import { RunStatusDot } from "./status-pill";
 import { SuiteGlyph } from "@/components/icons";
 
 interface TreeNode {
   name: string;
   kind?: "suite" | "test" | "folder" | "file";
+  status?: string;
   id?: string;
   path?: string;
   children?: TreeNode[];
@@ -66,30 +68,31 @@ function Branch({
         const hasChildren = Array.isArray(node.children) && node.children.length > 0;
         const isParent =
           hasChildren || node.kind === "suite" || node.kind === "folder";
+        const statusIcon = node.status ? (
+          <RunStatusDot status={node.status} title={node.status} />
+        ) : undefined;
 
         if (isParent) {
           return (
-            <FileTreeFolder key={path} path={path} name={node.name}>
+            <FileTreeFolder key={path} path={path} name={node.name} icon={statusIcon}>
               {hasChildren && (
                 <Branch nodes={node.children!} parentPath={path} />
               )}
             </FileTreeFolder>
           );
         }
+
+        let leafIcon = statusIcon;
+        if (!leafIcon && node.kind === "test") {
+          leafIcon = (
+            <FileTreeIcon>
+              <SuiteGlyph className="size-4 text-muted-foreground" />
+            </FileTreeIcon>
+          );
+        }
         // leaf — test or file
         return (
-          <FileTreeFile
-            key={path}
-            path={path}
-            name={node.name}
-            icon={
-              node.kind === "test" ? (
-                <FileTreeIcon>
-                  <SuiteGlyph className="size-4 text-muted-foreground" />
-                </FileTreeIcon>
-              ) : undefined
-            }
-          />
+          <FileTreeFile key={path} path={path} name={node.name} icon={leafIcon} />
         );
       })}
     </>

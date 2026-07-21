@@ -8,6 +8,10 @@ export interface ToolCall {
   toolName: string;
   input: Record<string, unknown>;
   output?: string;
+  /** Live output tail streamed while the tool runs (bash). Each partial event
+   *  carries the full accumulated tail, so this is replaced, never appended;
+   *  cleared once the final output arrives. */
+  streamOutput?: string;
   state: "input-available" | "output-available" | "output-error";
 }
 
@@ -348,6 +352,22 @@ export function useTesteiya(params?: TesteiyaParams) {
           break;
         }
 
+        case "tool-output-partial": {
+          const toolCallId = data.toolCallId as string;
+          const output = data.output as string;
+          updateLastAssistant((msg) => ({
+            ...msg,
+            tools: msg.tools?.map((t) =>
+              // Ignore late partials for a tool that already finished — the
+              // server drops queued ones, but one can still be in flight.
+              t.toolCallId === toolCallId && t.state === "input-available"
+                ? { ...t, streamOutput: output }
+                : t
+            ),
+          }));
+          break;
+        }
+
         case "tool-output-available": {
           const toolCallId = data.toolCallId as string;
           const output = data.output as string;
@@ -363,6 +383,7 @@ export function useTesteiya(params?: TesteiyaParams) {
                 ? {
                     ...t,
                     output,
+                    streamOutput: undefined,
                     state: isError ? "output-error" : "output-available",
                   }
                 : t
@@ -466,6 +487,7 @@ export function useTesteiya(params?: TesteiyaParams) {
       // A superseded socket (the effect reconnected with a new wsUrl) shouldn't
       // touch the live connection's status or raise a false "can't connect".
       if (wsRef.current !== ws) return;
+      clearWatchdog();
       wsRef.current = null;
       if (!opened) {
         setError(
@@ -491,7 +513,7 @@ export function useTesteiya(params?: TesteiyaParams) {
     };
 
     wsRef.current = ws;
-  }, [handleWsMessage, wsUrl, armWatchdog]);
+  }, [handleWsMessage, wsUrl, armWatchdog, clearWatchdog]);
 
   // Connect on mount (or when wsUrl changes)
   useEffect(() => {
@@ -543,6 +565,12 @@ export function useTesteiya(params?: TesteiyaParams) {
 
   const answerQuestion = useCallback(
     (toolCallId: string, value: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        setError(
+          "Lost connection to the agent — your answer was not delivered. Reconnect and ask the agent to continue."
+        );
+        return;
+      }
       // Optimistically mark the question answered so its pills disable and the
       // picked option highlights immediately; the server echoes the same value
       // back as the tool's output once the parked turn resumes.
@@ -555,7 +583,6 @@ export function useTesteiya(params?: TesteiyaParams) {
         ),
       }));
       setAnsweredQuestions((a) => ({ ...a, [toolCallId]: value }));
-      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
       wsRef.current.send(JSON.stringify({ type: "answer", toolCallId, value }));
       armWatchdog();
     },

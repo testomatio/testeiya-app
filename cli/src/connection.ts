@@ -20,11 +20,15 @@ function getSkills(cwd: string) {
   return dedupeSkillsByName([...bundledSkillsCache, ...loadCustomSkills(cwd)]);
 }
 
-/** While a prompt is being processed the server emits a lightweight `ping`
- *  every HEARTBEAT_MS. It lets the client's stall watchdog tell "still working"
- *  (long tool calls, deep thinking) apart from a genuinely dropped socket, so a
- *  slow turn never surfaces a false "connection lost" error. */
+/** The server emits a lightweight `ping` every HEARTBEAT_MS for the whole
+ *  life of the connection. It lets the client's stall watchdog tell "alive but
+ *  quiet" (long tool calls, an ask_question waiting for the user's answer, SDK
+ *  continuations that outlive session.prompt()) apart from a genuinely dropped
+ *  socket, so legitimate silence never surfaces a false "connection lost". */
 const HEARTBEAT_MS = 15000;
+
+/** Max rate for forwarding a running tool's streamed output tail (per tool). */
+const PARTIAL_THROTTLE_MS = 250;
 
 /** Transport-agnostic sender — `ws.send(JSON.stringify(...))` for either the
  *  `ws` library or Bun's native ServerWebSocket. */
@@ -53,16 +57,43 @@ export function createConnection(
   let aiDebugUnsub: (() => void) | null = null;
   let messageId = "";
   let sessionCwd = process.cwd();
-  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const heartbeat = setInterval(() => send({ type: "ping" }), HEARTBEAT_MS);
   let resumeConversationId: string | null = null;
+  // `tool-output-partial` coalescing: the SDK streams a tool's full output tail
+  // on every chunk (up to 50KB each), so forwarding raw would flood the socket.
+  // Leading-edge send + one trailing flush per PARTIAL_THROTTLE_MS, per tool.
+  const partialTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pendingPartials = new Map<string, Record<string, any>>();
+
+  function queuePartial(msg: Record<string, any>): void {
+    const id = msg.toolCallId as string;
+    if (partialTimers.has(id)) {
+      pendingPartials.set(id, msg);
+      return;
+    }
+    send(msg);
+    partialTimers.set(
+      id,
+      setTimeout(() => {
+        partialTimers.delete(id);
+        const pending = pendingPartials.get(id);
+        if (!pending) return;
+        pendingPartials.delete(id);
+        queuePartial(pending);
+      }, PARTIAL_THROTTLE_MS)
+    );
+  }
+
+  function dropPartial(id: string): void {
+    const timer = partialTimers.get(id);
+    if (timer) clearTimeout(timer);
+    partialTimers.delete(id);
+    pendingPartials.delete(id);
+  }
 
   async function handleMessage(msg: any): Promise<void> {
     switch (msg.type) {
       case "prompt": {
-        // Keep the client's stall watchdog fed for the whole turn — session
-        // creation and long tool calls can both outlast it otherwise.
-        stopHeartbeat();
-        heartbeat = setInterval(() => send({ type: "ping" }), HEARTBEAT_MS);
         try {
           // Create session on first prompt
           if (!session) {
@@ -214,7 +245,14 @@ export function createConnection(
               messageId = `msg_${randomUUID().slice(0, 12)}`;
             }
             const transformed = transformEvent(event, messageId);
-            if (transformed) {
+            if (transformed?.type === "tool-output-partial") {
+              queuePartial(transformed);
+            } else if (transformed) {
+              // The final output supersedes any queued partial — drop it so a
+              // trailing flush can't arrive after (and visually stomp) the result.
+              if (transformed.type === "tool-output-available") {
+                dropPartial(transformed.toolCallId);
+              }
               send(transformed);
             }
             if (event.type === "agent_end") {
@@ -284,8 +322,6 @@ export function createConnection(
         } catch (err: any) {
           console.error("[session] prompt error:", err?.message || err);
           send({ type: "error", error: err.message || String(err) });
-        } finally {
-          stopHeartbeat();
         }
         break;
       }
@@ -354,13 +390,6 @@ export function createConnection(
     }
   }
 
-  function stopHeartbeat(): void {
-    if (heartbeat) {
-      clearInterval(heartbeat);
-      heartbeat = null;
-    }
-  }
-
   return {
     async handleRaw(raw: string): Promise<void> {
       let msg: any;
@@ -373,7 +402,10 @@ export function createConnection(
       await handleMessage(msg);
     },
     close(): void {
-      stopHeartbeat();
+      clearInterval(heartbeat);
+      for (const timer of partialTimers.values()) clearTimeout(timer);
+      partialTimers.clear();
+      pendingPartials.clear();
       askChannel?.cancelAll();
       widgetChannel?.cancelAll();
       unsubscribe?.();

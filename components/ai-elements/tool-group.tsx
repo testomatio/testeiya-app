@@ -9,6 +9,9 @@ export type ToolGroupProps = {
   summary: string;
   /** Whether any of the wrapped tools is still running. */
   running?: boolean;
+  /** Force-open while true (e.g. a child is streaming live output); collapses
+   *  back when it flips to false unless the user toggled the group manually. */
+  autoOpen?: boolean;
   children: ReactNode;
   className?: string;
 };
@@ -22,16 +25,20 @@ export function ToolGroup({
   count,
   summary,
   running,
+  autoOpen,
   children,
   className,
 }: ToolGroupProps) {
-  const [open, setOpen] = useState(false);
+  const [userOverride, setUserOverride] = useState<boolean | undefined>(
+    undefined
+  );
+  const open = userOverride ?? !!autoOpen;
 
   return (
     <div className={cn("not-prose mb-4 w-full rounded-md border bg-background", className)}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setUserOverride(!open)}
         className="flex w-full items-center justify-between gap-4 p-2.5 text-left"
         aria-expanded={open}
       >

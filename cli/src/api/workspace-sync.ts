@@ -4,7 +4,8 @@
 // dir and the project write-token, preferring the connected Testomat.io account
 // and falling back to the folder's own `.env` (the check-tests convention).
 //
-//   pull              → fetch all suites (always with `--export-automated`)
+//   pull              → fetch all suites (with `--export-automated`, unless the
+//                       workspace is itself an automated-tests repo)
 //   pull + suiteIds   → fetch only those suites (`--suite-ids`)
 //   push              → partial push of only the changed files (full dir when
 //                       nothing is detected as changed)
@@ -21,7 +22,7 @@ import {
   type CheckTestsAction,
   type RunCheckTestsOptions,
 } from "../check-tests.js";
-import { resolveManualTestsDir } from "../workspace-model.js";
+import { resolveManualTestsDir, hasAutomationConfig } from "../workspace-model.js";
 import { computeChangedFiles } from "../sync-snapshot.js";
 import { PROJECT_DIR, MANUAL_TESTS_SUBDIR } from "../project-dir.js";
 import { safeResolve } from "../workspace/safe-path.js";
@@ -85,7 +86,7 @@ export async function workspaceSync(request: Request): Promise<Response> {
   let files = pickFiles(cwd, body.files);
 
   if (action === "pull") {
-    run.exportAutomated = true;
+    if (!hasAutomationConfig(cwd)) run.exportAutomated = true;
     if (Array.isArray(body.suiteIds) && body.suiteIds.length) run.suiteIds = body.suiteIds;
   }
 

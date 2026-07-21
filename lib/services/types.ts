@@ -21,6 +21,8 @@ export interface TreeNode {
   kind: "folder" | "file" | "test";
   path: string;
   anchor?: string;
+  /** A test block's `type:` — manual tests and automated ones live in separate tabs. */
+  testType?: "manual" | "automated";
   /** `@S…` when the file/test belongs to a suite that exists on Testomat.io. */
   suiteId?: string;
   /** Emoji from the `<!-- suite` block, shown as the suite's tree icon. */
@@ -45,6 +47,8 @@ export type WorkspaceType = "manual" | "automated" | "mixed" | "code" | "files";
 export interface WorkspaceTypeEntry {
   type: WorkspaceType;
   dir: string;
+  /** Overrides the type as the tab caption — "tests" when manual and automated are mixed. */
+  label?: string;
 }
 
 /** GET /api/files/tree response: the tree plus workspace classification. */
@@ -227,6 +231,8 @@ export interface ProviderModel {
   id: string;
   name: string;
 }
+
+export type EnvScope = "global" | "project";
 
 export interface Current {
   provider: string;

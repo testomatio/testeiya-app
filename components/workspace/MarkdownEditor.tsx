@@ -16,6 +16,7 @@ import {
   X,
 } from "@/lib/icons";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { useWidgetSnapshot } from "@/components/widgets/use-widget-snapshot";
 import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";
 import { OverTypeEditor } from "./OverTypeEditor";
@@ -114,6 +115,8 @@ export function MarkdownEditor({
   }, [sessionId, path, initialContent]);
 
   const dirty = content !== original;
+
+  useWidgetSnapshot({ kind: "file", path, content, unsaved: dirty }, !loading);
 
   const save = useCallback(async () => {
     if (saving || readOnly || !dirty) return;

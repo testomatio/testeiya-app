@@ -189,6 +189,11 @@ export function hasCodeManifest(dir: string): boolean {
   return matchesRoot(dir, CODE_MANIFEST_RES) || fs.existsSync(path.join(dir, ".git"));
 }
 
+/** True when any `*.test.md` under `dir` carries a `type: automated` test block. */
+export function hasAutomatedTestMd(dir: string): boolean {
+  return findAutomatedTestMd(dir, { nodes: 0 });
+}
+
 /** True when ≥90% of the folder's (non-asset) files are `*.test.md`. */
 export function detectManualProject(cwd: string): boolean {
   return detectWorkspaceType(cwd) === "manual";
@@ -305,6 +310,13 @@ function listWorkspaceTypes(
   if (manualTestsDir === `${PROJECT_DIR}/${MANUAL_TESTS_SUBDIR}`) {
     add("manual", manualTestsDir);
   }
+  // A pull with `--export-automated` folds `type: automated` tests into the same
+  // suite files as the manual ones, so the view holds both — "Manual" would be a
+  // lie. One tab either way; only its label changes.
+  const manual = byType.get("manual");
+  if (manual && hasAutomatedTestMd(path.join(cwd, manual.dir))) {
+    manual.label = "tests";
+  }
   for (const entry of readdirSafe(path.join(cwd, PROJECT_DIR))) {
     if (!entry.isDirectory()) continue;
     if (RESERVED_PROJECT_SUBDIRS.has(entry.name)) continue;
@@ -341,6 +353,45 @@ function hasFrameworkDep(dir: string, pkgs: Set<string>): boolean {
   return Object.keys(deps).some((name) => pkgs.has(name));
 }
 
+function findAutomatedTestMd(dir: string, budget: { nodes: number }): boolean {
+  for (const entry of readdirSafe(dir)) {
+    if (budget.nodes >= MAX_SCAN_NODES) return false;
+    if (VENDOR_DIRS.has(entry.name)) continue;
+    budget.nodes++;
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith(".")) continue;
+      if (findAutomatedTestMd(path.join(dir, entry.name), budget)) return true;
+      continue;
+    }
+    if (!entry.isFile() || !TEST_MD_RE.test(entry.name)) continue;
+    if (hasAutomatedBlock(path.join(dir, entry.name))) return true;
+  }
+  return false;
+}
+
+function hasAutomatedBlock(absFile: string): boolean {
+  let content: string;
+  try {
+    content = fs.readFileSync(absFile, "utf8");
+  } catch {
+    return false;
+  }
+  let armed = false;
+  for (const line of content.split("\n")) {
+    if (/^<!--\s*test\b/.test(line)) {
+      armed = true;
+      continue;
+    }
+    if (!armed) continue;
+    if (/^-->/.test(line)) {
+      armed = false;
+      continue;
+    }
+    if (/^type:\s*automated\s*$/.test(line)) return true;
+  }
+  return false;
+}
+
 function hasMarkdown(dir: string): boolean {
   for (const entry of readdirSafe(dir)) {
     if (entry.isFile() && entry.name.endsWith(".md")) return true;
@@ -368,6 +419,7 @@ export interface ProjectMeta {
 export interface WorkspaceTypeEntry {
   type: WorkspaceType;
   dir: string; // "" = workspace root, else ".testeiya/<sub>"
+  label?: string; // overrides the type as the tab's caption
 }
 
 export interface WorkspaceInfo {

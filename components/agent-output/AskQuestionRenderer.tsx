@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CheckIcon, EditIcon, Icon } from "@/lib/icons";
+import { CheckIcon, EditIcon, Icon, XIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   onPick: (option: string) => void;
   answered?: boolean;
   selected?: string;
+  dismissed?: boolean;
   multiSelect?: boolean;
   recommended?: number[];
 }
@@ -49,6 +50,7 @@ export default function AskQuestionRenderer({
   onPick,
   answered,
   selected,
+  dismissed,
   multiSelect,
   recommended,
 }: Props) {
@@ -56,6 +58,18 @@ export default function AskQuestionRenderer({
   const [note, setNote] = useState("");
 
   if (answered) {
+    const stopped = dismissalText(selected, dismissed);
+    if (stopped) {
+      return (
+        <div className="not-prose my-4 w-full space-y-2">
+          <div className="text-sm text-foreground">{question}</div>
+          <div className="flex items-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            <XIcon className="size-4 shrink-0" />
+            <span>{stopped}</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="not-prose my-4 w-full space-y-2">
         <div className="text-sm text-foreground">{question}</div>
@@ -398,6 +412,18 @@ function AnswerInput({
       </Button>
     </div>
   );
+}
+
+/** A question that ended without a real answer — the turn was stopped (the
+ *  tool call aborted, surfaced as an error result) or the question was
+ *  dismissed (the AskChannel's sentinel text). Both read as a muted notice,
+ *  never as "You answered: …". */
+function dismissalText(value?: string, dismissed?: boolean): string | null {
+  if (dismissed) return "Stopped — this question was not answered.";
+  if (value?.startsWith("[The user dismissed this question")) {
+    return "Dismissed — this question was not answered.";
+  }
+  return null;
 }
 
 function answerText(value?: string): string {

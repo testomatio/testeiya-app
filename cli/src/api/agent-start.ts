@@ -7,7 +7,7 @@ import { readJson } from "../json-store.js";
 import { createSession } from "../session-store.js";
 import { PROJECT_DIR, MANUAL_TESTS_SUBDIR, WORKSPACES_DIR } from "../project-dir.js";
 import { runCheckTests } from "../check-tests.js";
-import { writeProjectMeta } from "../workspace-model.js";
+import { writeProjectMeta, hasAutomationConfig } from "../workspace-model.js";
 import {
   fetchProjectInfo,
   writeProjectInfo,
@@ -161,7 +161,7 @@ async function pullProjectFiles(
     dir,
     token: project.token,
     baseUrl: backendUrl,
-    exportAutomated: true,
+    exportAutomated: !hasAutomationConfig(cwd),
   });
   if (!result.ok) throw new Error(result.output || "check-tests pull failed");
   return countMarkdown(path.join(cwd, dir));

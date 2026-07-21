@@ -128,8 +128,8 @@ export function useFileMentions({ text, setText, items, skills }: UseFileMention
             {item.kind === "folder" && <Folder className="size-4 shrink-0 text-muted-foreground" />}
             {item.kind === "file" && <FileText className="size-4 shrink-0 text-muted-foreground" />}
             {item.kind === "skill" && <SlashIcon className="size-4 shrink-0 text-muted-foreground" />}
-            <span className="truncate font-medium">{item.name}</span>
-            <span className="ml-auto truncate text-xs text-muted-foreground">
+            <span className="max-w-[60%] shrink-0 truncate font-medium">{item.name}</span>
+            <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
               {item.kind === "skill" ? item.description : item.path}
             </span>
           </button>

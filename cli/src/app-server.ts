@@ -191,7 +191,7 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
     return debugLayout(req);
   }
   if (pathname === "/api/settings/env") {
-    if (method === "GET") return settingsEnvGet();
+    if (method === "GET") return settingsEnvGet(req);
     if (method === "POST") return settingsEnvPost(req);
   }
   if (pathname === "/api/settings") {

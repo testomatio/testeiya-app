@@ -1,5 +1,5 @@
 import { Settings } from "@oh-my-pi/pi-coding-agent";
-import { userEnvKeys } from "./user-env.js";
+import { userEnvKeys, projectEnvVars } from "./user-env.js";
 
 // Make the agent's shell commands see the CURRENT Testomat.io credentials.
 // The SDK's bash executor reads its shell env from `Settings.getShellConfig()`,
@@ -16,7 +16,10 @@ import { userEnvKeys } from "./user-env.js";
 // copies — procmgr hands out its cached object by reference; never mutate it.
 // The user's own env vars (Settings → ENV Variables, saved to ~/.testeiya/.env
 // via user-env.ts) are overlaid alongside these, so secrets like API keys reach
-// every agent bash command too.
+// every agent bash command too. The workspace's project-scope vars
+// (`<cwd>/.testeiya/.env`, resolved per session via Settings.getCwd()) are
+// overlaid last and read live from disk on each call, so a project value wins
+// over a global one and a Settings save applies to the very next command.
 const SHELL_ENV_KEYS = ["TESTOMATIO", "TESTOMATIO_URL", "TESTOMATIO_PROJECT_ID"];
 
 const originalGetShellConfig = Settings.prototype.getShellConfig;
@@ -28,6 +31,9 @@ if (originalGetShellConfig) {
       const value = process.env[key];
       if (value) env[key] = value;
       else delete env[key];
+    }
+    for (const [key, value] of Object.entries(projectEnvVars(this.getCwd()))) {
+      if (value) env[key] = value;
     }
     return { ...config, env };
   };

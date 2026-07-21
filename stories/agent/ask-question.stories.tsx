@@ -28,6 +28,23 @@ export const Answered: Story = {
   },
 };
 
+export const Stopped: Story = {
+  args: {
+    answered: true,
+    dismissed: true,
+    selected:
+      'Error: {"content":[{"type":"text","text":"Tool execution was aborted: Request was aborted"}],"details":{}}',
+  },
+};
+
+export const Dismissed: Story = {
+  args: {
+    answered: true,
+    selected:
+      "[The user dismissed this question without picking an option. Ask again only if you still need the answer; otherwise continue.]",
+  },
+};
+
 export const MultiSelect: Story = {
   args: {
     question:

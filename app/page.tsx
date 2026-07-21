@@ -31,6 +31,7 @@ import {
   ToolContent,
   ToolInput,
   ToolOutput,
+  ToolTerminal,
   richViewMode,
   renderRichTool,
 } from "@/components/ai-elements/tool";
@@ -83,7 +84,7 @@ import { MarkdownEditor } from "@/components/workspace/MarkdownEditor";
 import { SearchResults } from "@/components/workspace/SearchResults";
 import { ResourceWidgetView } from "@/components/widgets/ResourceWidgetView";
 import ManualRunRenderer from "@/components/widgets/items/ManualRunRenderer";
-import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type FormEvent, type ReactNode } from "react";
+import { Suspense, useState, useCallback, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, type ClipboardEvent, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
@@ -91,8 +92,8 @@ import { toast } from "sonner";
 
 // `ask_question` is the only tool pinned to the bottom of the message
 // (it's interactive — the user reacts to it). Everything else — rich
-// renders, MCP list auto-renders, routine tools — appears IN-PLACE in
-// tool-call order so each datum is anchored to the reasoning around it.
+// renders, routine tools (incl. MCP `*_list`, collapsed) — appears IN-PLACE
+// in tool-call order so each datum is anchored to the reasoning around it.
 function isAskQuestion(tool: ToolCall): boolean {
   return tool.toolName === "ask_question";
 }
@@ -103,7 +104,7 @@ function isTodoWrite(tool: ToolCall): boolean {
   return tool.toolName === "todo_write";
 }
 
-/** Rich-view tools: `render_*` customs + MCP `*_list` auto-renders. */
+/** Rich-view tools: the explicit `render_*` customs (+ write/edit). */
 function isRenderish(tool: ToolCall): boolean {
   return !isAskQuestion(tool) && richViewMode(tool.toolName) !== null;
 }
@@ -216,7 +217,7 @@ function routineDescription(tool: ToolCall, cwd?: string | null): string | undef
     return `agent: ${input.agent}`;
   }
   if (typeof input._i === "string" && input._i.trim()) return relativizePath(input._i, cwd);
-  for (const field of ["command", "cmd", "file_path", "path", "pattern", "glob", "query", "url"]) {
+  for (const field of ["command", "cmd", "file_path", "path", "pattern", "glob", "query", "tql", "url"]) {
     const value = input[field];
     if (typeof value === "string" && value.trim()) return relativizePath(value, cwd);
   }
@@ -255,6 +256,9 @@ function renderSegments(
     const running = seg.tools.some(
       (t) => t.state !== "output-available" && t.state !== "output-error"
     );
+    const streaming = seg.tools.some(
+      (t) => t.state === "input-available" && t.streamOutput
+    );
     const firstId = seg.tools[0].toolCallId;
     return (
       <ToolGroup
@@ -262,6 +266,7 @@ function renderSegments(
         count={seg.tools.length}
         summary={summarizeTools(seg.tools)}
         running={running}
+        autoOpen={streaming}
       >
         {seg.tools.map((t) => renderRoutine(t))}
       </ToolGroup>
@@ -465,37 +470,72 @@ const MessageItem = observer(function MessageItem({
     [message.tools, isStreaming, isLastTodo]
   );
 
-  const renderRoutine = (tool: ToolCall): ReactNode => (
-    <div key={tool.toolCallId}>
-      <Tool>
-        <ToolHeader
-          title={tool.toolName}
-          type="dynamic-tool"
-          toolName={tool.toolName}
-          state={tool.state}
-          description={routineDescription(tool, cwd)}
-        />
-        <ToolContent>
-          <ToolInput input={tool.input} />
-          {tool.output != null && (
-            <ToolOutput
-              output={tool.output}
-              toolName={tool.toolName}
-              errorText={
-                tool.state === "output-error" ? tool.output : undefined
-              }
-            />
-          )}
-        </ToolContent>
-      </Tool>
-    </div>
-  );
+  const renderRoutine = (tool: ToolCall): ReactNode => {
+    // Live output tail (bash streams while it runs) — auto-open the card so
+    // the terminal is visible; it collapses back once the tool finishes
+    // unless the user toggled it manually.
+    const streamingOutput =
+      tool.state === "input-available" ? tool.streamOutput : undefined;
+    // MCP `*_list` output parses into the rich table — shown inside the
+    // collapsed card in place of the raw JSON when the user expands it.
+    const rich =
+      tool.state === "output-available"
+        ? renderRichTool(tool.toolName, tool.input, tool.output)
+        : null;
+    return (
+      <div key={tool.toolCallId}>
+        <Tool defaultOpen={!!streamingOutput}>
+          <ToolHeader
+            title={tool.toolName}
+            type="dynamic-tool"
+            toolName={tool.toolName}
+            state={tool.state}
+            description={routineDescription(tool, cwd)}
+          />
+          <ToolContent>
+            {tool.toolName === "bash" ? (
+              // One terminal block: `$ command` prompt line + its output,
+              // remaining params (cwd, timeout, …) behind the ⓘ badge.
+              <ToolTerminal
+                command={String(tool.input.command ?? "")}
+                info={tool.input}
+                output={streamingOutput ?? tool.output ?? ""}
+                isStreaming={!!streamingOutput}
+              />
+            ) : (
+              <>
+                <ToolInput input={tool.input} />
+                {streamingOutput && (
+                  <ToolTerminal output={streamingOutput} isStreaming />
+                )}
+                {rich ? (
+                  <div className="px-1 pb-1">{rich.body}</div>
+                ) : (
+                  tool.output != null && (
+                    <ToolOutput
+                      output={tool.output}
+                      toolName={tool.toolName}
+                      errorText={
+                        tool.state === "output-error" ? tool.output : undefined
+                      }
+                    />
+                  )
+                )}
+              </>
+            )}
+          </ToolContent>
+        </Tool>
+      </div>
+    );
+  };
 
   // Rich renders live in the widget pane now; the chat keeps a compact chip at
   // the narrative spot that re-opens that widget.
   const renderRender = (tool: ToolCall): ReactNode => {
     const rich = renderRichTool(tool.toolName, tool.input, tool.output);
-    if (!rich) return null;
+    // An unparseable rich payload must still leave a trace in the chat —
+    // fall back to the plain tool card instead of vanishing.
+    if (!rich) return renderRoutine(tool);
     const active =
       widget.current?.source === "tool" &&
       widget.current.key === tool.toolCallId;
@@ -552,6 +592,7 @@ const MessageItem = observer(function MessageItem({
         recommended={q.recommended}
         answered={tool.state !== "input-available"}
         selected={tool.output}
+        dismissed={tool.state === "output-error"}
         onPick={(opt) => onAnswer(tool.toolCallId, opt)}
       />
     );
@@ -952,8 +993,9 @@ const ChatView = observer(function ChatView({
   const contextLabel = widget.contextDismissed
     ? null
     : widgetContextLabel(widget.current, widgetExtra);
-  let ContextIcon = ListChecksIcon;
+  let ContextIcon: ComponentType<{ className?: string }> = ListChecksIcon;
   if (contextLabel && /^(run|manual run)/i.test(contextLabel)) ContextIcon = PlayIcon;
+  if (widget.current?.source === "file") ContextIcon = FileIcon;
 
   const paramsWithContext = useMemo(
     () => (activeWidget ? { ...(params ?? {}), activeWidget } : params),
@@ -1507,7 +1549,7 @@ function isEmptyListRender(
   input: unknown,
   output: unknown
 ): boolean {
-  const isList = richViewMode(toolName) === "below" || toolName === "render_list";
+  const isList = toolName === "render_list";
   if (!isList) return false;
   const count = Math.max(
     extractList(input).items.length,

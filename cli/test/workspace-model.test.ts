@@ -6,6 +6,7 @@ import {
   detectManualProject,
   detectWorkspaceType,
   describeWorkspace,
+  hasAutomatedTestMd,
   resolveManualTestsDir,
 } from "../src/workspace-model.js";
 
@@ -335,6 +336,43 @@ describe("describeWorkspace types", () => {
     write(d, "b.test.md", "# b");
     write(d, ".testeiya/manual-tests/x.md", "# x");
     expect(describeWorkspace(d).types).toEqual([{ type: "manual", dir: "" }]);
+  });
+
+  test("pulled automated markdown relabels the manual tab as tests", () => {
+    const d = tmp();
+    write(d, "a.test.md", "<!-- test\nid: @T1\ntype: manual\n-->\n# a");
+    write(d, "b.test.md", "<!-- test\nid: @T2\ntype: automated\n-->\n# b");
+    expect(describeWorkspace(d).types).toEqual([{ type: "manual", dir: "", label: "tests" }]);
+  });
+
+  test("a code repo's manual-tests cache with automated markdown relabels its tab", () => {
+    const d = tmp();
+    write(d, "package.json", "{}");
+    write(d, "src/app.js", "// code");
+    write(d, "src/util.js", "// code");
+    write(d, ".testeiya/manual-tests/a.test.md", "<!-- test\nid: @T1\ntype: automated\n-->\n# a");
+    expect(describeWorkspace(d).types).toEqual([
+      { type: "code", dir: "" },
+      { type: "manual", dir: ".testeiya/manual-tests", label: "tests" },
+      { type: "files", dir: "" },
+    ]);
+  });
+
+  test("an automation repo keeps its code-root automated tab", () => {
+    const d = tmp();
+    write(d, "playwright.config.ts", "export default {}");
+    write(d, "tests/a.spec.ts", "test('a', () => {})");
+    write(d, ".testeiya/manual-tests/a.test.md", "<!-- test\nid: @T1\ntype: automated\n-->\n# a");
+    const automated = describeWorkspace(d).types.filter((t) => t.type === "automated");
+    expect(automated).toEqual([{ type: "automated", dir: "" }]);
+  });
+
+  test("hasAutomatedTestMd only fires on a type: automated block", () => {
+    const d = tmp();
+    write(d, "a.test.md", "<!-- test\nid: @T1\ntype: manual\n-->\n# a");
+    expect(hasAutomatedTestMd(d)).toBe(false);
+    write(d, "b.test.md", "<!-- test\nid: @T2\ntype: automated\n-->\n# b");
+    expect(hasAutomatedTestMd(d)).toBe(true);
   });
 });
 

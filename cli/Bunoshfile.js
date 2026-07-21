@@ -1,4 +1,4 @@
-import { join, basename } from "node:path";
+import { join, basename, dirname } from "node:path";
 import {
   existsSync,
   readdirSync,
@@ -19,6 +19,11 @@ const SKILLS_MANIFEST = join(CLI_ROOT, "skills.yaml");
 const SKILLS_OUTPUT = join(CLI_ROOT, "skills");
 const SKILLS_LOCK = join(CLI_ROOT, "skills.lock.json");
 const INTERNAL_SKILLS_DIR = join(SKILLS_OUTPUT, "testeiya");
+const DOCS_OWNER = "testomatio";
+const DOCS_REPO = "docs";
+const DOCS_CONTENT_PATH = "src/content/docs";
+const DOCS_SITE_URL = "https://docs.testomat.io";
+const DOCS_SKILL_DIR = join(INTERNAL_SKILLS_DIR, "testomatio-docs");
 
 /**
  * Update the vendored external skills declared in cli/skills.yaml into the
@@ -157,6 +162,67 @@ export async function skillsList() {
     }
   }
   say(`\n${total} skill(s) from ${vendors} vendor(s) in ${SKILLS_OUTPUT}`);
+}
+
+/**
+ * Vendor the Testomat.io product documentation (github.com/testomatio/docs)
+ * into the internal `testomatio-docs` skill. Only the markdown under
+ * src/content/docs is fetched — the repo's screenshots are ~760MB and useless
+ * to an agent — landing in cli/skills/testeiya/testomatio-docs/docs/ next to a
+ * generated INDEX.md (file · title · public URL · description) that the skill
+ * greps before opening a page. Navigation-only stub pages are dropped. The
+ * source commit is pinned in the skill's docs.lock.json, so a re-run on the
+ * same commit is a no-op unless forced. Re-run on release.
+ * @param {object} options
+ * @param {boolean} [options.force=false] - Re-download even when the pinned commit is unchanged
+ */
+export async function docsUpdate(options = { force: false }) {
+  const sha = await resolveSha(DOCS_OWNER, DOCS_REPO, "HEAD");
+  if (!sha) return;
+
+  const lock = readDocsLock();
+  if (lock.sha === sha && !options.force) {
+    say(`Docs already at ${DOCS_OWNER}/${DOCS_REPO}@${sha.slice(0, 8)} (${lock.files ?? 0} pages) — pass --force to re-download.`);
+    return;
+  }
+
+  const paths = await listDocsPaths(sha);
+  if (paths.length === 0) {
+    yell(`No markdown found under ${DOCS_CONTENT_PATH} in ${DOCS_OWNER}/${DOCS_REPO}@${sha.slice(0, 8)}`);
+    return;
+  }
+  say(`Fetching ${paths.length} markdown file(s) from ${DOCS_OWNER}/${DOCS_REPO}@${sha.slice(0, 8)}`);
+
+  const docsDir = join(DOCS_SKILL_DIR, "docs");
+  rmSync(docsDir, { recursive: true, force: true });
+
+  const pages = [];
+  let skipped = 0;
+  for (const batch of chunk(paths, 16)) {
+    const fetched = await Promise.all(batch.map((path) => fetchDocsPage(sha, path)));
+    for (const page of fetched) {
+      if (!page) continue;
+      if (isNavStub(page.content)) {
+        skipped++;
+        continue;
+      }
+      const target = join(docsDir, page.rel);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, page.content);
+      pages.push(docsPageMeta(page));
+    }
+  }
+  if (pages.length === 0) {
+    yell("Every page failed to download — leaving the skill untouched.");
+    return;
+  }
+
+  writeDocsIndex(pages, sha);
+  writeFileSync(
+    join(DOCS_SKILL_DIR, "docs.lock.json"),
+    JSON.stringify({ source: `${DOCS_OWNER}/${DOCS_REPO}`, path: DOCS_CONTENT_PATH, sha, files: pages.length }, null, 2) + "\n",
+  );
+  say(`\nVendored ${pages.length} page(s) into ${docsDir} (${skipped} navigation stub(s) skipped); indexed in INDEX.md, pinned in docs.lock.json.`);
 }
 
 /**
@@ -537,4 +603,128 @@ function githubHeaders() {
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
+}
+
+function readDocsLock() {
+  const file = join(DOCS_SKILL_DIR, "docs.lock.json");
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+// One recursive tree listing beats 162 contents calls, and keeps us off the
+// tarball — the docs repo carries ~760MB of screenshots we never want.
+async function listDocsPaths(sha) {
+  const url = `https://api.github.com/repos/${DOCS_OWNER}/${DOCS_REPO}/git/trees/${sha}?recursive=1`;
+  const res = await fetch(url, { headers: githubHeaders() });
+  if (!res.ok) {
+    yell(`GitHub API ${res.status} listing ${DOCS_OWNER}/${DOCS_REPO}@${sha.slice(0, 8)}`);
+    return [];
+  }
+  const data = await res.json();
+  if (data.truncated) yell("GitHub truncated the tree listing — some pages may be missing.");
+  return (data.tree ?? [])
+    .filter((node) => node.type === "blob")
+    .map((node) => node.path)
+    .filter((path) => path.startsWith(`${DOCS_CONTENT_PATH}/`))
+    .filter((path) => /\.mdx?$/.test(path))
+    .filter((path) => !isExcludedDocsPath(path))
+    .sort();
+}
+
+// Retired drafts and the stray "<name> copy" folders left by the docs authors.
+function isExcludedDocsPath(path) {
+  const segments = path.split("/");
+  if (segments.includes("not-in-use")) return true;
+  return segments.some((segment) => segment.endsWith(" copy"));
+}
+
+async function fetchDocsPage(sha, path) {
+  const url = `https://raw.githubusercontent.com/${DOCS_OWNER}/${DOCS_REPO}/${sha}/${path}`;
+  const res = await fetch(url, { headers: { "User-Agent": "testeiya-vendor-skills" } });
+  if (!res.ok) {
+    yell(`  ! ${res.status} ${path}`);
+    return null;
+  }
+  return { rel: path.slice(DOCS_CONTENT_PATH.length + 1), content: await res.text() };
+}
+
+// A section landing page is often just `<DirectoryLinks directory="..." />`,
+// which carries no answer — indexing it only adds noise.
+function isNavStub(content) {
+  const prose = docsBody(content)
+    .replace(/^import .*$/gm, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+  return prose.length < 40;
+}
+
+function docsPageMeta(page) {
+  const fm = docsFrontmatter(page.content);
+  let title = fm?.title?.toString().trim();
+  if (!title) title = prettifyCategory(basename(page.rel).replace(/\.mdx?$/, ""));
+  let description = fm?.description?.toString().replace(/\s+/g, " ").trim() ?? "";
+  if (description.length > 160) description = `${description.slice(0, 157).trimEnd()}...`;
+  return { rel: page.rel, title, description, url: docsUrl(page.rel, fm) };
+}
+
+function docsUrl(rel, fm) {
+  const declared = fm?.url?.toString().trim();
+  if (declared) return declared;
+  const slug = rel.replace(/\.mdx?$/, "").replace(/(^|\/)index$/, "");
+  return `${DOCS_SITE_URL}/${slug}`;
+}
+
+function docsFrontmatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return null;
+  try {
+    return parseYaml(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function docsBody(content) {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
+}
+
+function writeDocsIndex(pages, sha) {
+  const bySection = new Map();
+  for (const page of pages) {
+    const section = page.rel.includes("/") ? page.rel.split("/")[0] : "(root)";
+    if (!bySection.has(section)) bySection.set(section, []);
+    bySection.get(section).push(page);
+  }
+
+  const lines = [
+    "# Testomat.io documentation index",
+    "",
+    `${pages.length} pages vendored from https://github.com/${DOCS_OWNER}/${DOCS_REPO} (\`${DOCS_CONTENT_PATH}\`) at commit \`${sha}\`.`,
+    "",
+    "Every file listed below lives under `docs/` next to this index. Grep this file for a term,",
+    "then read the matching page. Cite the public URL, never the local path.",
+    "",
+    "Format: `` `<file>` — **Title** — <public URL> — description ``",
+    "",
+  ];
+  for (const section of [...bySection.keys()].sort()) {
+    lines.push(`## ${section}`, "");
+    for (const page of bySection.get(section).sort((a, b) => a.rel.localeCompare(b.rel))) {
+      let line = `- \`${page.rel}\` — **${page.title}** — ${page.url}`;
+      if (page.description) line += ` — ${page.description}`;
+      lines.push(line);
+    }
+    lines.push("");
+  }
+  writeFileSync(join(DOCS_SKILL_DIR, "INDEX.md"), lines.join("\n"));
+}
+
+function chunk(items, size) {
+  const batches = [];
+  for (let i = 0; i < items.length; i += size) batches.push(items.slice(i, i + size));
+  return batches;
 }

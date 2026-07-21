@@ -22,3 +22,8 @@ Rules:
   load-order dedupe — avoid reusing external names; `bunosh skills:update`
   warns on collisions.
 - Check the result with `bunosh skills:list` (this folder shows as internal).
+
+One exception to "hand-authored": `testomatio-docs/` carries generated data.
+Its `SKILL.md` is source and safe to edit, but `docs/`, `INDEX.md` and
+`docs.lock.json` are written by `bunosh docs:update` (re-run on release) from
+github.com/testomatio/docs — edit those upstream, not here.

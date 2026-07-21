@@ -11,7 +11,12 @@
 const MAX_BODY = 2000;
 // Streaming chunk events fire hundreds of times per turn — they're content, not
 // state, and would drown out everything useful. The heartbeat is just as noisy.
-const SKIP_EVENTS = new Set(["text-delta", "reasoning-delta", "ping"]);
+const SKIP_EVENTS = new Set([
+  "text-delta",
+  "reasoning-delta",
+  "tool-output-partial",
+  "ping",
+]);
 
 let sink: Sink | null = null;
 let seq = 0;

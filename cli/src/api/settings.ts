@@ -3,7 +3,13 @@ import { HOME_DIR } from "../project-dir.js";
 import { mkdirSync } from "node:fs";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { loadConfig } from "../config.js";
-import { readUserEnvText, saveUserEnvText } from "../user-env.js";
+import { getSession } from "../session-store.js";
+import {
+  readUserEnvText,
+  saveUserEnvText,
+  readProjectEnvText,
+  saveProjectEnvText,
+} from "../user-env.js";
 
 /**
  * Settings API for the desktop app — lets the user supply the LLM provider
@@ -63,18 +69,33 @@ export async function settingsPost(request: Request): Promise<Response> {
 }
 
 /**
- * ENV Variables — raw `KEY=value` text the user manages in Settings, persisted
- * to `~/.testeiya/.env`. GET returns the current file (or a default template);
- * POST saves it and applies the vars to the process so agent bash commands and
- * the next session's provider-key resolution pick them up. Values are stored in
- * a local file the user controls, so unlike provider keys they round-trip here.
+ * ENV Variables — raw `KEY=value` text the user manages in Settings, in two
+ * scopes. Global (default): `~/.testeiya/.env`; saving applies the vars to the
+ * process so agent bash commands and the next session's provider-key resolution
+ * pick them up. Project (`?scope=project` + `session`): the workspace's
+ * `.testeiya/.env`, resolved via the session's cwd; it only reaches that
+ * workspace's shell commands (see shell-env.ts), never the server process.
+ * Values are stored in local files the user controls, so unlike provider keys
+ * they round-trip here.
  */
-export function settingsEnvGet(): Response {
-  return Response.json({ env: readUserEnvText() });
+export function settingsEnvGet(request: Request): Response {
+  const url = new URL(request.url);
+  if (url.searchParams.get("scope") !== "project") {
+    return Response.json({ env: readUserEnvText(), scope: "global" });
+  }
+  const sessionId = url.searchParams.get("session");
+  if (!sessionId) {
+    return Response.json({ error: "session required" }, { status: 400 });
+  }
+  const session = getSession(sessionId);
+  if (!session) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+  return Response.json({ env: readProjectEnvText(session.cwd), scope: "project" });
 }
 
 export async function settingsEnvPost(request: Request): Promise<Response> {
-  let body: { env?: string };
+  let body: { env?: string; scope?: string; session?: string };
   try {
     body = await request.json();
   } catch {
@@ -83,6 +104,17 @@ export async function settingsEnvPost(request: Request): Promise<Response> {
   if (typeof body.env !== "string") {
     return Response.json({ error: "env is required" }, { status: 400 });
   }
-  const keys = saveUserEnvText(body.env);
-  return Response.json({ ok: true, keys });
+  if (body.scope !== "project") {
+    const keys = saveUserEnvText(body.env);
+    return Response.json({ ok: true, keys });
+  }
+  if (!body.session) {
+    return Response.json({ error: "session required" }, { status: 400 });
+  }
+  const session = getSession(body.session);
+  if (!session) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+  saveProjectEnvText(session.cwd, body.env);
+  return Response.json({ ok: true });
 }

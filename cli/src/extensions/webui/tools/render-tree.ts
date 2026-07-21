@@ -34,6 +34,14 @@ export const renderTreeTool: ToolDefinition = {
             ],
             { description: "'suite'/'folder' have children; 'test'/'file' are leaves." }
           ),
+          status: Type.Optional(
+            Type.String({
+              description:
+                "Optional run status for this node (e.g. 'passed', 'failed', " +
+                "'skipped', 'pending'). Renders a colored status mark next to " +
+                "the node — use it to show each test's latest result in place.",
+            })
+          ),
           id: Type.Optional(Type.String()),
           path: Type.Optional(Type.String()),
           children: Type.Optional(Type.Array(Type.Any())),

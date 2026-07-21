@@ -116,6 +116,15 @@ export const WIDGET_DEFS: Record<string, WidgetDef> = {
       },
     ],
   },
+  "file-edit": {
+    kind: "file-edit",
+    description:
+      "A workspace file the user has open in the editor — the `path` field names " +
+      "it. Treat that file as the subject of the user's message when they say " +
+      "\"this file\", \"this test\", or \"here\". `get()` returns its live editor " +
+      "contents, including edits the user has not saved yet.",
+    actions: [],
+  },
   "manual-run": {
     kind: "manual-run",
     description:
@@ -232,6 +241,8 @@ export function serializeActiveWidget(
   if (!def) return null;
 
   const lines = [`id: ${descriptor.key}`, `kind: ${kind} — ${def.description}`];
+  const path = widgetFilePath(descriptor);
+  if (path) lines.push(`path: ${path}`);
   if (extra?.id) lines.push(`item id: ${extra.id}`);
   if (extra?.title) lines.push(`title: ${extra.title}`);
   if (extra?.state) lines.push(`state: ${extra.state}`);
@@ -253,6 +264,8 @@ export function widgetContextLabel(
 ): string | null {
   const kind = extra?.kind ?? widgetKindFor(descriptor);
   if (!kind || !descriptor || !WIDGET_DEFS[kind]) return null;
+  const path = widgetFilePath(descriptor);
+  if (path) return path.split("/").pop() ?? path;
   let label = CONTEXT_LABELS[kind] ?? WIDGET_DEFS[kind].description;
   if (extra?.id) label += ` #${extra.id}`;
   if (extra?.title) label += `: ${extra.title}`;
@@ -269,6 +282,17 @@ const CONTEXT_LABELS: Record<string, string> = {
   "run-item": "Run",
   "manual-run": "Manual run",
 };
+
+/** The workspace path a file-edit widget refers to — the open editor's file, or
+ *  the target of the agent's own write/edit tool call. */
+function widgetFilePath(descriptor: WidgetDescriptor): string | null {
+  if (descriptor.source === "file") return descriptor.path;
+  if (descriptor.source !== "tool") return null;
+  const input = descriptor.input as { file_path?: unknown; path?: unknown } | null;
+  const value = input?.file_path ?? input?.path;
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value;
+}
 
 function formatAction(action: WidgetActionDef): string {
   const sig = (action.params ?? [])

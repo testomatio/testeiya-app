@@ -159,16 +159,24 @@ function readDir(
     if (committed.has(childRel)) file.committed = true;
     // Expand `*.test.md` into its tests (one per `<!-- test` marker) so the
     // sidebar tree can drill into each test and scroll to it in the editor. The
-    // suite id (when present) lets the UI pull/push this one suite.
+    // suite id (when present) lets the UI pull/push this one suite. A pulled
+    // suite mixes manual and automated tests; `testType` distinguishes them.
     if (TEST_MD_RE.test(entry.name)) {
       const suite = readSuite(childAbs);
       if (suite.id) file.suiteId = suite.id;
       if (suite.emoji) file.emoji = suite.emoji;
       const tests: TreeNode[] = [];
-      for (const title of suite.titles) {
+      for (const test of suite.tests) {
         if (state.count >= MAX_NODES) break;
         state.count++;
-        tests.push({ name: title, kind: "test", path: childRel, anchor: title, suiteId: suite.id ?? undefined });
+        tests.push({
+          name: test.title,
+          kind: "test",
+          path: childRel,
+          anchor: test.title,
+          testType: test.type,
+          suiteId: suite.id ?? undefined,
+        });
       }
       if (tests.length > 0) file.children = tests;
     }
@@ -200,30 +208,49 @@ function isInsideFocus(p: string, focusAbs: string | null): boolean {
   return isAncestorOrEqual(focusAbs, p);
 }
 
-/** The suite id (`@S…`) and each test title of a `*.test.md` in a single read. */
-function readSuite(absFile: string): { id: string | null; emoji: string | null; titles: string[] } {
+/** The suite id (`@S…`) and each test (title + state) of a `*.test.md` in a single read. */
+function readSuite(absFile: string): Suite {
   let content: string;
   try {
     content = fs.readFileSync(absFile, "utf8");
   } catch {
-    return { id: null, emoji: null, titles: [] };
+    return { id: null, emoji: null, tests: [] };
   }
   const id = suiteId(content);
   const emoji = suiteEmoji(content);
-  const titles: string[] = [];
+  const tests: SuiteTest[] = [];
   let armed = false;
+  let type: TestState = "manual";
   for (const line of content.split("\n")) {
     if (/^<!--\s*test\b/.test(line)) {
       armed = true;
+      type = "manual";
       continue;
     }
     if (!armed) continue;
+    if (/^type:\s*automated\s*$/.test(line)) {
+      type = "automated";
+      continue;
+    }
     const match = /^#{1,2}\s+(.+?)\s*$/.exec(line);
     if (!match) continue;
-    titles.push(match[1]);
+    tests.push({ title: match[1], type });
     armed = false;
   }
-  return { id: id ? `@S${id}` : null, emoji, titles };
+  return { id: id ? `@S${id}` : null, emoji, tests };
+}
+
+type TestState = "manual" | "automated";
+
+interface SuiteTest {
+  title: string;
+  type: TestState;
+}
+
+interface Suite {
+  id: string | null;
+  emoji: string | null;
+  tests: SuiteTest[];
 }
 
 interface TreeNode {
@@ -231,6 +258,7 @@ interface TreeNode {
   kind: "folder" | "file" | "test";
   path: string; // relative to session.cwd
   anchor?: string;
+  testType?: TestState; // the `type:` of a test block — drives the Manual/Automated split
   suiteId?: string; // `@S…` when the file/test belongs to a pushed suite
   emoji?: string; // suite icon from the `<!-- suite` block's `emoji:` field
   status?: FileStatus; // "created" | "changed" since the last Testomat.io sync

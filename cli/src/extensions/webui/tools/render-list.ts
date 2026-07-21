@@ -60,6 +60,14 @@ export const renderListTool: ToolDefinition = {
           "Optional short caption shown inside the card above the table.",
       })
     ),
+    group_by: Type.Optional(
+      Type.String({
+        description:
+          "Split the rows into labelled sections by this field. For a `tests` " +
+          "list pass 'status' to group by latest run status — each section gets " +
+          "a colored status mark and a count. Tests only; ignored for other kinds.",
+      })
+    ),
   }),
   async execute(_toolCallId, params) {
     const p = params as { kind?: string; data?: unknown; summary?: string };

@@ -6,6 +6,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { RenderKindIcon } from "@/components/icons";
 import { Icon } from "@/lib/icons";
@@ -18,8 +23,9 @@ import {
   XCircleIcon,
 } from "@/lib/icons";
 import type { ComponentProps, ReactNode } from "react";
-import { isValidElement, useState } from "react";
+import { isValidElement, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Ansi from "ansi-to-react";
 
 import { CodeBlock } from "./code-block";
 
@@ -159,6 +165,120 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
   </div>
 );
 
+const TERMINAL_TAIL_LINES = 10;
+
+export type ToolTerminalProps = ComponentProps<"div"> & {
+  output: string;
+  /** The executed command — rendered as a `$`-prefixed prompt line above the
+   *  output, so the block reads like a real terminal session. */
+  command?: string;
+  /** Full tool input; every param except `command` (and the model's `_i`
+   *  intent label) is tucked behind an ⓘ badge on the prompt line. */
+  info?: Record<string, unknown>;
+  isStreaming?: boolean;
+};
+
+/**
+ * Terminal-style view for command output: ANSI colors preserved, collapsed to
+ * the last TERMINAL_TAIL_LINES lines by default, expandable to the full
+ * buffer. While streaming it follows the tail. Streamed partials carry the
+ * whole accumulated tail each time, so `output` is replaced, never appended.
+ */
+export const ToolTerminal = ({
+  output,
+  command,
+  info,
+  isStreaming,
+  className,
+  ...props
+}: ToolTerminalProps) => {
+  const [expanded, setExpanded] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lines = output.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n");
+  const visible = expanded ? lines : lines.slice(-TERMINAL_TAIL_LINES);
+  const hasOutput = output.trim().length > 0;
+  const infoEntries = Object.entries(info ?? {}).filter(
+    ([key, value]) => key !== "command" && key !== "_i" && value != null
+  );
+
+  useEffect(() => {
+    if (!isStreaming || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [output, isStreaming, expanded]);
+
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-md bg-zinc-950 text-zinc-100",
+        className
+      )}
+      {...props}
+    >
+      {command && (
+        <div
+          className={cn(
+            "flex items-start gap-2 px-3 py-2",
+            (hasOutput || isStreaming) && "border-b border-zinc-800"
+          )}
+        >
+          <pre className="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+            <span className="select-none text-zinc-500">$ </span>
+            {command}
+          </pre>
+          {infoEntries.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Command parameters"
+                    className="shrink-0 text-zinc-500 transition-colors hover:text-zinc-100"
+                  >
+                    <Icon name="info" className="size-3.5" />
+                  </button>
+                }
+              />
+              <TooltipContent>
+                <div className="space-y-0.5 font-mono text-xs">
+                  {infoEntries.map(([key, value]) => (
+                    <div key={key}>
+                      <span className="opacity-70">{key}:</span>{" "}
+                      {typeof value === "object"
+                        ? JSON.stringify(value)
+                        : String(value)}
+                    </div>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      )}
+      {(hasOutput || isStreaming) && (
+        <div ref={scrollRef} className={cn("overflow-auto p-3", expanded && "max-h-96")}>
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+            <Ansi>{visible.join("\n")}</Ansi>
+            {isStreaming && (
+              <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-zinc-100" />
+            )}
+          </pre>
+        </div>
+      )}
+      {lines.length > TERMINAL_TAIL_LINES && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full border-t border-zinc-800 px-3 py-1.5 text-left text-[11px] text-zinc-400 transition-colors hover:text-zinc-100"
+        >
+          {expanded
+            ? `Show last ${TERMINAL_TAIL_LINES} lines`
+            : `Show all ${lines.length} lines`}
+        </button>
+      )}
+    </div>
+  );
+};
+
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ToolPart["output"];
   errorText: ToolPart["errorText"];
@@ -206,14 +326,15 @@ type RichRenderer = (payload: {
   data: unknown;
   summary?: string;
   widgetId?: string;
+  groupBy?: string;
 }) => ReactNode;
 
 const KIND_RENDERERS: Record<string, RichRenderer> = {
   runs: ({ data, summary, widgetId }) => (
     <RunsListRenderer json={data} summary={summary} widgetId={widgetId} />
   ),
-  tests: ({ data, summary, widgetId }) => (
-    <TestsListRenderer json={data} summary={summary} widgetId={widgetId} />
+  tests: ({ data, summary, widgetId, groupBy }) => (
+    <TestsListRenderer json={data} summary={summary} widgetId={widgetId} groupBy={groupBy} />
   ),
   suites: ({ data, summary, widgetId }) => (
     <SuitesListRenderer json={data} summary={summary} widgetId={widgetId} />
@@ -244,15 +365,18 @@ function mcpListKind(toolName?: string): string | null {
 
 /**
  * How should this tool's rich view be laid out in the chat?
- *  - `"below"`: keep the tool card visible, put the rich block below it
- *    (used for auto-rendered MCP `*_list` tool output)
  *  - `"inline"`: skip the tool card entirely, just show the rich block
  *    (used for explicit `render_*` tools + the agent's `write`/`edit`)
  *  - `null`: no rich view, render the normal tool card only
+ *
+ * MCP `*_list` results deliberately get NO rich view of their own — showing
+ * data to the user is the agent's explicit `render_list` call. They render as
+ * collapsed routine cards; `renderRichTool` still parses them so the expanded
+ * card can show the table instead of raw JSON.
  */
 export function richViewMode(
   toolName?: string
-): "below" | "inline" | null {
+): "inline" | null {
   if (
     toolName === "render_list" ||
     toolName === "render_tree" ||
@@ -262,7 +386,6 @@ export function richViewMode(
   ) {
     return "inline";
   }
-  if (mcpListKind(toolName)) return "below";
   return null;
 }
 
@@ -360,11 +483,11 @@ export function renderRichTool(
   if (isRenderTool(toolName)) {
     const fromInput =
       input && typeof input === "object"
-        ? (input as { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown })
+        ? (input as { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; group_by?: string })
         : null;
     const fromOutput = !fromInput
       ? (parseMcpOutput(output) as
-          | { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown }
+          | { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; group_by?: string }
           | null)
       : null;
     const payload = fromInput ?? fromOutput;
@@ -394,12 +517,17 @@ export function renderRichTool(
     const renderer = KIND_RENDERERS[payload.kind];
     if (!renderer) return null;
     return {
-      body: renderer({ data: payload.data, summary: payload.summary, widgetId }),
+      body: renderer({
+        data: payload.data,
+        summary: payload.summary,
+        widgetId,
+        groupBy: payload.group_by,
+      }),
       header: deriveHeader(toolName, payload),
     };
   }
 
-  // MCP `*_list` — auto-render output as the matching kind.
+  // MCP `*_list` — parse output into the matching table for the expanded card.
   const kind = mcpListKind(toolName);
   if (!kind) return null;
   const renderer = KIND_RENDERERS[kind];

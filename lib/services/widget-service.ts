@@ -112,8 +112,9 @@ export class WidgetService {
       this.show({ source: "resource", key, resource });
       return;
     }
-    if (this.root.workspace.openFile) {
-      this.show({ source: "file", key });
+    const file = this.root.workspace.openFile;
+    if (file) {
+      this.show({ source: "file", key, path: file.path });
       return;
     }
     this.show({ source: "search", key });
@@ -130,5 +131,5 @@ export type WidgetDescriptor =
     }
   | { source: "resource"; key: string; resource: ProjectResource }
   | { source: "manual-run"; key: string }
-  | { source: "file"; key: string }
+  | { source: "file"; key: string; path: string }
   | { source: "search"; key: string };

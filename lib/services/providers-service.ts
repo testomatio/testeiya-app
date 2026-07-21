@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { getJson, postJson } from "./http";
 import type {
   Current,
+  EnvScope,
   LoginState,
   ProviderInfo,
   ProviderModel,
@@ -29,8 +30,9 @@ export class ProvidersService {
   thinkingLevels: ThinkingLevel[] = [];
   /** Set after a sign-in auto-selects a provider — surfaces a "reload" banner. */
   applied: Current | null = null;
-  /** Raw `KEY=value` env text (Settings → ENV Variables), saved to ~/.testeiya/.env. */
-  envVars = "";
+  /** Raw `KEY=value` env text (Settings → ENV Variables), one per scope. */
+  globalEnv = "";
+  projectEnv = "";
   /** Providers & Models dialog visibility — openable from the chat input, the
    * error banner, and the Settings section. */
   dialogOpen = false;
@@ -141,16 +143,35 @@ export class ProvidersService {
   async loadEnv(): Promise<void> {
     const data = await getJson<{ env?: string }>("/api/settings/env");
     runInAction(() => {
-      this.envVars = data.env ?? "";
+      this.globalEnv = data.env ?? "";
+    });
+    if (!this.root.sessionId) return;
+    const proj = await getJson<{ env?: string }>(
+      `/api/settings/env?scope=project&session=${encodeURIComponent(this.root.sessionId)}`
+    );
+    runInAction(() => {
+      this.projectEnv = proj.env ?? "";
     });
   }
 
-  async saveEnv(text: string): Promise<void> {
-    await postJson("/api/settings/env", { env: text });
+  async saveEnv(scope: EnvScope, text: string): Promise<void> {
+    const body: { env: string; scope: EnvScope; session?: string } = {
+      env: text,
+      scope,
+    };
+    if (scope === "project") {
+      if (!this.root.sessionId) throw new Error("No active session");
+      body.session = this.root.sessionId;
+    }
+    await postJson("/api/settings/env", body);
     runInAction(() => {
-      this.envVars = text;
+      if (scope === "global") {
+        this.globalEnv = text;
+        return;
+      }
+      this.projectEnv = text;
     });
-    toast.success("Environment variables saved — applies on next session");
+    toast.success("Environment variables saved");
   }
 
   async logout(provider: string): Promise<void> {

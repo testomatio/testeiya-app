@@ -31,6 +31,37 @@ const sampleTree = [
   { name: "README.md", kind: "file", id: "f-readme" },
 ];
 
+const statusTree = [
+  {
+    name: "Passed",
+    kind: "suite",
+    status: "passed",
+    id: "g-passed",
+    children: [
+      { name: "Valid credentials", kind: "test", status: "passed", id: "t-valid" },
+      { name: "Full refund within 30 days", kind: "test", status: "passed", id: "t-refund" },
+    ],
+  },
+  {
+    name: "Failed",
+    kind: "suite",
+    status: "failed",
+    id: "g-failed",
+    children: [
+      { name: "Pay with gift card", kind: "test", status: "failed", id: "t-gift" },
+    ],
+  },
+  {
+    name: "Skipped",
+    kind: "suite",
+    status: "skipped",
+    id: "g-skipped",
+    children: [
+      { name: "Locked account", kind: "test", status: "skipped", id: "t-locked" },
+    ],
+  },
+];
+
 const meta = {
   title: "Widget/TreeOutputRenderer",
   component: TreeOutputRenderer,
@@ -41,6 +72,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const WithStatuses: Story = {
+  args: { json: statusTree },
+};
 
 export const Empty: Story = {
   args: { json: [] },

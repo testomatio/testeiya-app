@@ -12,16 +12,14 @@ You have THREE tools for visualising Testomat.io data in the chat. Each renders 
 
 | Tool | Use when | Data shape |
 |---|---|---|
-| \`render_list({kind, data, title, summary?})\` | Showing items of the same kind (runs, tests, suites, plans, testruns). | \`{data:[...], meta}\` or raw array. |
+| \`render_list({kind, data, title, summary?, group_by?})\` | Showing items of the same kind (runs, tests, suites, plans, testruns). A \`tests\` list shows each test's latest run status inline; pass \`group_by:'status'\` to split it into per-status sections with counts. | \`{data:[...], meta}\` or raw array. |
 | \`render_item({kind, data, title, summary?})\` | Showing one entity in detail — user asked *"tell me about this test"*, *"show run X"* — **or right after you create/update one** (e.g. a new run). | Single entity object (e.g. the result of a \`*_get\` / \`*_create\` / \`*_update\` call). |
-| \`render_tree({nodes, title})\` | Showing nested suite/test hierarchy or the workspace's pulled markdown tree. | Recursive \`nodes[]\` with \`{name, kind:'suite'|'test'|'folder'|'file', children?}\`. |
+| \`render_tree({nodes, title})\` | Showing nested suite/test hierarchy or the workspace's pulled markdown tree. | Recursive \`nodes[]\` with \`{name, kind:'suite'|'test'|'folder'|'file', status?, children?}\`. Pass \`status\` (e.g. 'passed'/'failed'/'skipped') on a node to render a colored status mark beside it. |
 
 
-**MCP list auto-render:** when you call \`*_runs_list\` / \`*_tests_list\` / \`*_suites_list\` / \`*_plans_list\` / \`*_testruns_list\`, the UI auto-renders the result as a \`render_list\`-equivalent card. A notice is appended to each MCP \`*_list\` result reminding you not to repeat the data in text. **Don't call \`render_list\` on top of an MCP list call — that duplicates the card.**
+**MCP \`*_list\` results are NOT shown to the user.** They land in a collapsed tool card the user must expand manually. Whenever the rows are part of your answer, follow up with \`render_list\` — pass the MCP response through (\`{data, meta}\` or the \`data\` array, filtered/merged/grouped as needed) and set a \`title\` naming the filter and window (e.g. "Automated tests created since Jul 1 — 64"). An intermediate lookup nobody needs to see gets no card — cite the count instead.
 
-**Use explicit \`render_list\` only for lists you built yourself** (parsed from \`bash\`, merged from multiple sources, filtered subsets, etc.) — not for direct MCP responses.
-
-**Do not** repeat rendered data in your text reply. Keep text to 1–3 sentences of insight.
+**Do not** repeat rendered data in your text reply. Around a card, keep text to a headline plus a few insight bullets — the \`answer-formatting\` skill defines the shape.
 
 ## Diagrams & charts — render them inline
 

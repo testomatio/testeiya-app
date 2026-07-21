@@ -39,10 +39,10 @@ const RENDER_TOOLS = new Set(["render_list", "render_tree", "render_item"]);
 
 const LIST_NOTICE =
   "\n\n[UI notice — not part of the data]\n" +
-  "This list was just auto-rendered to the user as a rich interactive table in the chat UI. " +
-  "They can already see every row. " +
-  "Do NOT repeat the list as a markdown table, bullets, or JSON in your reply. " +
-  "Reply with 1–3 sentences of insight only (counts, anomalies, or the specific thing they asked about).";
+  "The user has NOT seen this result — it sits in a collapsed tool card they would have to expand. " +
+  "If these rows are part of your answer, call render_list with them (pass the {data, meta} through, " +
+  "set a title naming the filter and window). " +
+  "Do NOT paste the list as a markdown table, bullets, or JSON in your reply.";
 
 const RENDER_NOTICE =
   "\n\n[UI notice — not part of the data]\n" +
