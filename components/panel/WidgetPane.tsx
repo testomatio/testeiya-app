@@ -79,7 +79,7 @@ export function WidgetPane({
     <aside
       ref={layoutRef}
       className={cn(
-        "relative flex flex-col bg-muted/20",
+        "relative flex flex-col bg-background",
         fill ? "min-w-0 flex-1" : "shrink-0 border-r"
       )}
       style={fill ? undefined : { width }}

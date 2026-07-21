@@ -5,7 +5,7 @@
  * at runtime via `GET /api/providers` — nothing about providers is curated here.
  * This map only attaches a brand logo to a few well-known ids; every other
  * provider falls back to a generic mark. Brand marks are a deliberate exception
- * to the indigo-only palette.
+ * to the violet-only palette.
  *
  * Logos are SVGs in `public/providers/<file>` (served at `/providers/...`).
  */

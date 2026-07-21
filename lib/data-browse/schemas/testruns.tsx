@@ -33,11 +33,13 @@ export function buildTestrunsSchema(opts: {
     title: col
       .string()
       .label("Test")
+      .icon("science")
       .size(420)
       .display("custom", { cell: (_v, row) => <TestRunTitleCell tr={row as TestRun} /> }),
     status: col
       .enum(TESTRUN_STATUSES)
       .label("Status")
+      .icon("check_circle")
       .defaultOpen()
       .size(140)
       .display("custom", { cell: (_v, row) => <TestRunStatusCell tr={row as TestRun} /> }),
@@ -53,12 +55,13 @@ export function buildTestrunsSchema(opts: {
       .notFilterable()
       .size(140)
       .display("custom", { cell: (_v, row) => <EnvCell tr={row as TestRun} /> }),
-    kind: col.enum(TESTRUN_KINDS).label("Kind").hidden(),
-    priority: col.enum(PRIORITIES).label("Priority").hidden(),
-    defects: col.enum(DEFECTS).label("Defects").hidden(),
+    kind: col.enum(TESTRUN_KINDS).label("Kind").icon("category").hidden(),
+    priority: col.enum(PRIORITIES).label("Priority").icon("flag").hidden(),
+    defects: col.enum(DEFECTS).label("Defects").icon("bug_report").hidden(),
     envs: col
       .array(col.enum(opts.environments))
       .label("Environments")
+      .icon("cloud")
       .hidden()
       .filterable("checkbox", {
         options: opts.environments.map((e) => ({ label: e, value: e })),
@@ -66,11 +69,13 @@ export function buildTestrunsSchema(opts: {
     labels: col
       .array(col.enum(labelSlugs))
       .label("Labels")
+      .icon("label")
       .hidden()
       .filterable("checkbox", { options: labelOptions }),
     tags: col
       .array(col.enum(opts.tags))
       .label("Tags")
+      .icon("sell")
       .hidden()
       .filterable("checkbox", {
         options: opts.tags.map((t) => ({ label: t, value: t })),
@@ -78,11 +83,12 @@ export function buildTestrunsSchema(opts: {
     rungroups: col
       .array(col.enum(rungroupIds))
       .label("Rungroups")
+      .icon("workspaces")
       .hidden()
       .filterable("checkbox", { options: rungroupOptions }),
-    message: col.boolean().label("Has message").hidden(),
-    link: col.boolean().label("Has linked issue").hidden(),
-    finished_at: col.timestamp().label("Finished").hidden(),
+    message: col.boolean().label("Has message").icon("chat_bubble").hidden(),
+    link: col.boolean().label("Has linked issue").icon("link").hidden(),
+    finished_at: col.timestamp().label("Finished").icon("calendar_month").hidden(),
   });
 
   const filterMap: FilterMap = {
@@ -110,14 +116,18 @@ function TestRunTitleCell({ tr }: { tr: TestRun }) {
   return (
     <div className="flex min-w-0 flex-col justify-center">
       <div className="flex min-w-0 items-center gap-x-2">
-        <RunStatusDot status={tr.status} title={tr.status} />
-        {kind ? <TypeIcon type={kind} /> : null}
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          <RunStatusDot status={tr.status} title={tr.status} />
+        </span>
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          {kind ? <TypeIcon type={kind} /> : null}
+        </span>
         <span className="truncate font-medium" title={String(title)}>
           {title}
         </span>
       </div>
       {tr.suite_title ? (
-        <span className="truncate pl-6 text-xs text-muted-foreground">
+        <span className="truncate pl-14 text-xs text-muted-foreground">
           {tr.suite_title}
         </span>
       ) : null}

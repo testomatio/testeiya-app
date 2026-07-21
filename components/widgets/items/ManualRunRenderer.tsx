@@ -452,7 +452,7 @@ function ManualRunRenderer({
                 })}
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {groups.map((g) => (
                 <div key={g.suite}>
                   <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-muted px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

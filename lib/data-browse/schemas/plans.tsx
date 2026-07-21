@@ -18,11 +18,13 @@ export function buildPlansSchema(opts: {
     title: col
       .string()
       .label("Plan")
+      .icon("assignment")
       .size(420)
       .display("custom", { cell: (_v, row) => <PlanTitleCell plan={row as Plan} /> }),
     labels: col
       .array(col.enum(labelSlugs))
       .label("Labels")
+      .icon("label")
       .size(220)
       .filterable("checkbox", { options: labelOptions })
       .display("custom", { cell: (_v, row) => <LabelsRow labels={(row as Plan).labels} /> }),
@@ -32,8 +34,8 @@ export function buildPlansSchema(opts: {
       .notFilterable()
       .size(200)
       .display("custom", { cell: (_v, row) => <CountsCell plan={row as Plan} /> }),
-    kind: col.enum(PLAN_KINDS).label("Kind").hidden(),
-    hidden: col.boolean().label("Hidden").hidden(),
+    kind: col.enum(PLAN_KINDS).label("Kind").icon("category").hidden(),
+    hidden: col.boolean().label("Hidden").icon("visibility_off").hidden(),
   });
 
   const filterMap: FilterMap = {
@@ -51,11 +53,13 @@ function PlanTitleCell({ plan }: { plan: Plan }) {
   const kind = resolveType({ kind: plan.kind });
   return (
     <div className="flex min-w-0 items-center gap-x-2">
-      {kind ? (
-        <TypeIcon type={kind} />
-      ) : (
-        <ClipboardListIcon className="size-4 shrink-0 text-muted-foreground" />
-      )}
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        {kind ? (
+          <TypeIcon type={kind} />
+        ) : (
+          <ClipboardListIcon className="size-4 text-muted-foreground" />
+        )}
+      </span>
       <span className="truncate font-medium" title={title}>
         {title}
       </span>

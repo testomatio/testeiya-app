@@ -57,6 +57,23 @@ export type DisplayConfig =
       colorMap?: Record<string, string>;
     };
 
+export type TqlOperator =
+  | "eq"
+  | "neq"
+  | "in"
+  | "nin"
+  | "contains"
+  | "gt"
+  | "lt"
+  | "gte"
+  | "lte"
+  | "between";
+
+export type TqlConfig = {
+  field: string;
+  operators?: TqlOperator[];
+};
+
 export type FilterConfig = {
   type: FilterType;
   defaultOpen: boolean;
@@ -83,6 +100,7 @@ export type ColConfig = {
   arrayItem?: ColConfig;
   optional: boolean;
   label: string;
+  icon?: string;
   description?: string;
   display: DisplayConfig;
   size?: number;
@@ -93,6 +111,7 @@ export type ColConfig = {
   sortable: boolean;
   filter: FilterConfig | null;
   sheet: SheetConfig | null;
+  tql?: TqlConfig | null;
 };
 
 /**
@@ -125,6 +144,19 @@ export interface ColBuilder<T, F extends FilterType = FilterType> {
    * col.enum(LEVELS).label("Severity")
    */
   label(text: string): ColBuilder<T, F>;
+
+  /**
+   * Sets the Material Symbols Rounded icon shown next to this column's label
+   * in the filter field picker.
+   *
+   * Takes a ligature name from the Material Symbols set — the same names the
+   * `Icon` primitive in `@/lib/icons` accepts.
+   *
+   * @example
+   * col.string().label("Test").icon("science")
+   * col.enum(PRIORITIES).label("Priority").icon("flag")
+   */
+  icon(name: string): ColBuilder<T, F>;
 
   /**
    * Attaches a human-readable description of the column's domain meaning.
@@ -260,6 +292,19 @@ export interface ColBuilder<T, F extends FilterType = FilterType> {
    * col.string().label("Request ID").notFilterable().hidden()
    */
   notFilterable(): ColBuilder<T, never>;
+
+  /**
+   * Maps this column onto a TQL field, enabling operator selection
+   * (`is` / `is not` / `contains` / …), and/or grouping and the raw TQL editor.
+   *
+   * The operator list is derived from the column kind; pass `operators` to
+   * narrow it when the backend rejects some of them for this field.
+   *
+   * @example
+   * col.string().label("Test").filterable("input").tql("test")
+   * col.enum(PRIORITIES).label("Priority").filterable("checkbox").tql("priority", { operators: ["eq", "neq", "in"] })
+   */
+  tql(field: string, options?: { operators?: TqlOperator[] }): ColBuilder<T, F>;
 
   /**
    * Opens the filter accordion for this column by default in the filter sidebar.

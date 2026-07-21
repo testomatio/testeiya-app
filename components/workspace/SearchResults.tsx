@@ -25,11 +25,11 @@ export const SearchResults = observer(function SearchResults({
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col rounded-md border bg-background",
+        "flex min-h-0 flex-1 flex-col bg-background",
         className
       )}
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Tooltip>
           <TooltipTrigger render={
             <Button

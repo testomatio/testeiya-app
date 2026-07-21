@@ -44,3 +44,6 @@ next-env.d.ts
 # storybook
 /storybook-static
 *storybook.log
+
+# the agent core, developed in its own repo and checked out here
+/testeiya

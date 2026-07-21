@@ -1,4 +1,5 @@
 import { DataTableFilterField } from "@/components/data-table/types";
+import type { TqlField } from "@/lib/data-browse/tql";
 import { ControlsProvider } from "@/components/data-table/controls";
 import type {
   ColumnDef,
@@ -29,6 +30,8 @@ interface DataTableStateContextType {
 interface DataTableBaseContextType<TData = unknown, TValue = unknown> {
   table: Table<TData>;
   filterFields: DataTableFilterField<TData>[];
+  tqlFields?: TqlField[];
+  searchKey?: string;
   columns: ColumnDef<TData, TValue>[];
   isLoading?: boolean;
   totalRows?: number;
@@ -82,6 +85,8 @@ export function DataTableProvider<TData, TValue>({
       props.pagination,
       props.table,
       props.filterFields,
+      props.tqlFields,
+      props.searchKey,
       props.columns,
       props.enableColumnOrdering,
       props.isLoading,

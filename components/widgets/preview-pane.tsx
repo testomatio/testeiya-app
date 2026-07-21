@@ -44,17 +44,17 @@ export function PreviewPane({
         }
       }}
       className={cn(
-        "overflow-hidden rounded-md border bg-card/40 outline-none",
+        "overflow-hidden outline-none",
         className
       )}
     >
-      <div className="flex items-center gap-2 border-b bg-muted/30 px-2 py-1.5">
+      <div className="flex items-center gap-2 border-b px-4 py-1.5">
         <Button
           type="button"
           size="sm"
           variant="ghost"
           onClick={onBack}
-          className="h-6 gap-1 px-2 text-[11px]"
+          className="-ml-2 h-6 gap-1 px-2 text-[11px]"
         >
           <ArrowLeftIcon className="size-3" />
           Back to list
@@ -68,7 +68,7 @@ export function PreviewPane({
           esc
         </span>
       </div>
-      <div className="p-3">{children}</div>
+      <div className="px-4 py-3">{children}</div>
     </div>
   );
 }

@@ -26,14 +26,27 @@ export function useProjectFilterOptions(): ProjectFilterOptions {
       }),
     [store],
   );
-  return useMemo(
-    () => ({
-      environments: info?.environments ?? [],
-      labels: info?.labels ?? [],
-      tags: info?.tags ?? [],
-    }),
-    [info],
+  // `/info` is the only directory for labels, tags and environments, and it
+  // fails on projects whose stored config the backend cannot parse. Labels have
+  // their own endpoint, so read it rather than reporting a project with visible
+  // labels as having none. Tags and environments have no such endpoint — the
+  // checkbox filter falls back to the loaded rows and says so.
+  const { data: labelDefs } = useTestomatio<LabelDefinition[]>(
+    "labels",
+    { per_page: 100 },
+    { skip: Boolean(info?.labels?.length) },
   );
+  return useMemo(() => {
+    let labels = info?.labels ?? [];
+    if (!labels.length && labelDefs?.length) {
+      labels = labelDefs.map((item) => ({ title: item.title, slug: item.id }));
+    }
+    return {
+      environments: info?.environments ?? [],
+      labels,
+      tags: info?.tags ?? [],
+    };
+  }, [info, labelDefs]);
 }
 
 export function useRungroupOptions(enabled: boolean): Option[] {
@@ -69,4 +82,9 @@ interface TreeNode {
   title?: string;
   clean_title?: string;
   children?: TreeNode[];
+}
+
+interface LabelDefinition {
+  id: string;
+  title: string;
 }

@@ -76,17 +76,18 @@
   font-display: swap;
 }
 
-/* Brand palette overrides — Tailwind v4 ships different indigo defaults,
-   so we pin the exact brand hex here so var(--color-indigo-*) is usable. */
+/* Brand palette overrides — Tailwind v4 ships oklch defaults that drift from
+   the design system, so we pin the exact brand hex here so
+   var(--color-violet-*) is usable. */
 @theme {
-  --color-indigo-50:  #eef2ff;
-  --color-indigo-100: #e0e7ff;
-  --color-indigo-200: #c7d2fe;
-  --color-indigo-300: #a5b4fc;
-  --color-indigo-400: #818cf8;
-  --color-indigo-500: #6366f1;
-  --color-indigo-600: #4f46e5;
-  --color-indigo-700: #4338ca;
+  --color-violet-50:  #f5f3ff;
+  --color-violet-100: #ede9fe;
+  --color-violet-200: #ddd6fe;
+  --color-violet-300: #c4b5fd;
+  --color-violet-400: #a78bfa;
+  --color-violet-500: #8b5cf6;
+  --color-violet-600: #7c3aed;
+  --color-violet-700: #6d28d9;
   --color-neutral-400: #a3a3a3;
 }
 
@@ -171,18 +172,19 @@
 }
 
 /*
- * Palette matches the Testomat.io Rails backend (app/assets/stylesheets/
- * tailwind.config.js). Core anchors:
+ * Surfaces follow the Testomat.io Rails backend (app/assets/stylesheets/
+ * tailwind.config.js); the brand accent no longer does — the backend is still
+ * on indigo (primary #6366F1, primaryIndigoFont #cbc4ff) while Testeiya moved
+ * to violet with the new logo. Core anchors:
  *   dark-1000        #121127  page background
  *   dark-900         #252438  cards / popovers
  *   dark-800         #201F33  sidebar / iframe surface
  *   darkOpacity-120  #2F2E41  muted/secondary
- *   indigo (TW-500)  #6366F1  primary (light mode)
- *   indigoDark-700   #818CF8  primary (dark mode)
- *   primaryIndigoFont #cbc4ff  accent-foreground on dark
+ *   violet (TW-500)  #8B5CF6  primary (light mode)
+ *   violet (TW-400)  #A78BFA  primary (dark mode)
  */
 /*
- * Brand palette — neutral (grays) + indigo only. Hex values from the design
+ * Brand palette — neutral (grays) + violet only. Hex values from the design
  * system. Light theme.
  */
 :root {
@@ -192,32 +194,32 @@
   --card-foreground: var(--color-neutral-900);
   --popover: #ffffff;
   --popover-foreground: var(--color-neutral-900);
-  --primary: var(--color-indigo-500);
+  --primary: var(--color-violet-500);
   --primary-foreground: #ffffff;
   --secondary: var(--color-neutral-100);
   --secondary-foreground: var(--color-neutral-900);
   --muted: var(--color-neutral-100);
   --muted-foreground: var(--color-neutral-500);
-  --accent: var(--color-indigo-50);
-  --accent-foreground: var(--color-indigo-600);
+  --accent: var(--color-violet-50);
+  --accent-foreground: var(--color-violet-600);
   --destructive: #ef4444;
   --border: var(--color-neutral-200);
   --input: var(--color-neutral-200);
-  --ring: var(--color-indigo-500);
-  --chart-1: var(--color-indigo-500);
-  --chart-2: #8b5cf6;
+  --ring: var(--color-violet-500);
+  --chart-1: var(--color-violet-500);
+  --chart-2: #d946ef;
   --chart-3: #0ea5e9;
-  --chart-4: var(--color-indigo-400);
-  --chart-5: var(--color-indigo-600);
+  --chart-4: var(--color-violet-400);
+  --chart-5: var(--color-violet-600);
   --radius: 0.625rem;
   --sidebar: var(--color-neutral-50);
   --sidebar-foreground: var(--color-neutral-900);
-  --sidebar-primary: var(--color-indigo-500);
+  --sidebar-primary: var(--color-violet-500);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--color-indigo-50);
-  --sidebar-accent-foreground: var(--color-indigo-600);
+  --sidebar-accent: var(--color-violet-50);
+  --sidebar-accent-foreground: var(--color-violet-600);
   --sidebar-border: var(--color-neutral-200);
-  --sidebar-ring: var(--color-indigo-500);
+  --sidebar-ring: var(--color-violet-500);
   /* Status surfaces (light mode — pale tint from TW's 100/700 pair). */
   --status-success: oklch(0.94 0.08 155);
   --status-success-foreground: oklch(0.42 0.15 155);
@@ -247,7 +249,7 @@
   --info: #0ea5e9;
 }
 
-/* Dark theme — neutral-900 base + indigo accent. */
+/* Dark theme — neutral-900 base + violet accent. */
 .dark {
   --background: var(--color-neutral-900);
   --foreground: var(--color-neutral-50);
@@ -255,7 +257,7 @@
   --card-foreground: var(--color-neutral-50);
   --popover: var(--color-neutral-800);
   --popover-foreground: var(--color-neutral-50);
-  --primary: var(--color-indigo-500);
+  --primary: var(--color-violet-500);
   --primary-foreground: #ffffff;
   --secondary: var(--color-neutral-700);
   --secondary-foreground: var(--color-neutral-50);
@@ -266,20 +268,20 @@
   --destructive: #f87171;
   --border: var(--color-neutral-700);
   --input: var(--color-neutral-700);
-  --ring: var(--color-indigo-500);
-  --chart-1: var(--color-indigo-400);
-  --chart-2: #a78bfa;
+  --ring: var(--color-violet-500);
+  --chart-1: var(--color-violet-400);
+  --chart-2: #e879f9;
   --chart-3: #38bdf8;
-  --chart-4: var(--color-indigo-500);
+  --chart-4: var(--color-violet-500);
   --chart-5: #c4b5fd;
   --sidebar: var(--color-neutral-800);
   --sidebar-foreground: var(--color-neutral-50);
-  --sidebar-primary: var(--color-indigo-500);
+  --sidebar-primary: var(--color-violet-500);
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: var(--color-neutral-700);
   --sidebar-accent-foreground: var(--color-neutral-50);
   --sidebar-border: var(--color-neutral-700);
-  --sidebar-ring: var(--color-indigo-500);
+  --sidebar-ring: var(--color-violet-500);
   /* Status surfaces — backend's notify palette:
      successNotify #234144, errorNotify #412233, warningNotify #41392C,
      infoNotify #1E2D52. Muted backgrounds that sit well over dark-1000. */
@@ -329,12 +331,12 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Brand selection — indigo tint. */
+  /* Brand selection — violet tint. */
   ::selection {
-    @apply bg-indigo-100 text-indigo-900;
+    @apply bg-violet-100 text-violet-900;
   }
   .dark ::selection {
-    @apply bg-indigo-900 text-indigo-100;
+    @apply bg-violet-900 text-violet-100;
   }
 
   /* Heading scale (THICCCBOI). Compact per brand: H1 24px → H6 14px. These are
@@ -355,12 +357,12 @@
   h5 {
     @apply text-base font-semibold text-foreground;
   }
-  /* H6 is the brand "eyebrow": uppercase, wide tracking, indigo. */
+  /* H6 is the brand "eyebrow": uppercase, wide tracking, violet. */
   h6 {
-    @apply text-sm font-bold uppercase tracking-widest text-indigo-600;
+    @apply text-sm font-bold uppercase tracking-widest text-violet-600;
   }
   .dark h6 {
-    @apply text-indigo-400;
+    @apply text-violet-400;
   }
 }
 

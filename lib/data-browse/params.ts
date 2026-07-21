@@ -24,13 +24,16 @@ export type QueryParams = Record<string, string | string[]>;
 export function buildParams(
   state: Record<string, unknown>,
   map: FilterMap,
+  opts?: { skip?: string[] },
 ): QueryParams {
   const params: QueryParams = {};
 
   const raw = typeof state.q === "string" ? state.q.trim() : "";
   if (raw) params.tql = raw.replace(/^=/, "").trim();
 
+  const skip = new Set(opts?.skip ?? []);
   for (const [key, spec] of Object.entries(map)) {
+    if (skip.has(key)) continue;
     const value = state[key];
     if (value == null) continue;
     nativeParam(params, spec, value);

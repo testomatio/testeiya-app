@@ -14,7 +14,7 @@ import {
   DataTableCellTimestamp,
 } from "@/components/data-table/data-table-cell";
 
-const INDIGO = "#6366f1";
+const VIOLET = "#8b5cf6";
 const sampleDate = new Date("2026-04-21T10:12:33Z");
 
 const meta = {
@@ -29,7 +29,7 @@ type Story = StoryObj<typeof meta>;
 export const Badge: Story = {
   render: () => (
     <div className="flex items-center gap-2 text-sm">
-      <DataTableCellBadge value="GET" color={INDIGO} />
+      <DataTableCellBadge value="GET" color={VIOLET} />
       <DataTableCellBadge value="POST" color="#22c55e" />
       <DataTableCellBadge value={404} color="#ef4444" />
       <DataTableCellBadge value="regression" />
@@ -41,10 +41,10 @@ export const Bar: Story = {
   render: () => (
     <div className="flex w-48 flex-col gap-3 text-sm">
       <div className="rounded-md border p-2">
-        <DataTableCellBar value={42} min={0} max={200} unit="ms" color={INDIGO} />
+        <DataTableCellBar value={42} min={0} max={200} unit="ms" color={VIOLET} />
       </div>
       <div className="rounded-md border p-2">
-        <DataTableCellBar value={128} min={0} max={200} unit="ms" color={INDIGO} />
+        <DataTableCellBar value={128} min={0} max={200} unit="ms" color={VIOLET} />
       </div>
       <div className="rounded-md border p-2">
         <DataTableCellBar value={200} min={0} max={200} unit="ms" />
@@ -58,7 +58,7 @@ export const Boolean: Story = {
     <div className="flex w-16 flex-col gap-2 text-sm">
       <DataTableCellBoolean value={true} />
       <DataTableCellBoolean value={false} />
-      <DataTableCellBoolean value={true} color={INDIGO} />
+      <DataTableCellBoolean value={true} color={VIOLET} />
     </div>
   ),
 };
@@ -67,7 +67,7 @@ export const Code: Story = {
   render: () => (
     <div className="flex flex-col gap-1 text-sm">
       <DataTableCellCode value="req_8f3a91c2" />
-      <DataTableCellCode value="trace-4497d6a3" color={INDIGO} />
+      <DataTableCellCode value="trace-4497d6a3" color={VIOLET} />
     </div>
   ),
 };
@@ -75,8 +75,8 @@ export const Code: Story = {
 export const Gauge: Story = {
   render: () => (
     <div className="flex flex-col gap-2 text-sm">
-      <DataTableCellGauge value={17} min={0} max={100} unit="%" color={INDIGO} />
-      <DataTableCellGauge value={62} min={0} max={100} unit="%" color={INDIGO} />
+      <DataTableCellGauge value={17} min={0} max={100} unit="%" color={VIOLET} />
+      <DataTableCellGauge value={62} min={0} max={100} unit="%" color={VIOLET} />
       <DataTableCellGauge value={94} min={0} max={100} unit="%" />
     </div>
   ),
@@ -92,7 +92,7 @@ export const Heatmap: Story = {
             min={0}
             max={200}
             unit="ms"
-            color={INDIGO}
+            color={VIOLET}
           />
         </div>
       ))}
@@ -115,7 +115,7 @@ export const Number: Story = {
     <div className="flex flex-col gap-1 text-sm">
       <DataTableCellNumber value={12345.678} unit="ms" />
       <DataTableCellNumber value={42} />
-      <DataTableCellNumber value={0.125} unit="s" color={INDIGO} />
+      <DataTableCellNumber value={0.125} unit="s" color={VIOLET} />
     </div>
   ),
 };
@@ -136,7 +136,7 @@ export const StatusCode: Story = {
       <DataTableCellStatusCode value={301} />
       <DataTableCellStatusCode value={404} />
       <DataTableCellStatusCode value={500} />
-      <DataTableCellStatusCode value={200} color={INDIGO} />
+      <DataTableCellStatusCode value={200} color={VIOLET} />
     </div>
   ),
 };
@@ -146,7 +146,7 @@ export const Text: Story = {
     <div className="flex w-56 flex-col gap-2 text-sm">
       <DataTableCellText value="Short text" />
       <DataTableCellText value="A much longer text value that truncates and shows a tooltip on hover" />
-      <DataTableCellText value="Colored text value" color={INDIGO} />
+      <DataTableCellText value="Colored text value" color={VIOLET} />
     </div>
   ),
 };
@@ -155,7 +155,7 @@ export const Timestamp: Story = {
   render: () => (
     <div className="flex flex-col gap-2 text-sm">
       <DataTableCellTimestamp date={sampleDate} />
-      <DataTableCellTimestamp date="2026-06-02T02:13:00Z" color={INDIGO} />
+      <DataTableCellTimestamp date="2026-06-02T02:13:00Z" color={VIOLET} />
     </div>
   ),
 };

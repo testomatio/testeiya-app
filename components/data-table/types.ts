@@ -44,6 +44,11 @@ export type Base<TData> = {
   label: string;
   value: keyof TData;
   /**
+   * Material Symbols Rounded ligature name, shown beside the label in the
+   * filter field picker.
+   */
+  icon?: string;
+  /**
    * Defines if the accordion in the filter bar is open by default
    */
   defaultOpen?: boolean;
@@ -57,6 +62,16 @@ export type DataTableCheckboxFilterField<TData> = Base<TData> & Checkbox;
 export type DataTableSliderFilterField<TData> = Base<TData> & Slider;
 export type DataTableInputFilterField<TData> = Base<TData> & Input;
 export type DataTableTimerangeFilterField<TData> = Base<TData> & Timerange;
+
+/**
+ * Lets the filter menu own a row's value instead of the table's single
+ * `columnFilters` slot — required when two rows filter the same column
+ * (e.g. `priority == 'high' or priority == 'critical'`).
+ */
+export type ControlledFilterProps = {
+  filterValue?: unknown;
+  onFilterChange?: (value: unknown) => void;
+};
 
 export type DataTableFilterField<TData> =
   | DataTableCheckboxFilterField<TData>

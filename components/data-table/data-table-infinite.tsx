@@ -11,16 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataTableFilterControls } from "@/components/data-table/data-table-filter-controls";
 import { DataTableProvider } from "@/components/data-table/data-table-provider";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar"; // TODO: check where to put this
 import type { DataTableFilterField } from "@/components/data-table/types";
+import type { TqlField } from "@/lib/data-browse/tql";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useHotKey } from "@/hooks/use-hot-key";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import {
@@ -52,7 +47,7 @@ import {
   getFacetedMinMaxValues as getTTableFacetedMinMaxValues,
   useReactTable,
 } from "@tanstack/react-table";
-import { Loader2Icon, XIcon } from "@/lib/icons";
+import { Loader2Icon } from "@/lib/icons";
 import * as React from "react";
 
 // TODO: add a possible chartGroupBy
@@ -67,6 +62,8 @@ export interface DataTableInfiniteProps<TData, TValue> {
   defaultRowSelection?: RowSelectionState;
   defaultColumnVisibility?: VisibilityState;
   filterFields?: DataTableFilterField<TData>[];
+  tqlFields?: TqlField[];
+  searchKey?: string;
   // REMINDER: close to the same signature as the `getFacetedUniqueValues` of the `useReactTable`
   getFacetedUniqueValues?: (
     table: TTable<TData>,
@@ -109,6 +106,8 @@ export function DataTableInfinite<TData, TValue>({
   defaultRowSelection = {},
   defaultColumnVisibility = {},
   filterFields = [],
+  tqlFields,
+  searchKey,
   isFetching,
   isLoading,
   manualFiltering,
@@ -292,6 +291,8 @@ export function DataTableInfinite<TData, TValue>({
       table={table}
       columns={columns}
       filterFields={filterFields}
+      tqlFields={tqlFields}
+      searchKey={searchKey}
       columnFilters={columnFilters}
       sorting={sorting}
       rowSelection={rowSelection}
@@ -306,7 +307,7 @@ export function DataTableInfinite<TData, TValue>({
       getFacetedMinMaxValues={getFacetedMinMaxValues}
     >
       <div
-        className="flex h-full min-h-0 w-full flex-col sm:flex-row"
+        className="flex h-full min-h-0 w-full flex-col"
         style={
           {
             "--top-bar-height": `${topBarHeight}px`,
@@ -314,47 +315,12 @@ export function DataTableInfinite<TData, TValue>({
           } as React.CSSProperties
         }
       >
-        <div
-          className={cn(
-            "h-full w-full flex-col sm:sticky sm:top-0 sm:max-h-full sm:max-w-52 sm:min-w-52 sm:self-start md:max-w-72 md:min-w-72",
-            "group-data-[expanded=false]/controls:hidden",
-            "hidden sm:flex",
-          )}
-        >
-          <div className="border-border bg-background border-b p-2 md:sticky md:top-0">
-            <div className="flex h-[46px] items-center justify-between gap-3">
-              <p className="text-foreground px-2 font-medium">Filters</p>
-              <div>
-                {table.getState().columnFilters.length ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-7 text-muted-foreground" onClick={() => table.resetColumnFilters()} aria-label="Reset filters" />}><XIcon className="size-4" /></TooltipTrigger>
-                    <TooltipContent side="bottom">Reset filters</TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 p-2 sm:overflow-y-scroll">
-            <DataTableFilterControls />
-          </div>
-          {footerSlot ? (
-            <div className="border-border bg-background border-t p-4 md:sticky md:bottom-0">
-              {footerSlot}
-            </div>
-          ) : null}
-        </div>
-        <div
-          className={cn(
-            "border-border flex max-w-full min-h-0 flex-1 flex-col sm:border-l",
-            // Chrome issue
-            "sm:group-data-[expanded=true]/controls:max-w-[calc(100%-208px)] md:group-data-[expanded=true]/controls:max-w-[calc(100%-288px)]",
-          )}
-        >
+        <div className="flex max-w-full min-h-0 flex-1 flex-col">
           <div
             ref={topBarRef}
             className={cn(
-              "bg-background flex flex-col gap-4 p-2",
-              "sticky top-0 z-10 pb-4",
+              "bg-background flex flex-col gap-4 px-4 pt-3",
+              "sticky top-0 z-10 pb-3",
             )}
           >
             {commandSlot}
@@ -364,7 +330,7 @@ export function DataTableInfinite<TData, TValue>({
             />
             {chartSlot}
           </div>
-          <div className="z-0 flex min-h-0 flex-1 flex-col">
+          <div className="z-0 mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden">
             <Table
               ref={tableRef}
               onScroll={onScroll}
@@ -503,6 +469,11 @@ export function DataTableInfinite<TData, TValue>({
               </TableBody>
             </Table>
           </div>
+          {footerSlot ? (
+            <div className="border-border bg-background border-t p-4">
+              {footerSlot}
+            </div>
+          ) : null}
         </div>
       </div>
       {sheetSlot}
@@ -514,7 +485,7 @@ export function DataTableInfinite<TData, TValue>({
 /**
  * REMINDER: this is the heaviest component in the table if lots of rows
  * Some other components are rendered more often necessary, but are fixed size (not like rows that can grow in height)
- * e.g. DataTableFilterControls, DataTableFilterCommand, DataTableToolbar, DataTableHeader
+ * e.g. DataTableFilterMenu, DataTableToolbar, DataTableHeader
  */
 
 function Row<TData>({
@@ -565,7 +536,7 @@ function Row<TData>({
         }
       }}
       className={cn(
-        "outline-primary focus-visible:bg-muted/50 outline-1 -outline-offset-1 transition-colors outline-none focus-visible:outline-solid",
+        "h-8 outline-primary focus-visible:bg-muted/50 outline-1 -outline-offset-1 transition-colors outline-none focus-visible:outline-solid",
         "data-[state=selected]:bg-accent/40 data-[state=selected]:outline-solid",
         "data-detail:outline-solid",
         "data-checked:bg-muted/50",
@@ -605,6 +576,10 @@ const MemoizedRow = React.memo(
   Row,
   (prev, next) =>
     prev.row.id === next.row.id &&
+    // A row whose id survives a data swap can still carry new values — an
+    // `/info` row gaining the fields its API list adds, say. Without this the
+    // row renders its first payload forever.
+    prev.row.original === next.row.original &&
     prev.selected === next.selected &&
     prev.detailRowId === next.detailRowId &&
     prev.onRowClick === next.onRowClick &&

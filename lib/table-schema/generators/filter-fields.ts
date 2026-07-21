@@ -19,10 +19,11 @@ export function generateFilterFields<TData>(
     const config = builder._config;
     if (!config.filter) continue;
 
-    const { filter, label, kind, enumValues, arrayItem } = config;
+    const { filter, label, icon, kind, enumValues, arrayItem } = config;
 
     const base = {
       label,
+      icon,
       value: key as keyof TData,
       defaultOpen: filter.defaultOpen || undefined,
       commandDisabled: filter.commandDisabled || undefined,

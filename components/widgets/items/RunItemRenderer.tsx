@@ -318,7 +318,7 @@ export default function RunItemRenderer({
             </div>
           )}
 
-          <div className="overflow-hidden rounded-md border">
+          <div className="overflow-hidden">
             <table className="w-full text-sm">
               <tbody className="divide-y [&_td]:w-full [&_td]:px-3 [&_td]:py-1.5 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:align-top [&_th]:font-normal [&_th]:text-muted-foreground [&_tr:nth-child(even)]:bg-muted/30">
                 {run.id && (
@@ -440,7 +440,7 @@ export default function RunItemRenderer({
       )}
 
       {nested.length > 0 && (
-        <div className="overflow-hidden rounded-md border">
+        <div className="overflow-hidden">
           <div
             className={cn(
               GRID,

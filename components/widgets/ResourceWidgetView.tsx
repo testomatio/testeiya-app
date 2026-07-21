@@ -16,12 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CreateRunDialog } from "./CreateRunDialog";
-import {
-  ConfigurationView,
-  EnvironmentsView,
-  LabelsView,
-  TagsView,
-} from "./ProjectConfigView";
+import { ConfigurationView } from "./ProjectConfigView";
 import { ResourceDataTable } from "./ResourceDataTable";
 import { ListPager } from "./list-row";
 import PlansListRenderer from "./PlansListRenderer";
@@ -84,16 +79,19 @@ const RESOURCE_CONFIG: Record<
     label: "Labels",
     api: "labels",
     render: () => null,
+    table: true,
   },
   tags: {
     label: "Tags",
     api: "info",
     render: () => null,
+    table: true,
   },
   environments: {
     label: "Environments",
     api: "info",
     render: () => null,
+    table: true,
   },
   ci: {
     label: "CI Profiles",
@@ -111,9 +109,6 @@ const RESOURCE_CONFIG: Record<
 // Pages whose body is a dedicated view over the store's projectInfo — they
 // fetch nothing through the generic list pipeline.
 const CUSTOM_VIEWS: Partial<Record<ProjectResource, () => ReactNode>> = {
-  labels: () => <LabelsView />,
-  tags: () => <TagsView />,
-  environments: () => <EnvironmentsView />,
   settings: () => <ConfigurationView />,
 };
 
@@ -261,7 +256,7 @@ export function ResourceWidgetView({
   if (customView) {
     body = customView();
   } else if (isTable) {
-    body = <ResourceDataTable resource={resource} />;
+    body = <ResourceDataTable resource={resource} api={api} />;
   } else if (loading) {
     body = (
       <div className="flex flex-1 items-center justify-center py-12">
@@ -282,11 +277,11 @@ export function ResourceWidgetView({
     <div
       ref={layoutRef}
       className={cn(
-        "flex min-h-0 flex-1 flex-col rounded-md border bg-background",
+        "flex min-h-0 flex-1 flex-col bg-background",
         className
       )}
     >
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Tooltip>
           <TooltipTrigger render={
             <Button
@@ -368,8 +363,9 @@ export function ResourceWidgetView({
       <div
         className={cn(
           "min-h-0 flex-1",
-          customView && "overflow-auto",
-          !isTable && !customView && "overflow-auto p-3"
+          // The Configuration view ends in a browse table that owns its own
+          // scroller — an outer one here would nest two of them.
+          !isTable && !customView && "overflow-auto px-4 py-3"
         )}
       >
         {body}
@@ -382,7 +378,7 @@ export function ResourceWidgetView({
           hasPrev={hasPrev}
           hasNext={hasNext}
           onPage={setPage}
-          className="border-t px-3 py-2"
+          className="border-t px-4 py-2"
         />
       )}
       {resource === "runs" && (

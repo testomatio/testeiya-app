@@ -138,8 +138,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Neutral palette for enum values without semantic meaning. */
 const NEUTRAL_PALETTE = [
-  "#6366f1",
   "#8b5cf6",
+  "#3b82f6",
   "#ec4899",
   "#14b8a6",
   "#f97316",

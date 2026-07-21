@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { SectionShell } from "../SectionShell";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { useProjectService } from "@/lib/services/StoreProvider";
+import { useProjectFilterOptions } from "@/lib/data-browse/use-filter-options";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
 /**
@@ -28,6 +29,11 @@ export const ProjectSection = observer(function ProjectSection({
   const current = project.currentProject;
   const links = project.currentLinks;
   const info = project.projectInfo;
+  // `/info` carries the counts, but it fails on some projects; labels have
+  // their own endpoint, so this one stays real instead of falling back to a dash.
+  const { labels } = useProjectFilterOptions();
+  let labelCount: number | null = null;
+  if (info || labels.length) labelCount = labels.length;
 
   return (
     <SectionShell
@@ -101,7 +107,7 @@ export const ProjectSection = observer(function ProjectSection({
             <StatTile
               icon="label"
               label="Labels"
-              count={info ? (info.labels?.length ?? 0) : null}
+              count={labelCount}
               loading={project.countsLoading}
               active={project.openResource === "labels"}
               onClick={() => project.showResource("labels")}

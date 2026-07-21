@@ -1,11 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import {
-  ConfigurationDetails,
-  EnvironmentChips,
-  LabelsGrid,
-  TagChips,
-  type ProjectLabel,
-} from "@/components/widgets/ProjectConfigView";
+import { ConfigurationDetails } from "@/components/widgets/ProjectConfigView";
+import type { ProjectLabel } from "@/lib/data-browse/schemas/project-info";
 import type { ProjectInfo } from "@/lib/services/types";
 
 const labels: ProjectLabel[] = [
@@ -57,16 +52,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+// Labels, Tags, Environments and the enabled features all render as browse data
+// tables now, which need a DataTableProvider — only the facts grid is storied.
 export const Configuration: Story = {};
-
-export const Labels: Story = {
-  render: () => <LabelsGrid labels={labels} />,
-};
-
-export const Tags: Story = {
-  render: () => <TagChips tags={info.tags} />,
-};
-
-export const Environments: Story = {
-  render: () => <EnvironmentChips environments={info.environments} />,
-};
