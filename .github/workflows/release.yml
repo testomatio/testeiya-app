@@ -195,8 +195,16 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
+      # Skip if this version is already on the registry (e.g. the first version
+      # was published manually to bootstrap Trusted Publishing, or a re-run).
       - name: Publish to npm (provenance)
-        run: npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "testeiya@$version" version >/dev/null 2>&1; then
+            echo "testeiya@$version already published — skipping."
+            exit 0
+          fi
+          npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}
 
   # After the desktop installers are attached, append per-OS install
   # instructions to the Release body (once). Idempotent: skips if already present.
