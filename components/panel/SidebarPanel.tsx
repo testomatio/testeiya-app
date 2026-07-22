@@ -190,6 +190,14 @@ export const SidebarPanel = observer(function SidebarPanel({
               } />
               <TooltipContent side="bottom"><p>Testeiya</p></TooltipContent>
             </Tooltip>
+            {width >= 280 && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={theme === "dark" ? "/testeiya-wordmark-dark.svg" : "/testeiya-wordmark.svg"}
+                alt="Testeiya"
+                className="h-5 w-auto shrink-0"
+              />
+            )}
             <div className="flex-1" />
             {project.currentProject && (
               <>

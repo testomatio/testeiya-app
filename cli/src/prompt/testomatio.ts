@@ -17,6 +17,8 @@ export const testomatioTms = dedent`
 
   **Never** ask the user for the **Testomat.io** API token — it's configured. (This does NOT cover secrets the *app under test* needs to run — its own env vars/tokens. If a test run is blocked by one of those, ask for it.)
 
+  **Statuses and counts are live** — runs change them at any time. Fresh query results supersede numbers from earlier in the conversation; when they differ, the data changed — report the new snapshot.
+
   ## Banned moves
 
   - Do NOT call an MCP \`*_tests_list\` or \`*_suites_list\` as your first action for a test/suite question — **read the filesystem first** (\`find\`, \`ls\`, \`grep\`, \`read\`). Fall back to MCP only if the metadata you need isn't in the markdown.
@@ -60,7 +62,6 @@ export function testomatioConnection(
 
       Push or pull manual test cases with \`npx check-tests\` (or other \`npx @testomatio/*\` commands) — they pick the credentials up from the environment. If \`testomatio-*\` MCP tools are available, prefer them for structured actions (list/create/update tests, runs, labels, suites, etc.).
 
-      ${renderNotes}
     `;
   }
 
@@ -74,7 +75,6 @@ export function testomatioConnection(
       Projects pulled into this working directory (one dir per project):
       ${projects}
 
-      ${renderNotes}
     `;
   }
 
@@ -93,7 +93,6 @@ export function testomatioConnection(
 
     When you need to push changes back, run \`npx check-tests push\` (or similar \`npx @testomatio/*\` commands) directly — credentials are already in scope.
 
-    ${renderNotes}
   `;
 }
 
@@ -161,12 +160,6 @@ export function projectSettings(info: TestomatioProjectInfo): string {
     Use these when creating or editing tests: assign only labels that exist here, reuse the existing tags/environments before inventing new ones, and match the project's framework/language when generating automated tests. The full configuration JSON (every label, tag, and CI profile config) is cached at \`.testeiya/project-info.json\` — read that file when you need the complete lists.
   `;
 }
-
-const renderNotes = dedent`
-  ## Notes
-
-  See the app interface rules for rendering. After any **single-entity** call — \`*_get\` **or a \`*_create\` / \`*_update\`** that returns one run, testrun, test, suite, or plan — render the returned entity with \`render_item({kind, data})\` instead of pasting its link or describing it in text (e.g. after creating a run, \`render_item({kind:"run", data:<run>})\`). Only responses \`render_item\` can't show (labels, issues, analytics, ci/ims config) should be quoted or described normally.
-`;
 
 function capped(shown: string[], total: number): string {
   let suffix = "";

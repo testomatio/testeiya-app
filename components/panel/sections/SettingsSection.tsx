@@ -133,9 +133,16 @@ export const SettingsSection = observer(function SettingsSection({
 
             <div className="space-y-1 border-t pt-4">
               <h3 className="text-sm font-semibold">ENV Variables</h3>
-              <Accordion>
+              <p className="text-muted-foreground text-xs">
+                Secrets and config passed as{" "}
+                <code className="font-mono">KEY=value</code> to every agent
+                command.
+              </p>
+              <Accordion className="pt-1">
                 <AccordionItem value="global">
-                  <AccordionTrigger>Global</AccordionTrigger>
+                  <AccordionTrigger className={ENV_TRIGGER}>
+                    Global
+                  </AccordionTrigger>
                   <AccordionContent>
                     <EnvEditor
                       scope="global"
@@ -143,8 +150,10 @@ export const SettingsSection = observer(function SettingsSection({
                     />
                   </AccordionContent>
                 </AccordionItem>
-                <AccordionItem value="project">
-                  <AccordionTrigger>Project</AccordionTrigger>
+                <AccordionItem value="project" className="border-b-0">
+                  <AccordionTrigger className={ENV_TRIGGER}>
+                    Project
+                  </AccordionTrigger>
                   <AccordionContent>
                     <EnvEditor
                       scope="project"
@@ -327,6 +336,9 @@ export const SettingsSection = observer(function SettingsSection({
     </SectionShell>
   );
 });
+
+const ENV_TRIGGER =
+  "py-2 hover:no-underline hover:text-primary focus-visible:ring-0 focus-visible:border-transparent focus-visible:after:border-transparent";
 
 const EnvEditor = observer(function EnvEditor({
   scope,

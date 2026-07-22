@@ -37,8 +37,6 @@ function formatDate(iso?: string | null): string | null {
   });
 }
 
-const SUITES_GRID = "minmax(0,8fr) 2fr 2fr";
-
 export default function SuitesListRenderer({
   json,
   summary,
@@ -77,14 +75,20 @@ export default function SuitesListRenderer({
     );
   }
 
+  const hasCount = items.some((s) => s.tests_total_count != null || s.tests_count != null);
+  const hasUpdated = items.some((s) => formatDate(s.updated_at));
+  let grid = "minmax(0,8fr)";
+  if (hasCount) grid += " 2fr";
+  if (hasUpdated) grid += " 2fr";
+
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup gridCols={SUITES_GRID}>
-        <ListRowHeader gridCols={SUITES_GRID}>
+      <ListRowGroup gridCols={grid}>
+        <ListRowHeader gridCols={grid}>
           <div className="min-w-0 truncate">Suite</div>
-          <div className="min-w-0 truncate">Tests</div>
-          <div className="min-w-0 truncate">Updated</div>
+          {hasCount && <div className="min-w-0 truncate">Tests</div>}
+          {hasUpdated && <div className="min-w-0 truncate">Updated</div>}
         </ListRowHeader>
         {items.map((s, idx) => {
           const title = s.title ?? s.id ?? "(untitled)";
@@ -93,7 +97,7 @@ export default function SuitesListRenderer({
           return (
             <ListRow
               key={s.id ?? idx}
-              gridCols={SUITES_GRID}
+              gridCols={grid}
               onOpen={() => setSelected(s)}
             >
               <div className="flex min-w-0 items-center gap-x-2">
@@ -115,12 +119,16 @@ export default function SuitesListRenderer({
                 </span>
                 <LabelsRow labels={s.labels} className="min-w-0" />
               </div>
-              <div className="text-xs tabular-nums text-muted-foreground">
-                {count ?? "—"}
-              </div>
-              <div className="min-w-0 truncate text-xs text-muted-foreground">
-                {formatDate(s.updated_at) ?? "—"}
-              </div>
+              {hasCount && (
+                <div className="text-xs tabular-nums text-muted-foreground">
+                  {count ?? "—"}
+                </div>
+              )}
+              {hasUpdated && (
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  {formatDate(s.updated_at) ?? "—"}
+                </div>
+              )}
             </ListRow>
           );
         })}

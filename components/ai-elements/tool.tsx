@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { RenderKindIcon } from "@/components/icons";
 import { Icon } from "@/lib/icons";
+import { ChartBody, type ChartSpec } from "./chart-block";
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import {
   CheckCircleIcon,
@@ -289,26 +290,6 @@ const loadingFallback = (
   <div className="p-3 text-xs text-muted-foreground">Loading rich view…</div>
 );
 
-const RunsListRenderer = dynamic(
-  () => import("@/components/widgets/RunsListRenderer"),
-  { ssr: false, loading: () => loadingFallback }
-);
-const TestsListRenderer = dynamic(
-  () => import("@/components/widgets/TestsListRenderer"),
-  { ssr: false, loading: () => loadingFallback }
-);
-const SuitesListRenderer = dynamic(
-  () => import("@/components/widgets/SuitesListRenderer"),
-  { ssr: false, loading: () => loadingFallback }
-);
-const PlansListRenderer = dynamic(
-  () => import("@/components/widgets/PlansListRenderer"),
-  { ssr: false, loading: () => loadingFallback }
-);
-const TestRunsListRenderer = dynamic(
-  () => import("@/components/widgets/TestRunsListRenderer"),
-  { ssr: false, loading: () => loadingFallback }
-);
 const TreeOutputRenderer = dynamic(
   () => import("@/components/widgets/TreeOutputRenderer"),
   { ssr: false, loading: () => loadingFallback }
@@ -321,46 +302,19 @@ const FileEditRenderer = dynamic(
   () => import("@/components/widgets/FileEditRenderer"),
   { ssr: false, loading: () => loadingFallback }
 );
+const ResultTableRenderer = dynamic(
+  () => import("@/components/widgets/ResultTableRenderer"),
+  { ssr: false, loading: () => loadingFallback }
+);
 
-type RichRenderer = (payload: {
-  data: unknown;
-  summary?: string;
-  widgetId?: string;
-  groupBy?: string;
-}) => ReactNode;
-
-const KIND_RENDERERS: Record<string, RichRenderer> = {
-  runs: ({ data, summary, widgetId }) => (
-    <RunsListRenderer json={data} summary={summary} widgetId={widgetId} />
-  ),
-  tests: ({ data, summary, widgetId, groupBy }) => (
-    <TestsListRenderer json={data} summary={summary} widgetId={widgetId} groupBy={groupBy} />
-  ),
-  suites: ({ data, summary, widgetId }) => (
-    <SuitesListRenderer json={data} summary={summary} widgetId={widgetId} />
-  ),
-  plans: ({ data, summary, widgetId }) => (
-    <PlansListRenderer json={data} summary={summary} widgetId={widgetId} />
-  ),
-  testruns: ({ data, summary, widgetId }) => (
-    <TestRunsListRenderer json={data} summary={summary} widgetId={widgetId} />
-  ),
-};
-
-// Maps MCP tool-name suffix → rich-view kind. Derived from the Testomat.io
-// MCP server's list tools: `*_runs_list`, `*_tests_list`, etc.
-const MCP_LIST_TO_KIND: Array<{ suffix: string; kind: string }> = [
-  { suffix: "_testruns_list", kind: "testruns" }, // test before _runs_list
-  { suffix: "_runs_list", kind: "runs" },
-  { suffix: "_tests_list", kind: "tests" },
-  { suffix: "_suites_list", kind: "suites" },
-  { suffix: "_plans_list", kind: "plans" },
-];
+// Matches the Testomat.io MCP server's list-shaped tools — `*_tests_list`,
+// `*_tests_search`, `*_runs_list`, … — the capture is the rich-view kind.
+const MCP_LIST_RE = /_(testruns|runs|tests|suites|plans)_(?:list|search)$/;
 
 function mcpListKind(toolName?: string): string | null {
   if (!toolName) return null;
-  const match = MCP_LIST_TO_KIND.find((m) => toolName.endsWith(m.suffix));
-  return match?.kind ?? null;
+  const match = MCP_LIST_RE.exec(toolName);
+  return match ? match[1] : null;
 }
 
 /**
@@ -378,9 +332,11 @@ export function richViewMode(
   toolName?: string
 ): "inline" | null {
   if (
+    toolName === "render_result" ||
     toolName === "render_list" ||
     toolName === "render_tree" ||
     toolName === "render_item" ||
+    toolName === "render_chart" ||
     toolName === "write" ||
     toolName === "edit"
   ) {
@@ -397,9 +353,11 @@ export function hasRichRenderer(toolName?: string): boolean {
 /** True for every `render_*` custom tool — used to drive auto-collapse. */
 export function isRenderTool(toolName?: string): boolean {
   return (
+    toolName === "render_result" ||
     toolName === "render_list" ||
     toolName === "render_tree" ||
-    toolName === "render_item"
+    toolName === "render_item" ||
+    toolName === "render_chart"
   );
 }
 
@@ -428,6 +386,20 @@ function deriveHeader(
     return {
       icon: <Icon name="account_tree" />,
       title: payload.title ?? "Tree",
+    };
+  }
+  if (toolName === "render_chart") {
+    return {
+      icon: <Icon name="monitoring" />,
+      title: payload.title ?? "Chart",
+    };
+  }
+  if (toolName === "render_result") {
+    const kind = payload.kind ?? "result";
+    return {
+      icon: <RenderKindIcon kind={kind} />,
+      title: payload.title ?? `Result: ${kind}`,
+      tag: kind,
     };
   }
   if (toolName === "render_item") {
@@ -483,11 +455,11 @@ export function renderRichTool(
   if (isRenderTool(toolName)) {
     const fromInput =
       input && typeof input === "object"
-        ? (input as { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; group_by?: string })
+        ? (input as { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; columns?: string[] })
         : null;
     const fromOutput = !fromInput
       ? (parseMcpOutput(output) as
-          | { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; group_by?: string }
+          | { kind?: string; data?: unknown; summary?: string; title?: string; nodes?: unknown; columns?: string[] }
           | null)
       : null;
     const payload = fromInput ?? fromOutput;
@@ -512,30 +484,61 @@ export function renderRichTool(
         header: deriveHeader(toolName, payload),
       };
     }
-    // render_list
-    if (!payload.kind || payload.data === undefined) return null;
-    const renderer = KIND_RENDERERS[payload.kind];
-    if (!renderer) return null;
+    if (toolName === "render_chart") {
+      if (!Array.isArray(payload.data)) return null;
+      return {
+        body: <ChartBody spec={payload as ChartSpec} />,
+        header: deriveHeader(toolName, payload),
+      };
+    }
+    // render_result — the resolved payload (kind + rows) is in the OUTPUT;
+    // the input only carries the call reference and display options.
+    if (toolName === "render_result") {
+      const resolved = parseMcpOutput(output) as
+        | { kind?: string; data?: unknown; title?: string; columns?: string[]; summary?: string }
+        | null;
+      if (!resolved?.data) return null;
+      return {
+        body: (
+          <ResultTableRenderer
+            json={resolved.data}
+            kind={resolved.kind}
+            columns={resolved.columns}
+            summary={resolved.summary}
+          />
+        ),
+        header: deriveHeader(toolName, { ...resolved, title: payload.title ?? resolved.title }),
+      };
+    }
+    // render_list — `from`+`transform` rows arrive in the tool OUTPUT (the
+    // server derived them); `data` mode carries them in the input.
+    if (!payload.kind) return null;
+    let listData = payload.data;
+    if (listData === undefined) {
+      const fromResult = parseMcpOutput(output) as { data?: unknown } | null;
+      listData = fromResult?.data;
+    }
+    if (listData === undefined) return null;
     return {
-      body: renderer({
-        data: payload.data,
-        summary: payload.summary,
-        widgetId,
-        groupBy: payload.group_by,
-      }),
+      body: (
+        <ResultTableRenderer
+          json={listData}
+          kind={payload.kind}
+          columns={payload.columns}
+          summary={payload.summary}
+        />
+      ),
       header: deriveHeader(toolName, payload),
     };
   }
 
-  // MCP `*_list` — parse output into the matching table for the expanded card.
+  // MCP `*_list` — parse output into the generic table for the expanded card.
   const kind = mcpListKind(toolName);
   if (!kind) return null;
-  const renderer = KIND_RENDERERS[kind];
-  if (!renderer) return null;
   const parsed = parseMcpOutput(output);
   if (parsed === null || parsed === undefined) return null;
   return {
-    body: renderer({ data: parsed, widgetId }),
+    body: <ResultTableRenderer json={parsed} kind={kind} />,
     header: deriveHeader("render_list", { kind }),
   };
 }
@@ -588,18 +591,18 @@ export const ToolOutput = ({
   // OR the parsed output works — we prefer whatever is available.
   if (!errorText && toolName === "render_list") {
     const parsed = parseMcpOutput(output) as
-      | { kind?: string; data?: unknown; summary?: string }
+      | { kind?: string; data?: unknown; summary?: string; columns?: string[] }
       | null;
-    const kind = parsed?.kind;
-    const renderer = kind ? KIND_RENDERERS[kind] : undefined;
-    if (renderer && parsed?.data !== undefined) {
+    if (parsed?.kind && parsed.data !== undefined) {
       return (
         <div className={cn("space-y-2", className)} {...props}>
-          {parsed.summary && (
-            <p className="text-sm text-muted-foreground">{parsed.summary}</p>
-          )}
           <div className="overflow-x-auto rounded-md bg-muted/50 p-2 text-foreground">
-            {renderer({ data: parsed.data, summary: parsed.summary })}
+            <ResultTableRenderer
+              json={parsed.data}
+              kind={parsed.kind}
+              columns={parsed.columns}
+              summary={parsed.summary}
+            />
           </div>
         </div>
       );

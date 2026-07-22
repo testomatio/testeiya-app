@@ -56,6 +56,11 @@ export function createConnection(
   let unsubscribe: (() => void) | null = null;
   let aiDebugUnsub: (() => void) | null = null;
   let messageId = "";
+  let lastTurnError: string | null = null;
+  let promptStartedAt = 0;
+  let promptCalls = 0;
+  let promptOutTok = 0;
+  let promptPeakCtx = 0;
   let sessionCwd = process.cwd();
   const heartbeat = setInterval(() => send({ type: "ping" }), HEARTBEAT_MS);
   let resumeConversationId: string | null = null;
@@ -234,6 +239,11 @@ export function createConnection(
 
           // New message ID per prompt
           messageId = `msg_${randomUUID().slice(0, 12)}`;
+          lastTurnError = null;
+          promptStartedAt = Date.now();
+          promptCalls = 0;
+          promptOutTok = 0;
+          promptPeakCtx = 0;
 
           // Subscribe to agent events and bridge them
           unsubscribe = session.subscribe((event: any) => {
@@ -243,6 +253,31 @@ export function createConnection(
             // distinct message instead of two with the same React key.
             if (event.type === "agent_start") {
               messageId = `msg_${randomUUID().slice(0, 12)}`;
+            }
+            // A failed model turn is otherwise buried behind a plain `finish`
+            // (see ai-debug.ts). turn_end(error) fires on every failed retry
+            // attempt, so remember only the latest and surface it when the SDK
+            // has finally given up — retries exhausted, or the run ends still
+            // in error. A recovered retry clears it.
+            if (event.type === "turn_end") {
+              lastTurnError =
+                event.message?.stopReason === "error"
+                  ? event.message?.errorMessage || "The model request failed."
+                  : null;
+              if (event.message?.role === "assistant") {
+                promptCalls++;
+                promptOutTok += event.message.usage?.output ?? 0;
+                const ctx = event.message.usage?.totalTokens ?? 0;
+                if (ctx > promptPeakCtx) promptPeakCtx = ctx;
+              }
+            }
+            if (event.type === "auto_retry_end" && event.success) {
+              lastTurnError = null;
+            }
+            if (event.type === "auto_retry_end" && !event.success) {
+              const err = event.finalError || lastTurnError || "The model request failed.";
+              send({ type: "error", error: err });
+              lastTurnError = null;
             }
             const transformed = transformEvent(event, messageId);
             if (transformed?.type === "tool-output-partial") {
@@ -256,6 +291,19 @@ export function createConnection(
               send(transformed);
             }
             if (event.type === "agent_end") {
+              if (lastTurnError) {
+                send({ type: "error", error: lastTurnError });
+                lastTurnError = null;
+              }
+              if (promptCalls > 0) {
+                const wall = ((Date.now() - promptStartedAt) / 1000).toFixed(1);
+                console.log(
+                  `[ai] prompt done — ${promptCalls} calls · ${wall}s · out=${promptOutTok} tok · peak ctx=${promptPeakCtx} tok`
+                );
+                promptCalls = 0;
+                promptOutTok = 0;
+                promptPeakCtx = 0;
+              }
               send({ type: "done" });
             }
           });

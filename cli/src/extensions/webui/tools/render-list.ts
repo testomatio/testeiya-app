@@ -1,84 +1,169 @@
 import { Type } from "@sinclair/typebox";
+import vm from "node:vm";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
+import type { CachedList } from "./render-result.js";
+import { widgetResult } from "./widget-result.js";
 
 /**
- * `render_list` — a UI-side tool registered by the webui extension.
- *
- * The agent calls this tool after fetching a Testomat.io list (runs, tests,
- * suites, plans, labels). Server-side it does nothing: it just echoes the
- * input back as its output. The web UI intercepts the output by tool name
- * and renders a shadcn/ui-based table (see components/widgets/).
+ * `render_list` — display a list the agent assembled. Rows come from `data`,
+ * or are derived server-side: `from` references cached `*_list`/`*_search`
+ * results by call id and `transform` (a pure JS function source, run in a
+ * vm sandbox) converts those arrays into the rows to render — so derived
+ * lists never require re-emitting rows through the model.
+ * For showing one fetched result as-is use `render_result`.
  */
-export const renderListTool: ToolDefinition = {
-  name: "render_list",
-  label: "Render List",
-  description:
-    "Display a Testomat.io list (runs, tests, suites, plans, labels) as a " +
-    "rich interactive table in the chat UI. Call this AFTER fetching data " +
-    "via an MCP `*_list` tool when you want the user to see the result. " +
-    "Do NOT repeat the list content in your own reply — the UI already " +
-    "shows it. Reply with a short summary only.",
-  parameters: Type.Object({
-    kind: Type.Union(
-      [
-        Type.Literal("runs"),
-        Type.Literal("tests"),
-        Type.Literal("suites"),
-        Type.Literal("plans"),
-        Type.Literal("testruns"),
-      ],
-      {
-        description:
-          "Pick the kind that matches the MCP tool you just called: " +
-          "runs_list → 'runs', tests_list → 'tests', suites_list → 'suites', " +
-          "plans_list → 'plans', testruns_list → 'testruns'.",
+export function createRenderListTool(cache: Map<string, CachedList>): ToolDefinition {
+  return {
+    name: "render_list",
+    label: "Render List",
+    description:
+      "Display a list as a rich table in the chat UI. Pass rows via `data`, " +
+      "or derive them server-side: `from` = call ids of fetched *_list/*_search " +
+      "results, `transform` = a pure JS function over those arrays returning " +
+      "the rows to render (no need to re-type rows). For one result as-is, " +
+      "use render_result.",
+    parameters: Type.Object({
+      kind: Type.Union(
+        [
+          Type.Literal("runs"),
+          Type.Literal("tests"),
+          Type.Literal("suites"),
+          Type.Literal("plans"),
+          Type.Literal("testruns"),
+        ],
+        { description: "What the rows are." }
+      ),
+      data: Type.Optional(
+        Type.Union(
+          [Type.Array(Type.Any()), Type.Object({}, { additionalProperties: true })],
+          { description: "Explicit rows: `{data:[...], meta}` or a plain array." }
+        )
+      ),
+      from: Type.Optional(
+        Type.Union([Type.String(), Type.Array(Type.String())], {
+          description:
+            "Call id(s) of fetched *_list/*_search results (from their UI " +
+            "notices). Their row arrays become the transform's arguments, in order.",
+        })
+      ),
+      transform: Type.Optional(
+        Type.String({
+          description:
+            "Pure JS function source, e.g. \"(all, passed) => { const ok = new " +
+            "Set(passed.map(t => t.id)); return all.map(t => ({...t, status: " +
+            "ok.has(t.id) ? 'passed' : t.status})); }\". Receives one array per " +
+            "`from` id (or the `data` array) and returns the rows to render. " +
+            "Sandboxed: no imports, no IO, 1s limit.",
+        })
+      ),
+      title: Type.Optional(
+        Type.String({
+          description: "Card header: what this list is and how it was derived.",
+        })
+      ),
+      columns: Type.Optional(
+        Type.Array(Type.String(), {
+          description:
+            "Row fields to show as columns, rendered in exactly this order " +
+            "(e.g. ['title', 'status', 'priority']). Omit for the kind's defaults.",
+        })
+      ),
+      summary: Type.Optional(
+        Type.String({ description: "Optional caption above the table." })
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      const p = params as RenderListParams;
+      let inputs: Array<unknown[]>;
+      try {
+        inputs = resolveInputs(p, cache);
+      } catch (err) {
+        return errorText(err);
       }
-    ),
-    data: Type.Union(
-      [
-        Type.Array(Type.Any()),
-        Type.Object({}, { additionalProperties: true }),
-      ],
-      {
-        description:
-          "The list data from the MCP response. Pass either the full MCP " +
-          "result object (e.g. `{data: [...], meta: {...}}`) or just the " +
-          "`data` array. The UI will extract what it needs.",
+
+      let rows: unknown[];
+      if (p.transform) {
+        try {
+          rows = runTransform(p.transform, inputs);
+        } catch (err) {
+          return errorText(err, "transform failed: ");
+        }
+      } else if (inputs.length === 1) {
+        rows = inputs[0];
+      } else {
+        return errorText(
+          new Error("multiple `from` results need a `transform` to combine them")
+        );
       }
-    ),
-    title: Type.Optional(
-      Type.String({
-        description:
-          "Short header shown in the card's collapse bar " +
-          "(e.g. 'Recent runs in codeceptjs'). Always pass one so the user " +
-          "can identify the card in history.",
-      })
-    ),
-    summary: Type.Optional(
-      Type.String({
-        description:
-          "Optional short caption shown inside the card above the table.",
-      })
-    ),
-    group_by: Type.Optional(
-      Type.String({
-        description:
-          "Split the rows into labelled sections by this field. For a `tests` " +
-          "list pass 'status' to group by latest run status — each section gets " +
-          "a colored status mark and a count. Tests only; ignored for other kinds.",
-      })
-    ),
-  }),
-  async execute(_toolCallId, params) {
-    const p = params as { kind?: string; data?: unknown; summary?: string };
-    const count = Array.isArray(p.data)
-      ? p.data.length
-      : p.data && typeof p.data === "object" && Array.isArray((p.data as { data?: unknown[] }).data)
-        ? (p.data as { data: unknown[] }).data.length
-        : "?";
-    console.log(`[render_list] kind=${p.kind} count=${count} summary=${p.summary ?? "—"}`);
-    return {
-      content: [{ type: "text", text: JSON.stringify(params) }],
-    };
-  },
-};
+
+      const payload: Record<string, unknown> = { ...p };
+      delete payload.transform;
+      delete payload.from;
+      payload.data = { data: rows, meta: metaFor(p, rows) };
+      console.log(
+        `[render_list] kind=${p.kind} count=${rows.length} source=${p.data ? "data" : `from(${p.from})`}`
+      );
+      return widgetResult(
+        `Rendered ${rows.length} ${p.kind} rows as a table.`,
+        payload
+      );
+    },
+  };
+}
+
+function resolveInputs(p: RenderListParams, cache: Map<string, CachedList>): Array<unknown[]> {
+  if (p.data) {
+    const rows = Array.isArray(p.data)
+      ? p.data
+      : (p.data as { data?: unknown[] }).data;
+    if (!Array.isArray(rows)) throw new Error("`data` holds no row array");
+    return [rows];
+  }
+  if (!p.from) throw new Error("pass `data`, or `from` call id(s) of fetched results");
+  const ids = Array.isArray(p.from) ? p.from : [p.from];
+  return ids.map((id) => {
+    const entry = cache.get(id);
+    if (!entry) {
+      const known = [...cache.keys()].slice(-5).join(", ") || "none";
+      throw new Error(`call_id "${id}" is not a cached list result (recent: ${known})`);
+    }
+    return entry.rows;
+  });
+}
+
+function runTransform(src: string, inputs: Array<unknown[]>): unknown[] {
+  const sandbox: { __inputs: Array<unknown[]>; __result?: unknown } = {
+    __inputs: inputs,
+  };
+  vm.runInNewContext(`__result = (${src})(...__inputs)`, sandbox, { timeout: 1000 });
+  const result = sandbox.__result;
+  if (!Array.isArray(result)) {
+    throw new Error("transform must return an array of rows");
+  }
+  return result;
+}
+
+function metaFor(p: RenderListParams, rows: unknown[]): { total: number } {
+  if (p.data && !Array.isArray(p.data)) {
+    const total = (p.data as { meta?: { total?: number } }).meta?.total;
+    if (typeof total === "number") return { total };
+  }
+  return { total: rows.length };
+}
+
+function errorText(err: unknown, prefix = ""): { content: Array<{ type: "text"; text: string }> } {
+  const reason = err instanceof Error ? err.message : String(err);
+  return {
+    content: [{ type: "text", text: `${prefix}${reason}` }],
+  };
+}
+
+interface RenderListParams {
+  kind: string;
+  data?: unknown;
+  from?: string | string[];
+  transform?: string;
+  title?: string;
+  summary?: string;
+  columns?: string[];
+}

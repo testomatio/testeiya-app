@@ -31,8 +31,6 @@ interface McpTestRun {
   assigned_to?: string | null;
 }
 
-const TESTRUNS_GRID = "minmax(0,8fr) 2fr 2fr";
-
 export default function TestRunsListRenderer({
   json,
   summary,
@@ -77,14 +75,20 @@ export default function TestRunsListRenderer({
     );
   }
 
+  const hasDuration = items.some((tr) => formatDuration(tr.run_time ?? tr.duration));
+  const hasEnv = items.some((tr) => tr.environment ?? tr.browser);
+  let grid = "minmax(0,8fr)";
+  if (hasDuration) grid += " 2fr";
+  if (hasEnv) grid += " 2fr";
+
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup gridCols={TESTRUNS_GRID}>
-        <ListRowHeader gridCols={TESTRUNS_GRID}>
+      <ListRowGroup gridCols={grid}>
+        <ListRowHeader gridCols={grid}>
           <div className="min-w-0 truncate">Test</div>
-          <div className="min-w-0 truncate">Duration</div>
-          <div className="min-w-0 truncate">Env</div>
+          {hasDuration && <div className="min-w-0 truncate">Duration</div>}
+          {hasEnv && <div className="min-w-0 truncate">Env</div>}
         </ListRowHeader>
         {items.map((tr, idx) => {
           const title =
@@ -97,7 +101,7 @@ export default function TestRunsListRenderer({
           return (
             <ListRow
               key={tr.id ?? idx}
-              gridCols={TESTRUNS_GRID}
+              gridCols={grid}
               onOpen={() => setSelected(tr)}
             >
               <div className="flex min-w-0 items-center gap-x-2">
@@ -115,12 +119,16 @@ export default function TestRunsListRenderer({
                   </span>
                 )}
               </div>
-              <div className="text-xs tabular-nums text-muted-foreground">
-                {formatDuration(duration) ?? "—"}
-              </div>
-              <div className="min-w-0 truncate text-xs text-muted-foreground">
-                {tr.environment ?? tr.browser ?? "—"}
-              </div>
+              {hasDuration && (
+                <div className="text-xs tabular-nums text-muted-foreground">
+                  {formatDuration(duration) ?? "—"}
+                </div>
+              )}
+              {hasEnv && (
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  {tr.environment ?? tr.browser ?? "—"}
+                </div>
+              )}
             </ListRow>
           );
         })}

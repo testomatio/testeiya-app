@@ -49,8 +49,6 @@ interface McpRun {
   labels?: unknown;
 }
 
-const RUNS_GRID = "minmax(0,7fr) minmax(0,2fr) minmax(0,3fr) minmax(0,2fr)";
-
 export default function RunsListRenderer({
   json,
   summary,
@@ -129,17 +127,23 @@ export default function RunsListRenderer({
     );
   }
 
+  const hasAssigned = items.some((r) => r.assigned_to);
+  const hasEnv = items.some((r) => r.environment ?? r.env);
+  let grid = "minmax(0,7fr) minmax(0,2fr)";
+  if (hasAssigned) grid += " minmax(0,3fr)";
+  if (hasEnv) grid += " minmax(0,2fr)";
+
   return (
     <div className="space-y-2">
       {summary && (
         <p className="text-sm text-muted-foreground">{summary}</p>
       )}
-      <ListRowGroup gridCols={RUNS_GRID}>
-        <ListRowHeader gridCols={RUNS_GRID}>
+      <ListRowGroup gridCols={grid}>
+        <ListRowHeader gridCols={grid}>
           <div className="min-w-0 truncate">Run</div>
           <div className="min-w-0 truncate">Status</div>
-          <div className="min-w-0 truncate">Finished</div>
-          <div className="min-w-0 truncate">Environment</div>
+          {hasAssigned && <div className="min-w-0 truncate">Finished</div>}
+          {hasEnv && <div className="min-w-0 truncate">Environment</div>}
         </ListRowHeader>
         {items.map((r, idx) => {
           const total =
@@ -157,7 +161,7 @@ export default function RunsListRenderer({
           return (
             <ListRow
               key={r.id ?? idx}
-              gridCols={RUNS_GRID}
+              gridCols={grid}
               onOpen={() => setSelected(r)}
             >
               <div className="flex min-w-0 items-center gap-x-2">
@@ -195,12 +199,16 @@ export default function RunsListRenderer({
                   <RunProgress percent={percent} automated={r.automated} />
                 )}
               </div>
-              <div className="flex min-w-0 items-center text-xs text-muted-foreground overflow-hidden">
-                <span className="truncate">{r.assigned_to ?? "—"}</span>
-              </div>
-              <div className="min-w-0">
-                {env && <OverflowBadgeList items={env.split(/[,;]+/).map(s => s.trim()).filter(Boolean)} />}
-              </div>
+              {hasAssigned && (
+                <div className="flex min-w-0 items-center text-xs text-muted-foreground overflow-hidden">
+                  <span className="truncate">{r.assigned_to ?? "—"}</span>
+                </div>
+              )}
+              {hasEnv && (
+                <div className="min-w-0">
+                  {env && <OverflowBadgeList items={env.split(/[,;]+/).map(s => s.trim()).filter(Boolean)} />}
+                </div>
+              )}
             </ListRow>
           );
         })}

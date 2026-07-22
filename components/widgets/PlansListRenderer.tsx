@@ -28,8 +28,6 @@ interface McpPlan {
   labels?: unknown;
 }
 
-const PLANS_GRID = "minmax(0,6fr) minmax(0,3fr) minmax(0,2fr)";
-
 export default function PlansListRenderer({
   json,
   summary,
@@ -68,14 +66,30 @@ export default function PlansListRenderer({
     );
   }
 
+  const hasLabels = items.some((p) => {
+    if (Array.isArray(p.labels)) return p.labels.length > 0;
+    return p.labels != null;
+  });
+  const hasCounts = items.some(
+    (p) =>
+      p.tests_count != null ||
+      p.suites_count != null ||
+      p.runs_count != null ||
+      Array.isArray(p.tests) ||
+      Array.isArray(p.suites)
+  );
+  let grid = "minmax(0,6fr)";
+  if (hasLabels) grid += " minmax(0,3fr)";
+  if (hasCounts) grid += " minmax(0,2fr)";
+
   return (
     <div className="space-y-2">
       {summary && <p className="text-sm text-muted-foreground">{summary}</p>}
-      <ListRowGroup gridCols={PLANS_GRID}>
-        <ListRowHeader gridCols={PLANS_GRID}>
+      <ListRowGroup gridCols={grid}>
+        <ListRowHeader gridCols={grid}>
           <div className="min-w-0 truncate">Plan</div>
-          <div className="min-w-0 truncate">Labels</div>
-          <div className="min-w-0 truncate">Counts</div>
+          {hasLabels && <div className="min-w-0 truncate">Labels</div>}
+          {hasCounts && <div className="min-w-0 truncate">Counts</div>}
         </ListRowHeader>
         {items.map((p, idx) => {
           const title = p.title ?? p.id ?? "(untitled)";
@@ -88,7 +102,7 @@ export default function PlansListRenderer({
           return (
             <ListRow
               key={p.id ?? idx}
-              gridCols={PLANS_GRID}
+              gridCols={grid}
               onOpen={() => setSelected(p)}
             >
               <div className="flex min-w-0 items-center gap-x-2">
@@ -117,9 +131,12 @@ export default function PlansListRenderer({
                   </span>
                 )}
               </div>
-              <div className="min-w-0">
-                <LabelsRow labels={p.labels} />
-              </div>
+              {hasLabels && (
+                <div className="min-w-0">
+                  <LabelsRow labels={p.labels} />
+                </div>
+              )}
+              {hasCounts && (
               <div className="flex items-center gap-x-3 text-xs tabular-nums text-muted-foreground">
                 {testsCount != null && (
                   <span title="tests">
@@ -137,6 +154,7 @@ export default function PlansListRenderer({
                   </span>
                 )}
               </div>
+              )}
             </ListRow>
           );
         })}

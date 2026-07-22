@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
+import { widgetResult } from "./widget-result.js";
 
 /**
  * `render_tree` — visualize a nested hierarchy (suites→suites→tests, or
@@ -62,8 +63,9 @@ export const renderTreeTool: ToolDefinition = {
     console.log(
       `[render_tree] "${p.title ?? "(untitled)"}" with ${p.nodes?.length ?? 0} root nodes`
     );
-    return {
-      content: [{ type: "text", text: JSON.stringify(params) }],
-    };
+    return widgetResult(
+      `Rendered tree "${p.title ?? "(untitled)"}" (${p.nodes?.length ?? 0} root nodes).`,
+      params
+    );
   },
 };

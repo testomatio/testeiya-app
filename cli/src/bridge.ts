@@ -29,15 +29,29 @@ export function transformEvent(event: any, messageId: string): Record<string, an
         output: stringifyResult(event.partialResult),
       };
 
-    case "tool_execution_end":
+    case "tool_execution_end": {
+      if (event.isError) {
+        return {
+          type: "tool-output-available",
+          toolCallId: event.toolCallId,
+          isError: true,
+          output: `Error: ${stringifyResult(event.result)}`,
+        };
+      }
+      // Widget tools return their card payload via `details.widget` (see
+      // webui/tools/widget-result.ts) — the model only sees the ack in
+      // `content`, the UI renders the payload.
+      const widget = event.result?.details?.widget;
       return {
         type: "tool-output-available",
         toolCallId: event.toolCallId,
-        isError: !!event.isError,
-        output: event.isError
-          ? `Error: ${stringifyResult(event.result)}`
-          : stringifyResult(event.result),
+        isError: false,
+        output:
+          widget !== undefined
+            ? JSON.stringify(widget)
+            : stringifyResult(event.result),
       };
+    }
 
     case "turn_start":
       return { type: "start-step" };
@@ -133,7 +147,12 @@ function attachToolResult(out: ChatMessage[], msg: any): void {
   for (let i = out.length - 1; i >= 0; i--) {
     const tool = out[i].tools?.find((t) => t.toolCallId === msg.toolCallId);
     if (!tool) continue;
-    tool.output = stringifyResult(msg.content);
+    const widget = msg.details?.widget;
+    if (widget !== undefined && !msg.isError) {
+      tool.output = JSON.stringify(widget);
+    } else {
+      tool.output = stringifyResult(msg.content);
+    }
     tool.state = msg.isError ? "output-error" : "output-available";
     return;
   }

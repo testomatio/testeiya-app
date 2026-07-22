@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
+import { widgetResult } from "./widget-result.js";
 
 /**
  * `render_item` — display a single Testomat.io entity in detail.
@@ -51,8 +52,9 @@ export const renderItemTool: ToolDefinition = {
   async execute(_toolCallId, params) {
     const p = params as { kind: string; title?: string };
     console.log(`[render_item] kind=${p.kind} title="${p.title ?? "(none)"}"`);
-    return {
-      content: [{ type: "text", text: JSON.stringify(params) }],
-    };
+    return widgetResult(
+      `Rendered a ${p.kind} detail card${p.title ? ` "${p.title}"` : ""}.`,
+      params
+    );
   },
 };

@@ -530,13 +530,17 @@ const MessageItem = observer(function MessageItem({
     );
   };
 
-  // Rich renders live in the widget pane now; the chat keeps a compact chip at
-  // the narrative spot that re-opens that widget.
+  // Rich renders live in the widget pane; the chat keeps a compact chip at
+  // the narrative spot that re-opens that widget. Charts are the exception:
+  // they are part of the narrative itself and render inline in the chat.
   const renderRender = (tool: ToolCall): ReactNode => {
     const rich = renderRichTool(tool.toolName, tool.input, tool.output);
     // An unparseable rich payload must still leave a trace in the chat —
     // fall back to the plain tool card instead of vanishing.
     if (!rich) return renderRoutine(tool);
+    if (tool.toolName === "render_chart") {
+      return <div key={tool.toolCallId}>{rich.body}</div>;
+    }
     const active =
       widget.current?.source === "tool" &&
       widget.current.key === tool.toolCallId;
@@ -641,12 +645,14 @@ const MessageItem = observer(function MessageItem({
         </div>
       )}
 
-      {/* Reasoning — auto-opens and streams while the model thinks, then
-          auto-collapses ~1s after it finishes. Finished/historical reasoning
-          starts collapsed; click the trigger to expand. */}
+      {/* Reasoning — auto-opens and streams live while the model thinks, and
+          stays visible until the model starts producing output; only then does
+          it collapse. Finished/historical reasoning starts collapsed; click the
+          trigger to expand. */}
       {message.reasoning && (
         <Reasoning
           isStreaming={message.reasoning.isStreaming}
+          hasOutput={!!message.content}
           duration={message.reasoning.duration}
         >
           <ReasoningTrigger />
@@ -1056,6 +1062,7 @@ const ChatView = observer(function ChatView({
       for (let i = tools.length - 1; i >= 0; i--) {
         const t = tools[i];
         if (t.toolName === "ask_question") continue;
+        if (t.toolName === "render_chart") continue;
         if (t.state !== "output-available") continue;
         if (richViewMode(t.toolName) === null) continue;
         if (isEmptyListRender(t.toolName, t.input, t.output)) continue;
@@ -1284,9 +1291,7 @@ const ChatView = observer(function ChatView({
   }, [status, project, sessions]);
 
   const activeCategory =
-    workflows.categories.find((c) => c.id === activeWorkflow) ??
-    workflows.categories[0] ??
-    null;
+    workflows.categories.find((c) => c.id === activeWorkflow) ?? null;
 
   return (
     <div className={cn("@container flex min-h-0 flex-1 flex-col", !isActive && "hidden")}>
@@ -1377,13 +1382,15 @@ const ChatView = observer(function ChatView({
                       <TooltipContent><p>Workflow overview</p></TooltipContent>
                     </Tooltip>
                   </div>
-                  {activeCategory && (
-                    <WorkflowPrompts
-                      category={activeCategory}
-                      onRun={runWorkflowPrompt}
-                      streaming={status === "streaming" || status === "submitted"}
-                    />
-                  )}
+                  <div className="flex min-h-9 w-full items-start justify-center">
+                    {activeCategory && (
+                      <WorkflowPrompts
+                        category={activeCategory}
+                        onRun={runWorkflowPrompt}
+                        streaming={status === "streaming" || status === "submitted"}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
             </div>

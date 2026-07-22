@@ -48,19 +48,20 @@ export const useReasoning = () => {
 
 export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   isStreaming?: boolean;
+  hasOutput?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   duration?: number;
 };
 
-const AUTO_CLOSE_DELAY = 1000;
 const MS_IN_S = 1000;
 
 export const Reasoning = memo(
   ({
     className,
     isStreaming = false,
+    hasOutput = false,
     open,
     defaultOpen,
     onOpenChange,
@@ -108,22 +109,22 @@ export const Reasoning = memo(
       }
     }, [isStreaming, isOpen, setIsOpen, isExplicitlyClosed]);
 
-    // Auto-close when streaming ends (once only, and only if it ever streamed)
+    // Collapse only once the model has started producing output — not merely
+    // because thinking finished. While it's still the only thing happening
+    // (thinking done, tools running, nothing yet) the reasoning stays visible.
+    // If no output ever comes, it stays expanded. Once only, and only if it
+    // ever streamed.
     useEffect(() => {
       if (
         hasEverStreamedRef.current &&
-        !isStreaming &&
+        hasOutput &&
         isOpen &&
         !hasAutoClosed
       ) {
-        const timer = setTimeout(() => {
-          setIsOpen(false);
-          setHasAutoClosed(true);
-        }, AUTO_CLOSE_DELAY);
-
-        return () => clearTimeout(timer);
+        setIsOpen(false);
+        setHasAutoClosed(true);
       }
-    }, [isStreaming, isOpen, setIsOpen, hasAutoClosed]);
+    }, [hasOutput, isOpen, setIsOpen, hasAutoClosed]);
 
     const handleOpenChange = useCallback(
       (newOpen: boolean) => {

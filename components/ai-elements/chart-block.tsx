@@ -28,6 +28,22 @@ const CHART_COLORS = [
   "var(--chart-5)",
 ];
 
+// Points/series named after a run status use the product's status colors so
+// passed is always green and failed always red, in any chart type.
+const STATUS_CHART_COLOR: Record<string, string> = {
+  passed: "var(--run-passed)",
+  failed: "var(--run-failed)",
+  skipped: "var(--run-skipped)",
+  pending: "var(--run-pending)",
+  running: "var(--run-running)",
+  terminated: "var(--run-terminated)",
+};
+
+function colorFor(name: unknown, i: number): string {
+  const key = String(name ?? "").toLowerCase().replace(/^not .*$/, "failed");
+  return STATUS_CHART_COLOR[key] ?? CHART_COLORS[i % CHART_COLORS.length];
+}
+
 const TOOLTIP_STYLE = {
   background: "var(--popover)",
   border: "1px solid var(--border)",
@@ -59,6 +75,11 @@ export function ChartRenderer({ code, isIncomplete }: CustomRendererProps) {
     );
   }
 
+  return <ChartBody spec={spec} />;
+}
+
+/** Chart figure shared by ```chart blocks and the `render_chart` tool. */
+export function ChartBody({ spec }: { spec: ChartSpec }) {
   return (
     <figure className="my-4 rounded-lg border border-border bg-card p-3">
       {spec.title ? (
@@ -96,8 +117,8 @@ function renderChart(spec: ChartSpec) {
           strokeWidth={2}
           isAnimationActive={false}
         >
-          {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+          {data.map((d, i) => (
+            <Cell key={i} fill={colorFor((d as { name?: unknown }).name, i)} />
           ))}
         </Pie>
         <Legend verticalAlign="bottom" iconType="circle" />
@@ -123,7 +144,7 @@ function renderChart(spec: ChartSpec) {
             type="monotone"
             dataKey={s.key}
             name={s.label ?? s.key}
-            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            stroke={colorFor(s.label ?? s.key, i)}
             strokeWidth={2}
             dot={false}
             isAnimationActive={false}
@@ -151,8 +172,8 @@ function renderChart(spec: ChartSpec) {
             type="monotone"
             dataKey={s.key}
             name={s.label ?? s.key}
-            stroke={CHART_COLORS[i % CHART_COLORS.length]}
-            fill={CHART_COLORS[i % CHART_COLORS.length]}
+            stroke={colorFor(s.label ?? s.key, i)}
+            fill={colorFor(s.label ?? s.key, i)}
             fillOpacity={0.2}
             strokeWidth={2}
             isAnimationActive={false}
@@ -178,10 +199,15 @@ function renderChart(spec: ChartSpec) {
           key={s.key}
           dataKey={s.key}
           name={s.label ?? s.key}
-          fill={CHART_COLORS[i % CHART_COLORS.length]}
+          fill={colorFor(s.label ?? s.key, i)}
           radius={[4, 4, 0, 0]}
           isAnimationActive={false}
-        />
+        >
+          {series.length === 1 &&
+            data.map((d, j) => (
+              <Cell key={j} fill={colorFor((d as { name?: unknown }).name, j)} />
+            ))}
+        </Bar>
       ))}
     </BarChart>
   );
@@ -205,7 +231,7 @@ function parseChartSpec(code: string): ChartSpec | null {
 
 type ChartSeries = { key: string; label?: string };
 
-type ChartSpec = {
+export type ChartSpec = {
   type?: "bar" | "line" | "area" | "pie";
   title?: string;
   data: Array<Record<string, unknown>>;

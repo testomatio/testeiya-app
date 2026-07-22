@@ -42,7 +42,9 @@ function turnEntry(message: any): AiEventInput | null {
     kind: "ai",
     channel: "ai",
     name: "response",
-    summary: `${message.model} · ${message.stopReason} · ${text.length} chars${tokenSummary(tokens)}`,
+    summary:
+      `${message.model} · ${message.stopReason} · ${text.length} chars` +
+      `${tokenSummary(tokens)}${cacheSummary(message.usage)}${durSummary(message.duration)}`,
     ok: true,
     model: message.model ?? null,
     durationMs: numberOrNull(message.duration),
@@ -68,6 +70,16 @@ function turnEntry(message: any): AiEventInput | null {
 function tokenSummary(tokens: AiEventEntry["tokens"]): string {
   if (!tokens) return "";
   return ` · ${tokens.input}/${tokens.output} tok`;
+}
+
+function cacheSummary(usage: any): string {
+  if (!usage?.cacheRead) return "";
+  return ` · cached=${usage.cacheRead}`;
+}
+
+function durSummary(duration: any): string {
+  if (typeof duration !== "number") return "";
+  return ` · dur=${(duration / 1000).toFixed(1)}s`;
 }
 
 function withSession(summary: string | null, conversationId: string): string {
