@@ -3,7 +3,7 @@
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { ResolvedWorkflowCategory, ResolvedWorkflowPrompt } from "@/lib/workflows/categories";
+import type { ResolvedWorkflowCategory, ResolvedWorkflowPrompt } from "@/lib/workflows/types";
 
 export function WorkflowPrompts({
   category,

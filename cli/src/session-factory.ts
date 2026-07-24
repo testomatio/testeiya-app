@@ -81,6 +81,7 @@ import { createPermissionExtension } from "./permissions.js";
 import type { AskChannel } from "./extensions/webui/ask-channel.js";
 import type { WidgetCommandChannel } from "./extensions/webui/widget-channel.js";
 import { createCommandsExtension, type CommandsRuntime } from "./commands.js";
+import { createToolGateExtension, type ToolGateRuntime } from "./extensions/tool-gate.js";
 import { createTelemetryExtension, isTelemetryEnabled } from "./telemetry.js";
 
 /** Derive API key env var name from provider name (e.g., "openrouter" -> "OPENROUTER_API_KEY") */
@@ -280,9 +281,11 @@ export async function createTesteiyaSession(options?: SessionOptions) {
   // session) to live-connect servers from /connect — pass a mutable runtime
   // and fill it in after createAgentSession returns.
   const commandsRuntime: CommandsRuntime = { cwd };
+  const toolGateRuntime: ToolGateRuntime = {};
   const extensions: ExtensionFactory[] = [
     createPermissionExtension(config, cwd, options?.trusted) as ExtensionFactory,
     createCommandsExtension(commandsRuntime),
+    createToolGateExtension(toolGateRuntime, config.toolGate),
   ];
   let askChannel: AskChannel | undefined;
   let widgetChannel: WidgetCommandChannel | undefined;
@@ -345,6 +348,8 @@ export async function createTesteiyaSession(options?: SessionOptions) {
   });
 
   commandsRuntime.mcpManager = result.mcpManager;
+  toolGateRuntime.mcpManager = result.mcpManager;
+  initExtensionRunner(result.session);
 
   return {
     ...result,
@@ -368,4 +373,63 @@ async function resolveSessionManager(
   const match = infos.find((i) => i.id === resumeConversationId);
   if (!match) return SessionManager.create(cwd, sessionDir);
   return SessionManager.open(match.path, sessionDir);
+}
+
+// The SDK wires extension runtime *actions* (setActiveTools, sendMessage, …)
+// only from its own mode controllers (print/interactive/rpc). Testeiya drives
+// the session directly, so without this call every action method throws
+// ExtensionRuntimeNotInitializedError forever. Mirrors print-mode.ts.
+function initExtensionRunner(sessionValue: unknown): void {
+  const session = sessionValue as any;
+  const runner = session?.extensionRunner;
+  if (!runner) return;
+  runner.initialize(
+    {
+      sendMessage: (message: unknown, options: unknown) => {
+        session.sendCustomMessage(message, options).catch((e: any) => {
+          console.warn("[ext] sendMessage failed:", e?.message ?? e);
+        });
+      },
+      sendUserMessage: (content: unknown, options: unknown) => {
+        session.sendUserMessage(content, options).catch((e: any) => {
+          console.warn("[ext] sendUserMessage failed:", e?.message ?? e);
+        });
+      },
+      appendEntry: (customType: string, data: unknown) =>
+        session.sessionManager.appendCustomEntry(customType, data),
+      setLabel: (targetId: string, label: unknown) =>
+        session.sessionManager.appendLabelChange(targetId, label),
+      getActiveTools: () => session.getActiveToolNames(),
+      getAllTools: () => session.getAllToolNames(),
+      setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
+      getCommands: () => [],
+      setModel: async (model: unknown) => {
+        const key = await session.modelRegistry.getApiKey(model);
+        if (!key) return false;
+        await session.setModel(model);
+        return true;
+      },
+      getThinkingLevel: () => session.thinkingLevel,
+      setThinkingLevel: (level: unknown) => session.setThinkingLevel(level),
+    },
+    {
+      getModel: () => session.model,
+      getSearchDb: () => session.searchDb,
+      isIdle: () => !session.isStreaming,
+      abort: () => session.abort(),
+      hasPendingMessages: () => session.queuedMessageCount > 0,
+      shutdown: () => {},
+      getContextUsage: () => session.getContextUsage(),
+      getSystemPrompt: () => session.systemPrompt,
+      compact: async (instructionsOrOptions: unknown) => {
+        const instructions =
+          typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
+        const options =
+          instructionsOrOptions && typeof instructionsOrOptions === "object"
+            ? instructionsOrOptions
+            : undefined;
+        await session.compact(instructions, options);
+      },
+    }
+  );
 }

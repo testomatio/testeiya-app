@@ -49,7 +49,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTesteiya } from "@/hooks/use-testeiya";
-import type { ChatStatus as TesteiyaStatus, TesteiyaParams, ToolCall, ChatMessage } from "@/hooks/use-testeiya";
+import type { ChatStatus as TesteiyaStatus, TesteiyaParams, ToolCall, ChatMessage, MessagePart } from "@/hooks/use-testeiya";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useHost } from "@/lib/host-bridge";
 import { useTheme } from "@/lib/theme";
@@ -71,6 +71,7 @@ import {
   useChatTabsService,
   useWorkflowsService,
   useSkillsService,
+  useDebugLogService,
 } from "@/lib/services/StoreProvider";
 import { PanelProvider, usePanel } from "@/lib/panel/PanelContext";
 import { WidgetCommandProvider, useWidgetBus } from "@/lib/widgets/command-bus";
@@ -112,6 +113,9 @@ function isRenderish(tool: ToolCall): boolean {
 
 
 type Segment =
+  | { kind: "text"; text: string; index: number }
+  | { kind: "reasoning"; content: string; isStreaming: boolean; duration?: number; hasOutput: boolean; index: number }
+  | { kind: "ask"; tool: ToolCall }
   | { kind: "routine-solo"; tool: ToolCall }
   | { kind: "routine-group"; tools: ToolCall[] }
   | { kind: "render"; tool: ToolCall; isLatest: boolean }
@@ -192,6 +196,103 @@ function segmentTools(
   return out;
 }
 
+/**
+ * Order-preserving pass over a message's `parts` (text + tool calls, as the
+ * model emitted them). Text lands as its own segment where it occurred, so
+ * intent text stays above the tools and the final answer below them. Tool
+ * grouping mirrors `segmentTools`, but a text block also breaks a routine run.
+ */
+function segmentParts(
+  parts: MessagePart[],
+  tools: ToolCall[],
+  isStreaming: boolean,
+  isCurrentTodo: boolean
+): Segment[] {
+  const byId = new Map(tools.map((t) => [t.toolCallId, t]));
+
+  let lastRenderId: string | null = null;
+  for (let i = tools.length - 1; i >= 0; i--) {
+    if (isRenderish(tools[i])) {
+      lastRenderId = tools[i].toolCallId;
+      break;
+    }
+  }
+
+  let lastTodo: ToolCall | null = null;
+  let lastTodoWithOutput: ToolCall | null = null;
+  for (const t of tools) {
+    if (!isTodoWrite(t)) continue;
+    lastTodo = t;
+    if (t.state === "output-available") lastTodoWithOutput = t;
+  }
+  const todoTool = lastTodoWithOutput ?? lastTodo;
+  const todoRunning =
+    !!lastTodo &&
+    lastTodo.state !== "output-available" &&
+    lastTodo.state !== "output-error";
+
+  const out: Segment[] = [];
+  let buf: ToolCall[] = [];
+  let todoEmitted = false;
+  let textIndex = 0;
+  let reasoningIndex = 0;
+  const flush = () => {
+    if (buf.length === 0) return;
+    if (buf.length === 1) out.push({ kind: "routine-solo", tool: buf[0] });
+    else out.push({ kind: "routine-group", tools: buf });
+    buf = [];
+  };
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.type === "reasoning") {
+      flush();
+      if (part.content.trim()) {
+        out.push({
+          kind: "reasoning",
+          content: part.content,
+          isStreaming: part.isStreaming,
+          duration: part.duration,
+          // Collapse once the model moved on (a later part exists); the live
+          // trailing block stays open while it streams and while tools that
+          // belong to it are still the newest thing.
+          hasOutput: i < parts.length - 1,
+          index: reasoningIndex++,
+        });
+      }
+      continue;
+    }
+    if (part.type === "text") {
+      flush();
+      if (part.text.trim()) out.push({ kind: "text", text: part.text, index: textIndex++ });
+      continue;
+    }
+    const t = byId.get(part.toolCallId);
+    if (!t) continue;
+    if (isAskQuestion(t)) {
+      // Rendered in place (not pinned to the bottom) so the agent's post-answer
+      // reply, which now sits in `parts` after it, reads below the question.
+      flush();
+      out.push({ kind: "ask", tool: t });
+      continue;
+    }
+    if (isTodoWrite(t)) {
+      if (todoEmitted || !todoTool) continue; // one persistent panel per message
+      flush();
+      out.push({ kind: "todo", tool: todoTool, running: todoRunning, current: isCurrentTodo });
+      todoEmitted = true;
+      continue;
+    }
+    if (isRenderish(t)) {
+      flush();
+      out.push({ kind: "render", tool: t, isLatest: t.toolCallId === lastRenderId && !isStreaming });
+      continue;
+    }
+    buf.push(t);
+  }
+  flush();
+  return out;
+}
+
 function summarizeTools(tools: ToolCall[]): string {
   // Compact run-length encoding — "read×3, bash, find" style
   const out: string[] = [];
@@ -236,9 +337,31 @@ function relativizePath(value: string, cwd?: string | null): string {
 function renderSegments(
   segments: Segment[],
   renderRoutine: (tool: ToolCall) => ReactNode,
-  renderRender: (tool: ToolCall, isLatest: boolean) => ReactNode
+  renderRender: (tool: ToolCall, isLatest: boolean) => ReactNode,
+  renderAsk: (tool: ToolCall) => ReactNode
 ): ReactNode {
   return segments.map((seg, idx) => {
+    if (seg.kind === "text") {
+      return (
+        <MessageContent key={`text-${seg.index}`}>
+          <MessageResponse>{seg.text}</MessageResponse>
+        </MessageContent>
+      );
+    }
+    if (seg.kind === "reasoning") {
+      return (
+        <Reasoning
+          key={`reasoning-${seg.index}`}
+          isStreaming={seg.isStreaming}
+          hasOutput={seg.hasOutput}
+          duration={seg.duration}
+        >
+          <ReasoningTrigger />
+          <ReasoningContent>{seg.content}</ReasoningContent>
+        </Reasoning>
+      );
+    }
+    if (seg.kind === "ask") return renderAsk(seg.tool);
     if (seg.kind === "routine-solo") return renderRoutine(seg.tool);
     if (seg.kind === "render") return renderRender(seg.tool, seg.isLatest);
     if (seg.kind === "todo") {
@@ -466,10 +589,11 @@ const MessageItem = observer(function MessageItem({
   widget,
   onAnswer,
 }: MessageItemProps) {
-  const segments = useMemo(
-    () => segmentTools(message.tools ?? [], isStreaming, isLastTodo),
-    [message.tools, isStreaming, isLastTodo]
-  );
+  const segments = useMemo(() => {
+    const tools = message.tools ?? [];
+    if (message.parts?.length) return segmentParts(message.parts, tools, isStreaming, isLastTodo);
+    return segmentTools(tools, isStreaming, isLastTodo);
+  }, [message.parts, message.tools, isStreaming, isLastTodo]);
 
   const renderRoutine = (tool: ToolCall): ReactNode => {
     // Live output tail (bash streams while it runs) — auto-open the card so
@@ -645,11 +769,10 @@ const MessageItem = observer(function MessageItem({
         </div>
       )}
 
-      {/* Reasoning — auto-opens and streams live while the model thinks, and
-          stays visible until the model starts producing output; only then does
-          it collapse. Finished/historical reasoning starts collapsed; click the
-          trigger to expand. */}
-      {message.reasoning && (
+      {/* Legacy merged reasoning — only for parts-less messages; with ordered
+          parts each reasoning block renders inline via renderSegments, in the
+          position the model emitted it. */}
+      {message.reasoning && !message.parts?.some((p) => p.type === "reasoning") && (
         <Reasoning
           isStreaming={message.reasoning.isStreaming}
           hasOutput={!!message.content}
@@ -662,18 +785,22 @@ const MessageItem = observer(function MessageItem({
         </Reasoning>
       )}
 
-      {/* Tools — rendered in tool-call order so the narrative stays coherent. */}
-      {renderSegments(segments, renderRoutine, renderRender)}
+      {/* Text, tools, and ask_question cards — interleaved in the exact order
+          the model emitted them, so intent text leads and the answer trails. */}
+      {renderSegments(segments, renderRoutine, renderRender, renderAsk)}
 
-      {/* Answered `ask_question` — inline, above the follow-up text so the
-          agent's post-answer reply reads below the question, not above it. */}
-      {(message.tools ?? [])
+      {/* Answered `ask_question` — only for parts-less (legacy) messages; with
+          ordered parts the ask card renders inline above via renderSegments. */}
+      {!message.parts?.length && (message.tools ?? [])
         .filter(isAskQuestion)
         .filter((tool) => tool.state !== "input-available")
         .map(renderAsk)}
 
-      {/* Text content */}
-      {message.content && (
+      {/* Text content — with ordered `parts`, the message's text is already
+          interleaved above by renderSegments (intent first, answer last), so
+          only the copy action trails here. Parts-less messages (user bubbles,
+          legacy history) keep their single trailing content block. */}
+      {!message.parts?.length && message.content && (
         <MessageContent>
           <MessageResponse>{message.content}</MessageResponse>
           {message.role === "assistant" && (
@@ -681,10 +808,14 @@ const MessageItem = observer(function MessageItem({
           )}
         </MessageContent>
       )}
+      {!!message.parts?.length && message.role === "assistant" && message.content && (
+        <MessageActions content={message.content} className="mt-1" />
+      )}
 
       {/* Pending `ask_question` pinned to the bottom — the only interactive
-          tool; keep it reachable while it awaits an answer. */}
-      {(message.tools ?? [])
+          tool; keep it reachable while it awaits an answer. Parts messages
+          render it inline (it's the last part, so already at the bottom). */}
+      {!message.parts?.length && (message.tools ?? [])
         .filter(isAskQuestion)
         .filter((tool) => tool.state === "input-available")
         .map(renderAsk)}
@@ -1026,6 +1157,7 @@ const ChatView = observer(function ChatView({
   const connections = useConnectionsService();
   const sessions = useSessionsService();
   const skills = useSkillsService();
+  const debug = useDebugLogService();
   const mentionFiles = useMemo(() => flattenTree(workspace.tree), [workspace.tree]);
   const mentionSkills = useMemo(
     () =>
@@ -1314,6 +1446,9 @@ const ChatView = observer(function ChatView({
                 Open Providers
               </Button>
             )}
+            <Button size="sm" variant="ghost" onClick={() => void debug.copyLogs()}>
+              Copy logs
+            </Button>
             <Button size="sm" variant="ghost" onClick={clearError}>
               Dismiss
             </Button>

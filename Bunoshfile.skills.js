@@ -4,9 +4,11 @@ import * as cli from "./cli/Bunoshfile.js";
  * Update the vendored external skills (cli/skills.yaml) into cli/skills/<vendor>/.
  * Folders the manifest does not own (e.g. cli/skills/testeiya/) are internal and never touched.
  * @param {string} vendor - only update this vendor (folder, owner, or owner/repo)
+ * @param {object} options
+ * @param {string} [options.repo=""] - update one source from a branch, as <owner/repo:branch>; fails when the repo or branch does not exist
  */
-export function update(vendor = "") {
-  return cli.skillsUpdate(vendor);
+export function update(vendor = "", options = { repo: "" }) {
+  return cli.skillsUpdate(vendor, options);
 }
 
 /**

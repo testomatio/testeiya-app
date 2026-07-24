@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { transformEvent } from "../src/bridge.js";
+import { historyToChatMessages, transformEvent } from "../src/bridge.js";
 
 const NOTICE =
   "\n\n[UI notice — not part of the data]\n" +
@@ -37,5 +37,32 @@ describe("transformEvent tool_execution_end", () => {
       "m1"
     );
     expect(msg?.output).toBe("a\nb");
+  });
+});
+
+describe("historyToChatMessages reasoning parts", () => {
+  test("keeps thinking blocks in transcript order, grouping consecutive ones", () => {
+    const [msg] = historyToChatMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "**Planning workflow**" },
+          { type: "thinking", thinking: "**Starting discovery**" },
+          { type: "text", text: "I'll inspect the repo." },
+          { type: "toolCall", id: "c1", name: "read", arguments: {} },
+          { type: "thinking", thinking: "**Inspecting CI config**" },
+        ],
+      },
+    ]);
+    expect(msg.parts).toEqual([
+      {
+        type: "reasoning",
+        content: "**Planning workflow**\n\n**Starting discovery**",
+        isStreaming: false,
+      },
+      { type: "text", text: "I'll inspect the repo." },
+      { type: "tool", toolCallId: "c1" },
+      { type: "reasoning", content: "**Inspecting CI config**", isStreaming: false },
+    ]);
   });
 });

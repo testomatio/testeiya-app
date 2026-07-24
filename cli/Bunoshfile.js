@@ -12,7 +12,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
 
-const { shell, say, yell } = global.bunosh;
+const { shell, say, yell, assert } = global.bunosh;
 
 const CLI_ROOT = import.meta.dir;
 const SKILLS_MANIFEST = join(CLI_ROOT, "skills.yaml");
@@ -39,26 +39,48 @@ const DOCS_SKILL_DIR = join(INTERNAL_SKILLS_DIR, "testomatio-docs");
  * resolved SHAs + owned folders are pinned in cli/skills.lock.json. Re-run on
  * release.
  * @param {string} vendor - only update this vendor (folder, owner, or owner/repo)
+ * @param {object} options
+ * @param {string} [options.repo=""] - update one source from a branch, as <owner/repo:branch>; fails when the repo or branch does not exist
  */
-export async function skillsUpdate(vendor = "") {
+export async function skillsUpdate(vendor = "", options = { repo: "" }) {
   if (!existsSync(SKILLS_MANIFEST)) {
     yell(`No manifest at ${SKILLS_MANIFEST}`);
     return;
   }
+  let branch = null;
+  let filter = vendor;
+  if (options.repo) {
+    const match = String(options.repo).match(/^([^:]+):(.+)$/);
+    if (!match) {
+      assert(false, `--repo expects <owner/repo:branch>, got "${options.repo}"`);
+      return;
+    }
+    filter = match[1];
+    branch = match[2];
+  }
   const parsed = parseYaml(readFileSync(SKILLS_MANIFEST, "utf-8")) ?? [];
   const allSources = (Array.isArray(parsed) ? parsed : Object.values(parsed).flat()).map(normalizeEntry);
   let entries = allSources;
-  if (vendor) entries = allSources.filter((e) => matchesVendor(e, vendor));
+  if (filter) entries = allSources.filter((e) => matchesVendor(e, filter));
   if (entries.length === 0) {
-    yell(`No manifest source matches "${vendor}"`);
+    if (branch) {
+      assert(false, `No manifest source matches "${filter}" — add it to ${SKILLS_MANIFEST} first`);
+      say(`Known sources: ${allSources.map((e) => e.source).join(", ")}`);
+      return;
+    }
+    yell(`No manifest source matches "${filter}"`);
     say(`Known vendors: ${allSources.map((e) => vendorFolder(e.source)).join(", ")}`);
     return;
+  }
+  if (branch) {
+    for (const entry of entries) entry.ref = branch;
+    say(`Using branch "${branch}" for ${entries.map((e) => e.source).join(", ")}`);
   }
   say(`Updating ${entries.length} of ${allSources.length} source(s) from ${SKILLS_MANIFEST}`);
 
   const prevLock = readLock();
   const managed = new Set(prevLock.map((l) => l.folder).filter(Boolean));
-  if (!vendor) removeStaleFolders(prevLock, allSources);
+  if (!filter) removeStaleFolders(prevLock, allSources);
 
   // Slugs already taken by sources not updated in this run, so a filtered run
   // still detects cross-vendor duplicates.
@@ -78,7 +100,13 @@ export async function skillsUpdate(vendor = "") {
       continue;
     }
     const from = isLocal(entry.source) ? resolveLocalSource(entry) : await fetchGitSource(entry);
-    if (!from) continue;
+    if (!from) {
+      if (branch) {
+        assert(false, `${entry.source}@${branch} not found — check the repo and branch exist`);
+        return;
+      }
+      continue;
+    }
     const found = findSkills(from.root, entry.include, repoCategory(entry.source));
     if (found.length === 0) {
       say(`  ! ${entry.source} — no SKILL.md found`);
@@ -103,7 +131,7 @@ export async function skillsUpdate(vendor = "") {
     if (from.cleanup) rmSync(from.cleanup, { recursive: true, force: true });
   }
 
-  const sources = mergeLock(allSources, prevLock, updatedLock, !vendor);
+  const sources = mergeLock(allSources, prevLock, updatedLock, !filter);
   writeFileSync(SKILLS_LOCK, JSON.stringify({ sources }, null, 2) + "\n");
   say(`\nUpdated ${updatedLock.length} vendor(s) in ${SKILLS_OUTPUT}; pinned in ${SKILLS_LOCK}.`);
 }

@@ -1,21 +1,22 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { WorkflowsDiagram } from "@/components/workflows/WorkflowsDiagram";
-import type { ResolvedWorkflowCategory } from "@/lib/workflows/categories";
+import type { ResolvedWorkflowCategory } from "@/lib/workflows/types";
 
 const CATEGORIES: ResolvedWorkflowCategory[] = [
   {
-    id: "requirements",
-    title: "Requirements",
+    id: "analysis-planning",
+    title: "Analysis & Planning",
     icon: "assignment",
     prompts: [
       row("🔍", "Review requirements"),
       row("⚠️", "Risk-based focus"),
       row("🔀", "Analyze PR requirements"),
+      row("🔬", "Analyze PR diff"),
     ],
   },
   {
-    id: "test-cases",
-    title: "Test Cases",
+    id: "test-design-management",
+    title: "Test Design & Management",
     icon: "checklist",
     prompts: [
       row("✍️", "Write test cases"),
@@ -25,31 +26,30 @@ const CATEGORIES: ResolvedWorkflowCategory[] = [
     ],
   },
   {
-    id: "automation",
-    title: "Automation",
+    id: "test-execution-automation",
+    title: "Test Execution & Automation",
     icon: "automation",
     prompts: [
       row("🤖", "Automate test cases"),
-      row("🗺️", "Map coverage"),
       row("🔧", "Fix flaky tests"),
       row("🔎", "Scan project"),
     ],
   },
   {
-    id: "run-ci",
-    title: "Run / CI",
+    id: "reporting-ci-quality-gates",
+    title: "Reporting, CI/CD & Quality Gates",
     icon: "rocket_launch",
-    prompts: [row("📈", "Set up reporting"), row("🛠️", "Fix CI tests")],
+    prompts: [
+      row("📈", "Set up reporting"),
+      row("🛠️", "Fix CI tests"),
+      row("🗺️", "Map coverage"),
+    ],
   },
   {
-    id: "releases-analysis",
-    title: "Releases / Analysis",
+    id: "metrics-release-analytics",
+    title: "Metrics, Release & Analytics",
     icon: "insights",
-    prompts: [
-      row("📊", "Analyze runs"),
-      row("🚑", "Triage failures"),
-      row("🔬", "Analyze PR diff"),
-    ],
+    prompts: [row("📊", "Analyze runs"), row("🚑", "Triage failures")],
   },
 ];
 

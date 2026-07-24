@@ -2,8 +2,8 @@
   "sources": [
     {
       "source": "testomatio/skills",
-      "ref": null,
-      "sha": "0408f52dfb47065c9b5030ad9c36e6fbda8632de",
+      "ref": "feat/setup-pr-testing-skill",
+      "sha": "99a6808422ff9e3a6bd46edab04a32d37a6ed028",
       "folder": "testomatio",
       "skills": [
         "testomatio-mcp",
@@ -18,6 +18,8 @@
         "pull-request-diff-analyzer",
         "improve-test-cases",
         "detect-duplicate-test-cases",
+        "setup-pr-testing",
+        "run-tests-with-testomatio-reporter",
         "qa-automation-test-consolidation",
         "debug-fix-failed-flaky-autotests",
         "automate-manual-test-cases",

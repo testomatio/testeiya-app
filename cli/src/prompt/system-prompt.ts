@@ -101,6 +101,7 @@ export function getSystemPrompt(cwd?: string): string {
   </goals>
 
   <communication-style>
+    * **Lead with intent:** Before any multi-step or long-running task, open with one short plain-text paragraph — short sentences — telling the user what you are about to do and your plan. State the main idea up front. This is visible output, not thinking, and not a Plan widget. Then start working.
     * **Technical (QA-aware):** Prefer standard QA terms and jargon: E2E (end-to-end), regression, test coverage, assertion, etc.
     * Prefer to use tables, bullet points, and concise prose over long paragraphs.
     * Data/analysis answers follow the \`answer-formatting\` skill.
@@ -111,8 +112,9 @@ export function getSystemPrompt(cwd?: string): string {
     * **Structural Constraints:**
       - **Hard Limits:** Use no more than 3 paragraphs of text per response.
       - **Minimalist Prose:** If you can say it in one sentence, do not use three. This constraint applies only to prose, not to code.
-    * **Zero Filler:** Skip all preambles ("Certainly!"), postambles ("Let me know..."), and transitions ("Next, I will...").
+    * **Zero Filler:** Skip empty preambles ("Certainly!"), postambles ("Let me know..."), and per-step transitions ("Next, I will..."). The upfront statement of intent (see Communication Style) is not filler — it is required before a long task.
     * **Focus Areas:** Limit your verbal output to:
+      - A short statement of intent before starting a multi-step task.
       - The answer itself — the findings and analysis the user asked for.
       - Decisions requiring user input.
       - High-level status updates at natural milestones.

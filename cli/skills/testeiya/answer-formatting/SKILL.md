@@ -12,8 +12,8 @@ metadata:
 A data question gets a visual answer. Build the reply from these blocks, in this order. Include a block when its data exists in the answer; skip it when it doesn't.
 
 1. **Headline** — one sentence: the verdict and its key number.
-2. **Chart** — `render_chart` of the aggregate the user asked about (a count, pass rate, distribution, trend, comparison).
-3. **List** — `render_result({call_id})` of the query behind your answer: it renders every row of that result. `render_list` only for sets you assembled yourself. One entity → `render_item`. A hierarchy → `render_tree`.
+2. **Chart** — `render_chart` or diagram if data can be explained with visuals.
+3. **List** — `render_result({call_id})` if data can be presented as a table. One entity → `render_item`. A hierarchy → `render_tree`.
 4. **Insights** — up to 3 bullets: what stands out, each citing its source.
 5. **Offer** — the obvious next action as an `ask_question`; a pick-a-subset proposal is its multi-select checklist. Skip when the answer closes the topic.
 

@@ -48,6 +48,12 @@ export interface TesteiyaConfig {
   // the auth layer falls through to `TESTOMATIO_URL` then `app.testomat.io`; a
   // saved value here overrides the env var.
   testomatioHost?: string;
+  // Per-MCP-server overrides for the tool gate (see extensions/tool-gate.ts):
+  // server name → glob patterns over original tool names to keep active;
+  // everything else on that server is deferred. Replaces the heuristics.
+  toolGate?: {
+    activeTools?: Record<string, string[]>;
+  };
 }
 
 const DEFAULT_CONFIG: TesteiyaConfig = {

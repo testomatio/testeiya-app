@@ -22,10 +22,25 @@ export interface AttachedFile {
   dataUrl: string;
 }
 
+/** One ordered piece of an assistant turn — a text block, a tool call, or a
+ *  reasoning block — in the sequence the model emitted them, so the UI renders
+ *  thinking, intent text, tools, and the final answer in their true order.
+ *  Consecutive thinking segments merge into one reasoning part; a text block or
+ *  tool call in between starts a new one. */
+export type MessagePart =
+  | { type: "text"; text: string }
+  | { type: "tool"; toolCallId: string }
+  | { type: "reasoning"; content: string; isStreaming: boolean; duration?: number };
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Reasoning + text + tool calls in arrival order. Present on live and
+   *  resumed assistant turns; absent on plain user messages and legacy history. */
+  parts?: MessagePart[];
+  /** Legacy merged reasoning for parts-less messages; live turns and resumed
+   *  history carry reasoning as ordered `parts` instead. */
   reasoning?: {
     content: string;
     isStreaming: boolean;
@@ -134,7 +149,6 @@ export function useTesteiya(params?: TesteiyaParams) {
   }, [params?.sessionId]);
   const wsRef = useRef<WebSocket | null>(null);
   const contentRef = useRef("");
-  const reasoningRef = useRef("");
   const reasoningStartRef = useRef<number>(0);
   const currentMsgIdRef = useRef("");
   const pendingMessageRef = useRef<{ text: string; files?: AttachedFile[] } | null>(null);
@@ -257,7 +271,6 @@ export function useTesteiya(params?: TesteiyaParams) {
         case "start": {
           currentMsgIdRef.current = data.messageId as string;
           contentRef.current = "";
-          reasoningRef.current = "";
           const skill = pendingSkillRef.current ?? undefined;
           pendingSkillRef.current = null;
           setMessages((prev) => [
@@ -277,11 +290,14 @@ export function useTesteiya(params?: TesteiyaParams) {
           if (id !== currentMsgIdRef.current) {
             currentMsgIdRef.current = id;
             contentRef.current = "";
-            reasoningRef.current = "";
           }
           contentRef.current += data.delta as string;
           const text = contentRef.current;
-          updateMessageById(id, (msg) => ({ ...msg, content: text }));
+          updateMessageById(id, (msg) => ({
+            ...msg,
+            content: text,
+            parts: appendTextPart(msg.parts, data.delta as string),
+          }));
           break;
         }
 
@@ -293,12 +309,11 @@ export function useTesteiya(params?: TesteiyaParams) {
           if (id !== currentMsgIdRef.current) {
             currentMsgIdRef.current = id;
             contentRef.current = "";
-            reasoningRef.current = "";
           }
           reasoningStartRef.current = Date.now();
           updateMessageById(id, (msg) => ({
             ...msg,
-            reasoning: { content: "", isStreaming: true },
+            parts: openReasoningPart(msg.parts),
           }));
           break;
         }
@@ -308,27 +323,22 @@ export function useTesteiya(params?: TesteiyaParams) {
           if (id !== currentMsgIdRef.current) {
             currentMsgIdRef.current = id;
             contentRef.current = "";
-            reasoningRef.current = "";
           }
-          reasoningRef.current += data.delta as string;
-          const reasoning = reasoningRef.current;
           updateMessageById(id, (msg) => ({
             ...msg,
-            reasoning: { content: reasoning, isStreaming: true },
+            parts: appendReasoningDelta(msg.parts, data.delta as string),
           }));
           break;
         }
 
         case "reasoning-end": {
           const id = (data.id as string) || currentMsgIdRef.current;
-          const duration = Math.round(
+          const elapsed = Math.round(
             (Date.now() - reasoningStartRef.current) / 1000
           );
           updateMessageById(id, (msg) => ({
             ...msg,
-            reasoning: msg.reasoning
-              ? { ...msg.reasoning, isStreaming: false, duration }
-              : undefined,
+            parts: closeReasoningPart(msg.parts, elapsed),
           }));
           break;
         }
@@ -348,6 +358,7 @@ export function useTesteiya(params?: TesteiyaParams) {
           updateLastAssistant((msg) => ({
             ...msg,
             tools: [...(msg.tools || []), tool],
+            parts: [...(msg.parts ?? []), { type: "tool", toolCallId: tool.toolCallId }],
           }));
           break;
         }
@@ -620,7 +631,6 @@ export function useTesteiya(params?: TesteiyaParams) {
     setError(null);
     setAnsweredQuestions({});
     contentRef.current = "";
-    reasoningRef.current = "";
   }, [clearWatchdog]);
 
   // Switch to a past conversation: render its history and bind new prompts to
@@ -633,7 +643,6 @@ export function useTesteiya(params?: TesteiyaParams) {
       pendingSkillRef.current = null;
       pendingMessageRef.current = null;
       contentRef.current = "";
-      reasoningRef.current = "";
       setMessages(historyMessages);
       setCurrentConversationId(conversationId);
       setStatus("ready");
@@ -671,4 +680,58 @@ export function useTesteiya(params?: TesteiyaParams) {
     openConversation,
     clearError,
   };
+}
+
+/** Append a streamed text delta to the message's ordered parts — extending the
+ *  trailing text block, or starting a new one when the last part is a tool. */
+function appendTextPart(parts: MessagePart[] | undefined, delta: string): MessagePart[] {
+  const next = parts ? parts.slice() : [];
+  const last = next[next.length - 1];
+  if (last?.type === "text") {
+    next[next.length - 1] = { type: "text", text: last.text + delta };
+    return next;
+  }
+  next.push({ type: "text", text: delta });
+  return next;
+}
+
+/** Open a reasoning block in the ordered parts — continuing the trailing one
+ *  (back-to-back thinking segments group into a single collapsible) or starting
+ *  a new block when text or a tool call came in between. */
+function openReasoningPart(parts: MessagePart[] | undefined): MessagePart[] {
+  const next = parts ? parts.slice() : [];
+  const last = next[next.length - 1];
+  if (last?.type === "reasoning") {
+    const content = last.content ? `${last.content}\n\n` : last.content;
+    next[next.length - 1] = { ...last, content, isStreaming: true };
+    return next;
+  }
+  next.push({ type: "reasoning", content: "", isStreaming: true });
+  return next;
+}
+
+function appendReasoningDelta(parts: MessagePart[] | undefined, delta: string): MessagePart[] {
+  const next = parts ? parts.slice() : [];
+  const last = next[next.length - 1];
+  if (last?.type === "reasoning") {
+    next[next.length - 1] = { ...last, content: last.content + delta, isStreaming: true };
+    return next;
+  }
+  next.push({ type: "reasoning", content: delta, isStreaming: true });
+  return next;
+}
+
+/** Close the trailing reasoning block, accumulating its visible duration across
+ *  the grouped thinking segments it absorbed. */
+function closeReasoningPart(parts: MessagePart[] | undefined, elapsed: number): MessagePart[] {
+  if (!parts?.length) return parts ?? [];
+  const last = parts[parts.length - 1];
+  if (last.type !== "reasoning") return parts;
+  const next = parts.slice();
+  next[next.length - 1] = {
+    ...last,
+    isStreaming: false,
+    duration: (last.duration ?? 0) + elapsed,
+  };
+  return next;
 }

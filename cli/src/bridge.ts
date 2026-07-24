@@ -137,9 +137,29 @@ function assistantToChatMessage(msg: any, index: number): ChatMessage {
       input: p.arguments ?? {},
       state: "input-available",
     }));
+  // Preserve the true thinking↔text↔tool ordering from the transcript so a
+  // resumed turn renders like a live one — reasoning inline where it happened,
+  // not merged into one block; consecutive thinking parts grouped.
+  const orderedParts: MessagePart[] = [];
+  for (const p of parts) {
+    if (p?.type === "thinking") {
+      const content = p.thinking ?? p.text ?? "";
+      if (!content) continue;
+      const last = orderedParts[orderedParts.length - 1];
+      if (last?.type === "reasoning") {
+        last.content = `${last.content}\n\n${content}`;
+        continue;
+      }
+      orderedParts.push({ type: "reasoning", content, isStreaming: false });
+    }
+    if (p?.type === "text" && (p.text ?? "")) orderedParts.push({ type: "text", text: p.text });
+    if (p?.type === "toolCall") orderedParts.push({ type: "tool", toolCallId: p.id });
+  }
+
   const message: ChatMessage = { id: `hist_${index}`, role: "assistant", content: text };
   if (thinking) message.reasoning = { content: thinking, isStreaming: false };
   if (tools.length > 0) message.tools = tools;
+  if (orderedParts.length > 0) message.parts = orderedParts;
   return message;
 }
 
@@ -216,10 +236,16 @@ interface ToolCall {
   state: "input-available" | "output-available" | "output-error";
 }
 
+type MessagePart =
+  | { type: "text"; text: string }
+  | { type: "tool"; toolCallId: string }
+  | { type: "reasoning"; content: string; isStreaming: boolean; duration?: number };
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  parts?: MessagePart[];
   reasoning?: { content: string; isStreaming: boolean; duration?: number };
   tools?: ToolCall[];
 }

@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon, ArrowRightIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import type { ResolvedWorkflowCategory, ResolvedWorkflowPrompt } from "@/lib/workflows/categories";
+import type { ResolvedWorkflowCategory, ResolvedWorkflowPrompt } from "@/lib/workflows/types";
 
 export function WorkflowsDiagram({
   categories,

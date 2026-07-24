@@ -21,7 +21,7 @@ import {
   KeyRoundIcon,
   SearchIcon,
 } from "@/lib/icons";
-import { useProjectService } from "@/lib/services/StoreProvider";
+import { useDebugLogService, useProjectService } from "@/lib/services/StoreProvider";
 
 type Phase = "loading" | "signin" | "projects";
 
@@ -41,6 +41,7 @@ export const TestomatioLogin = observer(function TestomatioLogin({
   onOpenChange,
 }: TestomatioLoginProps) {
   const project = useProjectService();
+  const debug = useDebugLogService();
   const [phase, setPhase] = useState<Phase>("loading");
   const [token, setToken] = useState("");
   const [host, setHost] = useState(project.baseUrl);
@@ -338,9 +339,16 @@ export const TestomatioLogin = observer(function TestomatioLogin({
           )}
 
           {error && (
-            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
+            <div className="space-y-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={() => void debug.copyLogs()}
+                className="text-xs underline underline-offset-2 hover:opacity-80"
+              >
+                Copy logs
+              </button>
+            </div>
           )}
         </DialogBody>
 

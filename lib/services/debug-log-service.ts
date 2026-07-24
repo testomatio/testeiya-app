@@ -1,9 +1,11 @@
 import { makeAutoObservable, observable } from "mobx";
+import { toast } from "sonner";
 import {
   setExternalLogSink,
   initConsoleCapture,
   type DebugLogEntry,
 } from "@/lib/debug/external-log";
+import { formatDebugLog } from "@/lib/debug/format-log";
 import { serviceSnapshot } from "@/lib/debug/store-snapshot";
 import { captureLayoutTree } from "@/lib/debug/layout-registry";
 import type { RootStore } from "./root-store";
@@ -50,6 +52,10 @@ export class DebugLogService {
    * makes the Debug section appear client-only and throws a hydration mismatch.
    */
   hydrate(): void {
+    // Re-assert the sink: StrictMode's double `new RootStore()` leaves the
+    // module-level sink pointing at the discarded twin, silently swallowing
+    // every client-side entry. `hydrate` runs on the instance React kept.
+    setExternalLogSink(this.record);
     initConsoleCapture();
     this.enabled = loadEnabled();
     this.report("load");
@@ -74,6 +80,26 @@ export class DebugLogService {
 
   clear(): void {
     this.entries = [];
+  }
+
+  /**
+   * Copy the current activity log (requests + events, no chat content — see
+   * `formatDebugLog`) to the clipboard. Surfaced in the Debug panel and on
+   * error banners so users can attach logs to a bug report.
+   */
+  async copyLogs(): Promise<void> {
+    if (typeof window === "undefined") return;
+    const text = formatDebugLog(this.entries.slice(), pageMeta());
+    if (!navigator?.clipboard?.writeText) {
+      toast.error("Clipboard is not available");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Logs copied to clipboard");
+    } catch {
+      toast.error("Could not copy logs");
+    }
   }
 
   record(entry: DebugLogEntry): void {

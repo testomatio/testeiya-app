@@ -5,7 +5,7 @@ import { observer } from "mobx-react-lite";
 import { toPlain } from "@/lib/debug/store-snapshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDownIcon, Icon, Trash2Icon } from "@/lib/icons";
+import { ChevronDownIcon, CopyIcon, Icon, Trash2Icon } from "@/lib/icons";
 import { openExternalUrl } from "@/lib/testomatio-url";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,6 +55,25 @@ export const DebugSection = observer(function DebugSection({
     </Tooltip>
   );
 
+  const copyAction = (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Copy logs"
+            disabled={debug.entries.length === 0}
+            onClick={() => void debug.copyLogs()}
+          >
+            <CopyIcon className="size-4" />
+          </Button>
+        }
+      />
+      <TooltipContent><p>Copy logs</p></TooltipContent>
+    </Tooltip>
+  );
+
   const clearAction = (
     <Tooltip>
       <TooltipTrigger
@@ -98,6 +117,7 @@ export const DebugSection = observer(function DebugSection({
       actions={
         <>
           {storybookAction}
+          {copyAction}
           {view !== "store" && clearAction}
         </>
       }
