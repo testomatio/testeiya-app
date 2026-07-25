@@ -13,20 +13,22 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatHistoryDialog } from "@/components/ChatHistoryDialog";
 import {
   useSessionsService,
   useChatTabsService,
 } from "@/lib/services/StoreProvider";
+import type { ChatTab } from "@/lib/services/chat-tabs-service";
 import { useLayoutNode } from "@/lib/debug/layout-registry";
-import { cn } from "@/lib/utils";
 
 /**
- * The chat column's header: the active conversation's title, one square per
- * open chat tab (colored initial, pulsating while that chat is processing),
- * a history button opening the Chat History modal, and a "+" that spawns a
- * new parallel chat tab. A thin `observer` over ChatTabsService +
- * SessionsService.
+ * The chat column's header: the static "Agent" title (the active conversation's
+ * full title lives in its tooltip), a tab-switch with one readable tab per open
+ * chat — each carrying a run/done/error status icon — a history button opening
+ * the Agents modal, and a "+" that spawns a new parallel chat tab. The tab strip
+ * wraps to a second row when it no longer fits. A thin `observer` over
+ * ChatTabsService + SessionsService.
  */
 export const ChatPanelHeader = observer(function ChatPanelHeader({
   mcpStatus,
@@ -48,10 +50,10 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   const activeConv = sessions.conversations.find(
     (c) => c.id === sessions.activeId
   );
-  const title = activeConv?.title || activeConv?.firstMessage || "New chat";
+  const title = activeConv?.title || activeConv?.firstMessage || "New agent";
 
-  let newChatLabel = "New chat";
-  if (!tabs.canOpen) newChatLabel = "New chat (max 5)";
+  let newChatLabel = "New agent";
+  if (!tabs.canOpen) newChatLabel = "New agent (max 5)";
 
   const commit = () => {
     const id = sessions.activeId;
@@ -62,7 +64,7 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
 
   if (editing) {
     return (
-      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
+      <div className="flex min-h-12 shrink-0 items-center gap-1 border-b px-2">
         <input
           autoFocus
           value={draft}
@@ -79,82 +81,17 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   }
 
   return (
-    <div ref={layoutRef} className="flex h-12 shrink-0 items-center gap-1 border-b pr-1">
-      <button
-        type="button"
-        onClick={() => setHistoryOpen(true)}
-        className="flex min-w-0 shrink items-center gap-1.5 px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60"
-        title="Chat history"
-      >
-        <MdiIcon
-          path={mdiChatOutline}
-          className="size-4 shrink-0 text-muted-foreground"
-        />
-        <span className="min-w-0 truncate text-sm font-medium">
-          {title}
-        </span>
-      </button>
-
-      {tabs.visibleTabs.map((tab) => {
-        const conv = sessions.conversations.find(
-          (c) => c.id === tab.conversationId
-        );
-        const label = conv?.title || conv?.firstMessage || "New chat";
-        const letter = (label.match(/[a-zA-Z0-9]/)?.[0] ?? "N").toUpperCase();
-        const busy = tab.status === "submitted" || tab.status === "streaming";
-        return (
-          <Tooltip key={tab.key}>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  onClick={() => tabs.activate(tab.key)}
-                  className={cn(
-                    "group/tab relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold",
-                    tabColor(tab.key),
-                    busy && "animate-pulse",
-                    tab.key === tabs.activeKey && "ring-2 ring-primary"
-                  )}
-                  aria-label={label}
-                >
-                  <span>{letter}</span>
-                  <span
-                    role="button"
-                    tabIndex={-1}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      tabs.close(tab.key);
-                    }}
-                    className="absolute -top-1 -right-1 hidden size-3.5 items-center justify-center rounded-full border bg-background text-muted-foreground group-hover/tab:flex hover:text-destructive"
-                    aria-label="Close chat"
-                    title="Close chat"
-                  >
-                    <XIcon className="size-3" />
-                  </span>
-                </button>
-              }
-            />
-            <TooltipContent>{label}</TooltipContent>
-          </Tooltip>
-        );
-      })}
-
+    <div
+      ref={layoutRef}
+      className="flex min-h-12 shrink-0 items-center gap-2 border-b py-1.5 pr-1 pl-3"
+    >
       <Tooltip>
         <TooltipTrigger
-          render={
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 shrink-0 p-0"
-              disabled={!sessions.sessionId}
-              onClick={() => setHistoryOpen(true)}
-              aria-label="Chat history"
-            >
-              <Icon name="history" className="size-4" />
-            </Button>
-          }
+          render={<span className="shrink-0 text-sm font-semibold">Agent</span>}
         />
-        <TooltipContent>Chat history</TooltipContent>
+        <TooltipContent>
+          <p className="line-clamp-2">{title}</p>
+        </TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -175,7 +112,73 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
         <TooltipContent>{newChatLabel}</TooltipContent>
       </Tooltip>
 
-      <div className="min-w-0 flex-1" />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 p-0"
+              disabled={!sessions.sessionId}
+              onClick={() => setHistoryOpen(true)}
+              aria-label="Agent history"
+            >
+              <Icon name="history" className="size-4" />
+            </Button>
+          }
+        />
+        <TooltipContent>Agent history</TooltipContent>
+      </Tooltip>
+
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+        {tabs.visibleTabs.length > 0 && (
+          <Tabs
+            value={tabs.activeKey ?? ""}
+            onValueChange={(value) => tabs.activate(value as string)}
+          >
+            <TabsList className="h-auto max-w-full flex-wrap">
+              {tabs.visibleTabs.map((tab) => {
+                const conv = sessions.conversations.find(
+                  (c) => c.id === tab.conversationId
+                );
+                const label = conv?.title || conv?.firstMessage || "New agent";
+                return (
+                  <Tooltip key={tab.key}>
+                    <TooltipTrigger
+                      render={
+                        <TabsTrigger
+                          value={tab.key}
+                          className="group/tab flex-none gap-1.5 px-2 py-1"
+                        >
+                          {statusIcon(tab)}
+                          <span className="min-w-[15ch] max-w-[18ch] truncate text-left">
+                            {label}
+                          </span>
+                          <span
+                            role="button"
+                            tabIndex={-1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              tabs.close(tab.key);
+                            }}
+                            className="flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover/tab:opacity-100 hover:text-destructive"
+                            aria-label="Close agent"
+                          >
+                            <XIcon className="size-3" />
+                          </span>
+                        </TabsTrigger>
+                      }
+                    />
+                    <TooltipContent>
+                      <p className="line-clamp-2">{label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </TabsList>
+          </Tabs>
+        )}
+      </div>
 
       {mcpStatus}
 
@@ -188,8 +191,8 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
           setDraft(title);
           setEditing(true);
         }}
-        title="Rename chat"
-        aria-label="Rename chat"
+        title="Rename agent"
+        aria-label="Rename agent"
       >
         <MdiIcon path={mdiPencilOutline} className="size-3.5" />
       </Button>
@@ -200,8 +203,8 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
           variant="ghost"
           className="h-6 w-6 shrink-0 p-0"
           onClick={() => setChatOpen(false)}
-          title="Collapse chat"
-          aria-label="Collapse chat"
+          title="Collapse agent"
+          aria-label="Collapse agent"
         >
           <Icon name="dock_to_right" className="size-4" />
         </Button>
@@ -211,16 +214,27 @@ export const ChatPanelHeader = observer(function ChatPanelHeader({
   );
 });
 
-const TAB_COLORS = [
-  "bg-primary text-primary-foreground",
-  "bg-primary/20 text-primary",
-  "bg-muted text-foreground",
-  "bg-primary/40 text-primary",
-  "bg-foreground/80 text-background",
-];
-
-function tabColor(key: string): string {
-  const n = Number(key.slice(4));
-  if (!Number.isFinite(n)) return TAB_COLORS[0];
-  return TAB_COLORS[n % TAB_COLORS.length];
+function statusIcon(tab: ChatTab): ReactNode {
+  if (tab.status === "submitted" || tab.status === "streaming") {
+    return (
+      <Icon
+        name="progress_activity"
+        className="size-3.5 shrink-0 animate-spin text-primary"
+      />
+    );
+  }
+  if (tab.error) {
+    return <Icon name="error" className="size-3.5 shrink-0 text-destructive" />;
+  }
+  if (tab.doneUnseen) {
+    return (
+      <Icon name="check_circle" className="size-3.5 shrink-0 text-run-passed" />
+    );
+  }
+  return (
+    <MdiIcon
+      path={mdiChatOutline}
+      className="size-3.5 shrink-0 text-muted-foreground"
+    />
+  );
 }

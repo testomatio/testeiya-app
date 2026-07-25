@@ -1,4 +1,4 @@
-import { existsSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -31,6 +31,17 @@ export const MANUAL_TESTS_SUBDIR = "manual-tests";
 
 /** Folder name that holds user-added custom skills. */
 export const CUSTOM_SKILLS_SUBDIR = "skills";
+
+/**
+ * Where user-added context lands inside `.testeiya` (see context-store.ts):
+ * linked folders and cloned repos under `code/`, uploaded documents under
+ * `requirements/` — the same layout the system prompt teaches the agent.
+ */
+export const CONTEXT_CODE_SUBDIR = "code";
+export const CONTEXT_REQUIREMENTS_SUBDIR = "requirements";
+
+/** Manifest of user-added context entries (what, where from, when). */
+export const CONTEXT_MANIFEST_FILE = "context.json";
 
 /** Global custom-skills folder (`~/.testeiya/skills`), loaded for every session. */
 export const CUSTOM_SKILLS_DIR = join(HOME_DIR, CUSTOM_SKILLS_SUBDIR);
@@ -83,6 +94,43 @@ export function projectInfoPath(cwd: string): string {
 /** Absolute path to the last-sync snapshot file inside `cwd`. */
 export function syncSnapshotPath(cwd: string): string {
   return join(cwd, PROJECT_DIR, SYNC_SNAPSHOT_FILE);
+}
+
+/** Absolute path to the user-added-context manifest inside `cwd`. */
+export function contextManifestPath(cwd: string): string {
+  return join(cwd, PROJECT_DIR, CONTEXT_MANIFEST_FILE);
+}
+
+/**
+ * Guard files for the project dir, written idempotently whenever it exists:
+ * `.gitignore` (`*`) keeps the dir out of the user's repo history, while
+ * `.ignore` (`!*`) whitelists the contents back for the agent's search tools —
+ * their walker (ripgrep's ignore crate) honors gitignore, and a same-dir
+ * `.ignore` outranks the `.gitignore`, so pulled manual tests and added
+ * context stay searchable. Git never reads `.ignore`.
+ *
+ * The whitelist re-ignores `.git/` and `node_modules/` below it (later lines
+ * win), so cloned repos and installed tools inside the dir don't flood search
+ * results. The `.ignore` is content-synced — the dir is Testeiya's own, so a
+ * stale generation of the file is replaced, not preserved.
+ *
+ * The whitelist cannot help when the workspace's own `.gitignore` lists the
+ * project dir — the walker then skips it at the parent level and never reads
+ * the inner files. That entry is a workspace misconfiguration (redundant for
+ * git — the dir self-excludes) the system prompt forbids; the prompt's
+ * explicit-`.testeiya/`-prefix search rule still works there, because a
+ * search rooted inside the dir bypasses the parent-level skip.
+ */
+export function ensureProjectDirGuards(cwd: string): void {
+  const dir = join(cwd, PROJECT_DIR);
+  if (!existsSync(dir)) return;
+  const gitignore = join(dir, ".gitignore");
+  if (!existsSync(gitignore)) writeFileSync(gitignore, "*\n", "utf8");
+  const ignore = join(dir, ".ignore");
+  const ignoreContent = "!*\n.git/\nnode_modules/\n";
+  let current = "";
+  if (existsSync(ignore)) current = readFileSync(ignore, "utf8");
+  if (current !== ignoreContent) writeFileSync(ignore, ignoreContent, "utf8");
 }
 
 /** The home state dir used before the rename from "testclaw" to "testeiya". */

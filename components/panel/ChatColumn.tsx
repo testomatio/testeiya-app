@@ -120,7 +120,7 @@ export function ChatColumn({
       )}
       role="separator"
       aria-orientation="vertical"
-      aria-label={collapsed ? "Expand chat" : "Resize chat"}
+      aria-label={collapsed ? "Expand agent" : "Resize agent"}
       title="Drag to resize"
     />
   ) : null;

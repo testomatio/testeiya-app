@@ -31,6 +31,10 @@ const AUTO_PUSH_DEBOUNCE_MS = 1500;
  */
 export class WorkspaceService {
   openFile: OpenFile | null = null;
+  // Bumped whenever the open file should be re-read from disk (the agent may
+  // have rewritten it while it was on screen). The editor ignores a reload that
+  // would clobber unsaved edits.
+  fileReloadToken = 0;
   tree: TreeNode[] = [];
   treeLoading = false;
   treeError: string | null = null;
@@ -138,6 +142,12 @@ export class WorkspaceService {
     this.openFile = null;
   }
 
+  /** Re-read the open file from disk (agent edits land while it's on screen). */
+  reloadOpenFile() {
+    if (!this.openFile) return;
+    this.fileReloadToken++;
+  }
+
   setFullHeight(fullHeight: boolean) {
     if (this.openFile) this.openFile = { ...this.openFile, fullHeight };
   }
@@ -233,6 +243,9 @@ export class WorkspaceService {
         this.seedExpansion();
         this.scheduleEmptyRetry();
       });
+      // Keep the workspace-context chips in step with the tree (the agent may
+      // have dropped new folders into .testeiya since the last load).
+      void this.root.context.load();
     } catch (e) {
       runInAction(() => {
         this.handleLoadError(e);
@@ -297,6 +310,23 @@ export class WorkspaceService {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open workspace");
     }
+  }
+
+  /**
+   * Reveal a `.testeiya` context folder in the sidebar tree: switch to a view
+   * that shows it (the manual view for the manual-tests dir, else the Files
+   * view) and expand every folder on the way to it.
+   */
+  async revealFolder(dir: string) {
+    const target = this.viewFor(dir);
+    if (target && target !== this.activeType) {
+      this.activeType = target;
+      this.seeded = false;
+      await this.loadTree();
+    }
+    const next = new Set(this.expanded);
+    expandAncestors(next, dir);
+    this.expanded = next;
   }
 
   /**
@@ -415,6 +445,7 @@ export class WorkspaceService {
     try {
       await postJson("/api/files/delete", { session: sessionId, path: node.path });
       await this.loadTree();
+      void this.root.context.load();
     } catch (err) {
       runInAction(() => {
         this.tree = snapshot;
@@ -513,6 +544,18 @@ export class WorkspaceService {
   }
 
   // --- internals ---
+  // The view a reveal should switch to so `dir` is actually in the tree; null
+  // when the current view already shows it (or no better view exists).
+  private viewFor(dir: string): WorkspaceType | null {
+    if (this.activeType === "files") return null;
+    if (dir === this.manualTestsDir && this.activeType === "manual") return null;
+    if (dir === this.manualTestsDir && this.types.some((t) => t.type === "manual")) {
+      return "manual";
+    }
+    if (this.types.some((t) => t.type === "files")) return "files";
+    return null;
+  }
+
   // Merge the server's snapshot diff with this client's session edits. The
   // server wins on type; session edits are kept only while their file still
   // exists in the tree (a deleted file drops out).

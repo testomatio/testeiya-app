@@ -41,6 +41,7 @@ import { TodoWriteRenderer } from "@/components/agent-output/TodoWriteRenderer";
 import AskQuestionRenderer from "@/components/agent-output/AskQuestionRenderer";
 import { MessageActions } from "@/components/ai-elements/message-actions";
 import { AgentStatusBar } from "@/components/ai-elements/agent-status-bar";
+import { ChatStatusBar } from "@/components/ChatStatusBar";
 import { WorkflowPrompts } from "@/components/workflows/WorkflowPrompts";
 import { WorkflowsDiagramDialog } from "@/components/workflows/WorkflowsDiagramDialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,6 +56,7 @@ import { useHost } from "@/lib/host-bridge";
 import { useTheme } from "@/lib/theme";
 import { Icon, KeyRoundIcon, ChevronDownIcon, PaperclipIcon, FileIcon, XIcon, SparklesIcon, MicIcon, PlayIcon, ListChecksIcon } from "@/lib/icons";
 import { ProvidersDialog } from "@/components/ProvidersDialog";
+import { CommandPalette } from "@/components/CommandPalette";
 import { TestomatioLogin } from "@/components/TestomatioLogin";
 import { SkillsMenu } from "@/components/SkillsMenu";
 import { useFileMentions } from "@/components/ai-elements/prompt-input-mentions";
@@ -976,6 +978,7 @@ const ChatPage = observer(function ChatPage() {
             path={file.path}
             initialContent={file.initialContent}
             scrollToText={file.scrollToText}
+            reloadToken={workspace.fileReloadToken}
             readOnly={activeBusy}
             onClose={workspace.close}
             onSaved={() => workspace.markChanged(file.path)}
@@ -995,6 +998,8 @@ const ChatPage = observer(function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <CommandPalette />
+
       <ProvidersDialog
         open={providers.dialogOpen}
         onOpenChange={providers.setDialogOpen}
@@ -1401,6 +1406,7 @@ const ChatView = observer(function ChatView({
   useEffect(() => {
     tabs.report(tabKey, {
       status,
+      error,
       conversationId: currentConversationId,
       mcpTools,
       expectedMcpServers,
@@ -1408,10 +1414,11 @@ const ChatView = observer(function ChatView({
       cwd,
       stop,
     });
-  }, [tabs, tabKey, status, currentConversationId, mcpTools, expectedMcpServers, mcpLoaded, cwd, stop]);
+  }, [tabs, tabKey, status, error, currentConversationId, mcpTools, expectedMcpServers, mcpLoaded, cwd, stop]);
 
-  // Refresh project counters + chat list once each AI turn finishes (the agent
-  // may have created/edited tests or runs). Only on a busy→ready edge.
+  // Refresh project counters + chat list + the open file once each AI turn
+  // finishes (the agent may have created/edited tests or runs). Only on a
+  // busy→ready edge.
   const prevStatusRef = useRef(status);
   useEffect(() => {
     const prev = prevStatusRef.current;
@@ -1419,8 +1426,9 @@ const ChatView = observer(function ChatView({
     if (status !== "ready") return;
     if (prev !== "submitted" && prev !== "streaming") return;
     project.refresh();
+    workspace.reloadOpenFile();
     void sessions.load();
-  }, [status, project, sessions]);
+  }, [status, project, sessions, workspace]);
 
   const activeCategory =
     workflows.categories.find((c) => c.id === activeWorkflow) ?? null;
@@ -1590,30 +1598,6 @@ const ChatView = observer(function ChatView({
         <div className="grid w-full max-w-[960px] gap-3 px-4 pb-4 @2xl:px-[60px]">
         <AgentStatusBar status={status} activeTool={activeTool} onStop={stop} />
 
-        {contextLabel && status !== "streaming" && status !== "submitted" && (
-          <div className="flex flex-wrap gap-2">
-            <div className="flex items-center gap-2 rounded-md border bg-muted/40 py-1 pr-1 pl-2 text-xs">
-              <ContextIcon className="size-3.5 text-muted-foreground" />
-              <span className="max-w-[220px] truncate">{contextLabel}</span>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={() => widget.dismissContext()}
-                      className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Remove widget from context"
-                    >
-                      <XIcon className="size-3.5" />
-                    </button>
-                  }
-                />
-                <TooltipContent><p>Remove from context</p></TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        )}
-
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {attachments.map((a) => (
@@ -1662,6 +1646,12 @@ const ChatView = observer(function ChatView({
           mentionSkills={mentionSkills}
           sessionId={sessionId ?? null}
           voiceEnabled={project.currentProject != null}
+        />
+        <ChatStatusBar
+          cwd={cwd}
+          widgetLabel={status === "streaming" || status === "submitted" ? null : contextLabel}
+          WidgetIcon={ContextIcon}
+          onDismissWidget={() => widget.dismissContext()}
         />
         </div>
       </div>

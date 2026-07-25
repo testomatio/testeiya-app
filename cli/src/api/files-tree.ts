@@ -18,7 +18,11 @@ import { gitCommittedFiles, gitChangedFiles, gitBranch } from "../git-tracked.js
 import { suiteId, suiteEmoji } from "../workspace/test-md.js";
 
 const MAX_DEPTH = 8;
-const MAX_NODES = 5000;
+// Budget for *filesystem* entries (dirs + files). Test nodes parsed from inside
+// a suite file are free — the file is already read for its suite id, and they
+// must not starve sibling folders out of the tree (a 2800-test project would
+// otherwise truncate the repo's own dirs).
+const MAX_NODES = 10000;
 
 export async function filesTree(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -45,17 +49,18 @@ export async function filesTree(request: Request): Promise<Response> {
   } else if (active.dir) {
     focusAbs = path.resolve(cwd, active.dir);
   }
-  // Only the Files view folds in the gitignored `.testeiya/manual-tests` cache
-  // so "show all" really shows everything. The Code view stays the source repo —
-  // the manual tests belong to the Manual tab, not the code tree.
-  let manualAbs: string | null = null;
-  if (active.type === "files" && !active.dir && info.manualTestsDir) {
-    manualAbs = path.resolve(cwd, info.manualTestsDir);
+  // Only the Files view folds in the whole gitignored `.testeiya` dir so "show
+  // all" really shows everything — the pulled manual tests, user-added context
+  // (code/, requirements/, …) and the config files. The Code view stays the
+  // source repo; the Manual view stays tests-only.
+  let configAbs: string | null = null;
+  if (active.type === "files" && !active.dir) {
+    configAbs = path.resolve(cwd, PROJECT_DIR);
   }
   const view: TreeView = {
     type: active.type,
     focusAbs,
-    manualAbs,
+    configAbs,
     branchOnly: !!active.dir && active.type !== "manual",
   };
 
@@ -68,11 +73,13 @@ export async function filesTree(request: Request): Promise<Response> {
   const gitChanged = view.type === "manual" ? {} : gitChangedFiles(cwd);
   const changed = { ...gitChanged, ...syncChanged };
   const committed = gitCommittedFiles(cwd);
-  const nodes = readDir(cwd, "", 0, { count: 0 }, view, changed, committed, loadGitignore(cwd));
+  const state = { count: 0 };
+  const nodes = readDir(cwd, "", 0, state, view, changed, committed, loadGitignore(cwd));
   return Response.json({
     cwd,
     branch: gitBranch(cwd),
     nodes,
+    truncated: state.count >= MAX_NODES,
     changedCount: Object.keys(changed).length,
     activeType: active.type,
     ...info,
@@ -106,18 +113,31 @@ function readDir(
     if (VENDOR_DIRS.has(entry.name)) continue;
     const childAbs = path.join(absDir, entry.name);
     const childRel = relDir ? `${relDir}/${entry.name}` : entry.name;
-    // A browse-all view surfaces both the view's focus and the manual-tests
-    // cache, so `leads`/`inside` fold in `manualAbs` too.
+    // Resolve symlinks (linked context folders under `.testeiya/`) so they
+    // render as the dir/file they point at; dangling links are dropped.
+    let isDir = entry.isDirectory();
+    let isFile = entry.isFile();
+    if (entry.isSymbolicLink()) {
+      try {
+        const target = fs.statSync(childAbs);
+        isDir = target.isDirectory();
+        isFile = target.isFile();
+      } catch {
+        continue;
+      }
+    }
+    // A browse-all view surfaces both the view's focus and the whole `.testeiya`
+    // dir, so `leads`/`inside` fold in `configAbs` too.
     const leads =
       (!!view.focusAbs && isAncestorOrEqual(childAbs, view.focusAbs)) ||
-      (!!view.manualAbs && isAncestorOrEqual(childAbs, view.manualAbs));
-    const inside = isInsideFocus(childAbs, view.focusAbs) || isInsideFocus(childAbs, view.manualAbs);
+      (!!view.configAbs && isAncestorOrEqual(childAbs, view.configAbs));
+    const inside = isInsideFocus(childAbs, view.focusAbs) || isInsideFocus(childAbs, view.configAbs);
 
     // Hide git-ignored paths (e.g. a Rails `storage/` blob cache), except the
     // surfaced `.testeiya` cache the browse-all view deliberately folds in.
     if (!leads && !inside && ig.ignores(childRel)) continue;
 
-    if (entry.isDirectory()) {
+    if (isDir) {
       // Hide only the internal config dir (`.testeiya`/`.omp`) unless it leads
       // to a surfaced dir (e.g. `.testeiya/manual-tests`). Other non-git-ignored
       // dot folders (`.github`, `.circleci`, …) are valuable and render normally.
@@ -135,7 +155,7 @@ function readDir(
       folders.push({ name: entry.name, kind: "folder", path: childRel, children });
       continue;
     }
-    if (!entry.isFile() || entry.name.startsWith(".")) continue;
+    if (!isFile || entry.name.startsWith(".")) continue;
     // Inside the config dir (`.testeiya`), only show files that live inside a
     // surfaced dir — keep `mcp.json`/`testeiya.json` siblings out of every view.
     if (inConfigDir && !inside) continue;
@@ -167,8 +187,6 @@ function readDir(
       if (suite.emoji) file.emoji = suite.emoji;
       const tests: TreeNode[] = [];
       for (const test of suite.tests) {
-        if (state.count >= MAX_NODES) break;
-        state.count++;
         tests.push({
           name: test.title,
           kind: "test",
@@ -269,6 +287,6 @@ interface TreeNode {
 interface TreeView {
   type: WorkspaceType;
   focusAbs: string | null;
-  manualAbs: string | null;
+  configAbs: string | null;
   branchOnly: boolean;
 }

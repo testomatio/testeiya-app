@@ -27,7 +27,7 @@ export const ChatRail = observer(function ChatRail() {
     <nav
       className="flex shrink-0 flex-col items-center gap-1 border-l bg-background px-1"
       style={{ width: RAIL_W }}
-      aria-label="Chat"
+      aria-label="Agent"
     >
       <div className="flex h-12 shrink-0 items-center justify-center">
         <Tooltip>
@@ -35,13 +35,13 @@ export const ChatRail = observer(function ChatRail() {
             <button
               type="button"
               onClick={() => setChatOpen(true)}
-              aria-label="Open chat"
+              aria-label="Open agent"
               className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted"
             >
               <MdiIcon path={mdiChatOutline} className="size-4" />
             </button>
           } />
-          <TooltipContent side="left"><p>Open chat</p></TooltipContent>
+          <TooltipContent side="left"><p>Open agent</p></TooltipContent>
         </Tooltip>
       </div>
 
@@ -51,13 +51,13 @@ export const ChatRail = observer(function ChatRail() {
             type="button"
             onClick={() => tabs.openTab()}
             disabled={!sessions.sessionId || !tabs.canOpen}
-            aria-label="New chat"
+            aria-label="New agent"
             className="flex size-8 items-center justify-center rounded-md transition-colors text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
           >
             <MdiIcon path={mdiChatPlusOutline} className="size-4" />
           </button>
         } />
-        <TooltipContent side="left"><p>New chat</p></TooltipContent>
+        <TooltipContent side="left"><p>New agent</p></TooltipContent>
       </Tooltip>
 
       <BrowserControls iconOnly />

@@ -38,10 +38,19 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SectionShell } from "../SectionShell";
+import { AddToWorkspaceDialog } from "@/components/workspace/AddToWorkspaceDialog";
 import {
   useWorkspaceService,
   useSearchService,
+  useContextService,
 } from "@/lib/services/StoreProvider";
 import type { FileStatus, TreeNode, WorkspaceType } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
@@ -239,6 +248,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
 }: PanelSectionProps) {
   const ws = useWorkspaceService();
   const search = useSearchService();
+  const ctx = useContextService();
 
   return (
     <SectionShell
@@ -311,67 +321,64 @@ export const WorkspaceSection = observer(function WorkspaceSection({
                 size="sm"
                 variant="ghost"
                 className="h-7 w-7 p-0"
-                onClick={() => void ws.openFolder()}
-                aria-label="Open folder as workspace"
+                disabled={!ws.sessionId}
+                onClick={() => ctx.openModal()}
+                aria-label="Add to Workspace"
               >
-                <Icon name="folder_open" className="size-4" />
+                <Icon
+                  name="library_add"
+                  className={cn("size-4", ctx.busy && "animate-pulse text-primary")}
+                />
               </Button>
             } />
-            <TooltipContent side="bottom"><p>Open folder as workspace</p></TooltipContent>
+            <TooltipContent side="bottom"><p>Add to Workspace</p></TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger render={
+                <DropdownMenuTrigger render={
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    aria-label="More workspace actions"
+                  />
+                }>
+                  <Icon
+                    name="more_horiz"
+                    className={cn("size-4", (ws.syncing || ws.treeLoading) && "animate-pulse")}
+                  />
+                </DropdownMenuTrigger>
+              } />
+              <TooltipContent side="bottom"><p>More workspace actions</p></TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onClick={() => void ws.openFolder()}>
+                <Icon name="folder_open" className="size-4" />
+                Open folder as workspace
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 disabled={!ws.sessionId || !!ws.syncing}
                 onClick={() => void ws.sync("pull")}
-                aria-label="Pull manual tests from Testomat.io"
               >
-                <Icon
-                  name="cloud_download"
-                  className={cn("size-4", ws.syncing === "pull" && "animate-pulse")}
-                />
-              </Button>
-            } />
-            <TooltipContent side="bottom"><p>Pull manual tests from Testomat.io</p></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
+                <Icon name="cloud_download" className="size-4" />
+                Pull tests from Testomat.io
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 disabled={!ws.sessionId || !!ws.syncing || ws.manualTestsDir === null}
                 onClick={() => void ws.sync("push")}
-                aria-label="Push changed tests to Testomat.io"
               >
-                <Icon
-                  name="cloud_upload"
-                  className={cn("size-4", ws.syncing === "push" && "animate-pulse")}
-                />
-              </Button>
-            } />
-            <TooltipContent side="bottom"><p>Push changed tests to Testomat.io</p></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                onClick={() => void ws.loadTree()}
-                aria-label="Refresh tree"
-              >
-                <Icon
-                  name="refresh"
-                  className={cn("size-4", ws.treeLoading && "animate-spin")}
-                />
-              </Button>
-            } />
-            <TooltipContent side="bottom"><p>Refresh tree</p></TooltipContent>
-          </Tooltip>
+                <Icon name="cloud_upload" className="size-4" />
+                Push changed tests to Testomat.io
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void ws.loadTree()}>
+                <Icon name="refresh" className="size-4" />
+                Refresh tree
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       }
     >
@@ -533,6 +540,7 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AddToWorkspaceDialog />
     </SectionShell>
   );
 });

@@ -266,3 +266,42 @@ export interface SkillInfo {
   source?: string;
   category?: string;
 }
+
+export type ContextKind = "folder" | "repo" | "file";
+
+/** A top-level `.testeiya` folder, shown as its own section in the chat status bar. */
+export interface ContextFolder {
+  name: string;
+  /** Relative to cwd (`.testeiya/<name>`). */
+  path: string;
+  /** Direct children (files + dirs). */
+  count: number;
+}
+
+/** User-added agent context (`.testeiya/context.json`), from `GET /api/context`. */
+export interface ContextEntry {
+  id: string;
+  kind: ContextKind;
+  name: string;
+  /** Location inside the workspace, relative to cwd. */
+  path: string;
+  /** Where it came from: a local path, a git URL, or the uploaded filename. */
+  origin: string;
+  addedAt: string;
+}
+
+export type PaletteMode = "files" | "commands";
+
+/** One quick-open row: a workspace file, or a test heading inside a `*.test.md` suite. */
+export interface PaletteFileItem {
+  name: string;
+  path: string;
+  kind: "file" | "test";
+  /** The test heading to scroll to; absent for plain files. */
+  anchor?: string;
+  testType?: "manual" | "automated";
+  /** The workspace view this item was indexed from. */
+  type: WorkspaceType | null;
+  /** That view's tab caption, shown as a badge for non-active tabs. */
+  typeLabel: string;
+}

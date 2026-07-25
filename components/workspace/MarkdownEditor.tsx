@@ -34,6 +34,8 @@ export type MarkdownEditorProps = {
   scrollToText?: string;
   /** Key that changes whenever the "open file" should force a remount. */
   instanceKey?: number;
+  /** Bump to re-read the file from disk (skipped while there are unsaved edits). */
+  reloadToken?: number;
   /** Prevent edits while the agent is mid-action. */
   readOnly?: boolean;
   /** Optional close handler (panel / modal usage). */
@@ -58,6 +60,7 @@ export function MarkdownEditor({
   path,
   initialContent,
   scrollToText,
+  reloadToken,
   readOnly,
   onClose,
   onSaved,
@@ -74,22 +77,33 @@ export function MarkdownEditor({
   const [loading, setLoading] = useState<boolean>(initialContent === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The rich editor seeds its document once, so content replaced from disk has
+  // to remount it.
+  const [seed, setSeed] = useState(0);
   const contentRef = useRef(content);
   contentRef.current = content;
+  const dirty = content !== original;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const tokenRef = useRef(reloadToken);
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const isMarkdown = /\.(md|markdown)$/i.test(path);
 
-  // Load when path changes (or when initialContent not provided).
+  // Load when path changes (or when initialContent not provided); a bumped
+  // `reloadToken` re-reads the file in place, but never over unsaved edits.
   useEffect(() => {
+    const reloading = tokenRef.current !== reloadToken;
+    tokenRef.current = reloadToken;
+    if (reloading && dirtyRef.current) return;
     let cancelled = false;
-    if (initialContent !== undefined) {
+    if (initialContent !== undefined && !reloading) {
       setContent(initialContent);
       setOriginal(initialContent);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!reloading) setLoading(true);
     setError(null);
     fetch(
       `/api/files/read?session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`
@@ -100,6 +114,7 @@ export function MarkdownEditor({
       })
       .then((data: { content: string }) => {
         if (cancelled) return;
+        if (data.content !== contentRef.current) setSeed((s) => s + 1);
         setContent(data.content);
         setOriginal(data.content);
       })
@@ -112,9 +127,7 @@ export function MarkdownEditor({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, path, initialContent]);
-
-  const dirty = content !== original;
+  }, [sessionId, path, initialContent, reloadToken]);
 
   useWidgetSnapshot({ kind: "file", path, content, unsaved: dirty }, !loading);
 
@@ -310,6 +323,7 @@ export function MarkdownEditor({
         )}
         {!loading && isMarkdown && mode === "rich" && (
           <BlockEditor
+            key={seed}
             value={content}
             onChange={setContent}
             readOnly={readOnly || saving}

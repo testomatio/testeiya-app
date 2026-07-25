@@ -1,16 +1,20 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { logApp } from "./file-log.js";
+import { log, type WideEvent } from "evlog";
+import { readMemoryLogs } from "evlog/memory";
 
 /*
- * Server-side instrumentation for the sidebar Debug panel. The real outbound
- * calls to the Testomat.io API server happen here in the Bun process (the v2
- * proxy, attachment upload, transcription) — the browser only ever sees the
- * same-origin `/api/testomatio/*` proxy hop. `loggedServerFetch` wraps each
- * upstream call, keeps a small ring buffer, and notifies subscribers; the
- * `/api/debug/stream` SSE endpoint forwards entries to the client panel, where
- * they show up as the `testomatio` ("tmt") channel.
+ * Server-side instrumentation for the sidebar Debug panel, built on the evlog
+ * pipeline that `file-log.ts` initializes. The real outbound calls to the
+ * Testomat.io API server happen here in the Bun process (the v2 proxy,
+ * attachment upload, transcription) — the browser only ever sees the
+ * same-origin `/api/testomatio/*` proxy hop. `loggedServerFetch` (and
+ * `publish` for the `ai` / `check-tests` channels) emits one evlog wide event
+ * per call; the shared drain fans it out to the NDJSON app log, the in-memory
+ * ring buffer (`evlog/memory` — the snapshot's source), and `panelDrain`
+ * below, which maps panel-facing channels onto the `DebugEntry` wire shapes
+ * the `/api/debug/stream` SSE feed and the client panel already speak.
  *
  * While debug mode is on — the panel is open (an SSE subscriber is connected)
  * or `TESTEIYA_DEBUG=1` is set — each request + response is also appended to
@@ -21,18 +25,14 @@ import { logApp } from "./file-log.js";
  * the panel or the SSE feed.
  */
 
-const MAX_ENTRIES = 200;
 const MAX_BODY = 16000;
 const FILE_RESPONSE_MAX = 6000;
 const LOG_DIR = fileURLToPath(new URL("../log", import.meta.url));
 const REPLAY_FILE = join(LOG_DIR, "testomatio.http");
 
-let seq = 0;
+let panelSeq = 0;
 let dirReady = false;
-let consolePatched = false;
 let latestReportKey: string | null = null;
-const buffer: DebugEntry[] = [];
-const serverConsole: ServerConsoleEntry[] = [];
 const clientReports = new Map<string, ClientReport>();
 const subscribers = new Set<(entry: DebugEntry) => void>();
 
@@ -91,15 +91,14 @@ export function publishCheckTests(run: {
   output: string;
   durationMs: number;
 }): void {
-  const entry: Omit<ProcessEventEntry, "id" | "ts"> = {
+  publish({
     kind: "event",
     channel: "check-tests",
     name: `check-tests ${run.action}`,
     summary: `${run.code === 0 ? "ok" : `exit ${run.code}`} · ${run.dir} · ${run.durationMs}ms`,
     ok: run.code === 0,
     detail: truncate(run.output),
-  };
-  publish(entry);
+  });
 }
 
 export function subscribeDebug(cb: (entry: DebugEntry) => void): () => void {
@@ -110,30 +109,9 @@ export function subscribeDebug(cb: (entry: DebugEntry) => void): () => void {
 }
 
 export function recentDebugEntries(): DebugEntry[] {
-  return buffer.slice();
-}
-
-/*
- * Server-side console capture. Wraps `console.log/warn/error` so the app-server's
- * own stdout (the CLI half of the stack — `[api]`, `[testomatio→]`, `[telemetry]`,
- * and any thrown errors) lands in a ring buffer that the debug snapshot exposes.
- * Still forwards to the original console. Patches once.
- */
-export function captureServerConsole(): void {
-  if (consolePatched) return;
-  consolePatched = true;
-  for (const level of ["log", "warn", "error"] as const) {
-    const original = console[level].bind(console);
-    console[level] = (...args: unknown[]) => {
-      original(...args);
-      serverConsole.push({ level, ts: Date.now(), text: truncate(formatArgs(args)) ?? "" });
-      if (serverConsole.length > MAX_ENTRIES) serverConsole.shift();
-    };
-  }
-}
-
-export function serverConsoleEntries(): ServerConsoleEntry[] {
-  return serverConsole.slice();
+  return readMemoryLogs()
+    .map(toPanelEntry)
+    .filter((entry): entry is DebugEntry => !!entry);
 }
 
 /*
@@ -149,21 +127,21 @@ export function recordClientReport(report: ClientReport): void {
 }
 
 export function buildSnapshot(sessionId?: string | null): DebugSnapshot {
-  const requests = buffer.filter((e): e is ServerRequestEntry => e.kind === "request");
-  const ai = buffer.filter((e): e is AiEventEntry => e.kind === "ai");
-  const checkTests = buffer.filter((e): e is ProcessEventEntry => e.kind === "event");
+  const events = readMemoryLogs();
+  const entries = events.map(toPanelEntry);
   return {
     generatedAt: new Date().toISOString(),
-    server: { requests, ai, checkTests, console: serverConsoleEntries() },
+    server: {
+      requests: entries.filter((e): e is ServerRequestEntry => !!e && e.kind === "request"),
+      ai: entries.filter((e): e is AiEventEntry => !!e && e.kind === "ai"),
+      checkTests: entries.filter((e): e is ProcessEventEntry => !!e && e.kind === "event"),
+      console: events.filter((e) => e.tag === "console").map(toConsoleEntry),
+      api: events.filter((e) => e.channel === "api"),
+      prompts: events.filter((e) => e.channel === "prompt"),
+    },
     client: getClientReport(sessionId),
     langfuseHint: "bun run debug:trace session:<agent-conversation-id>",
   };
-}
-
-function getClientReport(sessionId?: string | null): ClientReport | null {
-  if (sessionId && clientReports.has(sessionId)) return clientReports.get(sessionId)!;
-  if (latestReportKey) return clientReports.get(latestReportKey) ?? null;
-  return null;
 }
 
 export function clientLayout(
@@ -177,102 +155,154 @@ export function clientLayout(
   return { layout: report.layout ?? null, reportedAt: report.reportedAt, url };
 }
 
-function formatArgs(args: unknown[]): string {
-  return args
-    .map((a) => {
-      if (typeof a === "string") return a;
-      if (a instanceof Error) return `${a.message}\n${a.stack ?? ""}`;
-      try {
-        return JSON.stringify(a);
-      } catch {
-        return String(a);
-      }
-    })
-    .join(" ");
-}
-
 /*
  * Generic sink for any non-request debug entry (currently the `ai` channel —
- * pi-coding-agent LLM interactions; see `ai-debug.ts`). Shares the request ring
- * buffer + subscribers so it replays on connect and rides the same
- * `/api/debug/stream` SSE feed.
+ * pi-coding-agent LLM interactions; see `ai-debug.ts`). Emits an evlog wide
+ * event, which the shared drain routes to the file/memory sinks and back into
+ * `panelDrain` for the live SSE feed.
  */
-export function publish(entry: Omit<DebugEntry, "id" | "ts">): void {
-  seq += 1;
-  const full = { ...entry, id: seq, ts: Date.now() } as DebugEntry;
-  buffer.push(full);
-  if (buffer.length > MAX_ENTRIES) buffer.shift();
-  for (const cb of subscribers) cb(full);
-  if (full.kind !== "request") teeToAppLog(full);
+export function publish(entry: WithoutMeta<DebugEntry>): void {
+  const { kind: _, ...fields } = entry;
+  if (entry.ok) {
+    log.info(fields);
+    return;
+  }
+  log.error(fields);
 }
 
-function record(
-  partial: Omit<ServerRequestEntry, "id" | "ts" | "kind" | "channel">,
-  headers?: HeadersInit
-): void {
-  seq += 1;
-  const entry: ServerRequestEntry = {
-    kind: "request",
+/**
+ * Drain hook wired into the evlog pipeline by `file-log.ts`: maps panel-facing
+ * wide events onto the `DebugEntry` wire shapes and pushes them to the live
+ * SSE subscribers. Non-panel channels (`api`, `prompt`, `console`) stay in the
+ * file/memory sinks only.
+ */
+export function panelDrain(event: WideEvent): void {
+  const entry = toPanelEntry(event);
+  if (!entry) return;
+  for (const cb of subscribers) cb(entry);
+}
+
+function getClientReport(sessionId?: string | null): ClientReport | null {
+  if (sessionId && clientReports.has(sessionId)) return clientReports.get(sessionId)!;
+  if (latestReportKey) return clientReports.get(latestReportKey) ?? null;
+  return null;
+}
+
+function toPanelEntry(event: WideEvent): DebugEntry | null {
+  const e = event as Record<string, any>;
+  const channel = e.channel;
+  if (channel !== "testomatio" && channel !== "ai" && channel !== "check-tests") return null;
+  if (!e._panelId) {
+    panelSeq += 1;
+    e._panelId = panelSeq;
+  }
+  const id = e._panelId as number;
+  const ts = Date.parse(e.timestamp) || Date.now();
+  if (channel === "testomatio") {
+    return {
+      kind: "request",
+      channel: "testomatio",
+      id,
+      ts,
+      method: e.method,
+      url: e.url,
+      requestBody: e.requestBody ?? null,
+      status: e.status ?? null,
+      ok: !!e.ok,
+      responseBody: e.responseBody ?? null,
+      error: e.error ?? null,
+      durationMs: e.durationMs ?? 0,
+    };
+  }
+  if (channel === "ai") {
+    return {
+      kind: "ai",
+      channel: "ai",
+      id,
+      ts,
+      name: e.name,
+      summary: e.summary ?? null,
+      ok: !!e.ok,
+      model: e.model ?? null,
+      durationMs: e.durationMs ?? null,
+      tokens: e.tokens ?? null,
+      detail: e.detail ?? null,
+    };
+  }
+  return {
+    kind: "event",
+    channel: "check-tests",
+    id,
+    ts,
+    name: e.name,
+    summary: e.summary ?? null,
+    ok: !!e.ok,
+    detail: e.detail ?? null,
+  };
+}
+
+function toConsoleEntry(event: WideEvent): ServerConsoleEntry {
+  let level: ServerConsoleEntry["level"] = "log";
+  if (event.level === "warn") level = "warn";
+  if (event.level === "error") level = "error";
+  return {
+    level,
+    ts: Date.parse(event.timestamp) || 0,
+    text: String((event as Record<string, unknown>).message ?? ""),
+  };
+}
+
+function record(partial: RequestData, headers?: HeadersInit): void {
+  const outcome = partial.error ?? partial.status ?? "—";
+  console.log(
+    `[testomatio→] ${partial.method} ${partial.url} → ${outcome} (${partial.durationMs}ms)`
+  );
+  const event = {
     channel: "testomatio",
-    id: seq,
-    ts: Date.now(),
     ...partial,
     requestBody: truncate(partial.requestBody),
     responseBody: truncate(partial.responseBody),
   };
-  buffer.push(entry);
-  if (buffer.length > MAX_ENTRIES) buffer.shift();
-  const outcome = entry.error ?? entry.status ?? "—";
-  console.log(
-    `[testomatio→] ${entry.method} ${entry.url} → ${outcome} (${entry.durationMs}ms)`
-  );
-  for (const cb of subscribers) cb(entry);
-  writeReplayFile(entry, partial.requestBody, headers);
+  if (partial.ok) log.info(event);
+  else log.error(event);
+  writeReplayFile(partial, headers);
 }
 
-function writeReplayFile(
-  entry: ServerRequestEntry,
-  requestBody: string | null,
-  headers?: HeadersInit
-): void {
+function writeReplayFile(data: RequestData, headers?: HeadersInit): void {
   if (subscribers.size === 0 && process.env.TESTEIYA_DEBUG !== "1") return;
   try {
     if (!dirReady) {
       mkdirSync(LOG_DIR, { recursive: true });
       dirReady = true;
     }
-    appendFileSync(REPLAY_FILE, formatHttp(entry, requestBody, headers));
+    appendFileSync(REPLAY_FILE, formatHttp(data, headers));
   } catch {}
 }
 
-function formatHttp(
-  entry: ServerRequestEntry,
-  requestBody: string | null,
-  headers?: HeadersInit
-): string {
-  const ts = new Date(entry.ts).toISOString();
-  const resource = entry.url.replace(/\?.*$/, "").split("/").pop() || entry.url;
-  const outcome = entry.error ? `ERR ${entry.error}` : entry.status;
+function formatHttp(data: RequestData, headers?: HeadersInit): string {
+  const ts = new Date().toISOString();
+  const resource = data.url.replace(/\?.*$/, "").split("/").pop() || data.url;
+  const outcome = data.error ? `ERR ${data.error}` : data.status;
   const lines = [
-    `### ${entry.method} ${resource} — ${ts} → ${outcome} (${entry.durationMs}ms)`,
-    `${entry.method} ${entry.url}`,
+    `### ${data.method} ${resource} — ${ts} → ${outcome} (${data.durationMs}ms)`,
+    `${data.method} ${data.url}`,
   ];
   for (const [key, value] of headerEntries(headers)) lines.push(`${key}: ${value}`);
-  if (requestBody && requestBody.startsWith("[multipart]")) {
-    lines.push(`# ${requestBody} (binary body not captured)`);
+  if (data.requestBody && data.requestBody.startsWith("[multipart]")) {
+    lines.push(`# ${data.requestBody} (binary body not captured)`);
   }
-  if (requestBody && !requestBody.startsWith("[multipart]")) {
-    lines.push("", requestBody);
+  if (data.requestBody && !data.requestBody.startsWith("[multipart]")) {
+    lines.push("", data.requestBody);
   }
-  lines.push("", ...responseComment(entry), "", "");
+  lines.push("", ...responseComment(data), "", "");
   return lines.join("\n");
 }
 
-function responseComment(entry: ServerRequestEntry): string[] {
-  if (entry.error) return [`# ── error: ${entry.error} ──`];
-  const head = `# ── response ${entry.status} (${entry.durationMs}ms) ──`;
-  if (!entry.responseBody) return [head];
-  let body = entry.responseBody;
+function responseComment(data: RequestData): string[] {
+  if (data.error) return [`# ── error: ${data.error} ──`];
+  const head = `# ── response ${data.status} (${data.durationMs}ms) ──`;
+  if (!data.responseBody) return [head];
+  let body = data.responseBody;
   if (body.length > FILE_RESPONSE_MAX) {
     body = `${body.slice(0, FILE_RESPONSE_MAX)}… (truncated)`;
   }
@@ -292,12 +322,11 @@ function truncate(value: string | null): string | null {
   return `${value.slice(0, MAX_BODY)}… (+${value.length - MAX_BODY} more chars)`;
 }
 
-function teeToAppLog(entry: AiEventEntry | ProcessEventEntry): void {
-  let text = entry.name;
-  if (!entry.ok) text += " FAIL";
-  if (entry.summary) text += ` — ${entry.summary}`;
-  logApp(entry.channel, text);
-}
+type RequestData = Omit<ServerRequestEntry, "id" | "ts" | "kind" | "channel">;
+
+// Distributes over the union so each member keeps its own keys (a plain
+// `Omit<A | B, K>` collapses to only the keys common to A and B).
+type WithoutMeta<T> = T extends unknown ? Omit<T, "id" | "ts"> : never;
 
 export interface ServerRequestEntry {
   kind: "request";
@@ -368,6 +397,8 @@ export interface DebugSnapshot {
     ai: AiEventEntry[];
     checkTests: ProcessEventEntry[];
     console: ServerConsoleEntry[];
+    api: WideEvent[];
+    prompts: WideEvent[];
   };
   client: ClientReport | null;
   langfuseHint: string;

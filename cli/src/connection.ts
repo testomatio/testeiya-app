@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { log } from "evlog";
 import { PROJECT_DIR } from "./project-dir.js";
 import { createTesteiyaSession } from "./session-factory.js";
 import { transformEvent } from "./bridge.js";
@@ -9,6 +10,12 @@ import { getSession } from "./session-store.js";
 import { resolveSessionShellEnv } from "./api/testomatio-target.js";
 import { dedupeSkillsByName, loadBundledSkills, loadCustomSkills } from "./skills.js";
 import { browserStateNotice } from "./api/playwright-cli.js";
+import {
+  contextStamp,
+  contextUpdateNotice,
+  listContext,
+  listContextFolders,
+} from "./context-store.js";
 
 // Bundled skills are static for the process; load once. Custom skills are
 // re-read per prompt (cheap dir scan) so a freshly dropped-in skill is
@@ -61,7 +68,15 @@ export function createConnection(
   let promptCalls = 0;
   let promptOutTok = 0;
   let promptPeakCtx = 0;
+  let promptRetries = 0;
+  let sessionModel = "";
+  let conversationId: string | null = null;
   let sessionCwd = process.cwd();
+  // The workspace-context stamp the agent last saw (system prompt at session
+  // creation, or the last update notice). A change between prompts — the Add
+  // to Workspace UI ran, or a pull seeded manual-tests — appends a refresh
+  // notice to the next prompt.
+  let contextSeenStamp = "";
   const heartbeat = setInterval(() => send({ type: "ping" }), HEARTBEAT_MS);
   let resumeConversationId: string | null = null;
   // `tool-output-partial` coalescing: the SDK streams a tool's full output tail
@@ -177,7 +192,10 @@ export function createConnection(
               resumeConversationId: resumeConversationId ?? undefined,
             });
             session = result.session;
-            aiDebugUnsub = attachAiDebug(session, (result as any).conversationId ?? null);
+            sessionModel = `${result.model.provider}/${result.model.id}`;
+            conversationId = (result as any).conversationId ?? null;
+            contextSeenStamp = contextStamp(sessionCwd);
+            aiDebugUnsub = attachAiDebug(session, conversationId);
             askChannel = (result as any).askChannel ?? null;
             widgetChannel = (result as any).widgetChannel ?? null;
 
@@ -226,9 +244,9 @@ export function createConnection(
 
             send({
               type: "session_created",
-              model: `${result.model.provider}/${result.model.id}`,
+              model: sessionModel,
               cwd: sessionParams.cwd || process.cwd(),
-              conversationId: (result as any).conversationId,
+              conversationId,
               mcpTools,
               mcpServers: mcpServerStatus,
             });
@@ -244,6 +262,7 @@ export function createConnection(
           promptCalls = 0;
           promptOutTok = 0;
           promptPeakCtx = 0;
+          promptRetries = 0;
 
           // Subscribe to agent events and bridge them
           unsubscribe = session.subscribe((event: any) => {
@@ -271,6 +290,9 @@ export function createConnection(
                 if (ctx > promptPeakCtx) promptPeakCtx = ctx;
               }
             }
+            if (event.type === "auto_retry_start") {
+              promptRetries++;
+            }
             if (event.type === "auto_retry_end" && event.success) {
               lastTurnError = null;
             }
@@ -291,18 +313,37 @@ export function createConnection(
               send(transformed);
             }
             if (event.type === "agent_end") {
+              const promptError = lastTurnError;
               if (lastTurnError) {
                 send({ type: "error", error: lastTurnError });
                 lastTurnError = null;
               }
               if (promptCalls > 0) {
-                const wall = ((Date.now() - promptStartedAt) / 1000).toFixed(1);
+                const durationMs = Date.now() - promptStartedAt;
                 console.log(
-                  `[ai] prompt done — ${promptCalls} calls · ${wall}s · out=${promptOutTok} tok · peak ctx=${promptPeakCtx} tok`
+                  `[ai] prompt done — ${promptCalls} calls · ${(durationMs / 1000).toFixed(1)}s · out=${promptOutTok} tok · peak ctx=${promptPeakCtx} tok`
                 );
+                // One queryable wide event per prompt in the NDJSON app log.
+                const wide: Record<string, unknown> = {
+                  channel: "prompt",
+                  model: sessionModel,
+                  session: conversationId,
+                  calls: promptCalls,
+                  retries: promptRetries,
+                  durationMs,
+                  outputTokens: promptOutTok,
+                  peakContext: promptPeakCtx,
+                };
+                if (promptError) {
+                  wide.error = promptError;
+                  log.error(wide);
+                } else {
+                  log.info(wide);
+                }
                 promptCalls = 0;
                 promptOutTok = 0;
                 promptPeakCtx = 0;
+                promptRetries = 0;
               }
               send({ type: "done" });
             }
@@ -311,6 +352,17 @@ export function createConnection(
           // Append a live browser-state notice (if a browser is open) so the
           // agent knows a session is running and what it shows. Best-effort.
           const browserNotice = await browserStateNotice(sessionCwd);
+
+          // User-added context that changed since the system prompt was built.
+          let contextNotice: string | null = null;
+          const currentContextStamp = contextStamp(sessionCwd);
+          if (currentContextStamp !== contextSeenStamp) {
+            contextSeenStamp = currentContextStamp;
+            contextNotice = contextUpdateNotice(
+              listContext(sessionCwd),
+              listContextFolders(sessionCwd)
+            );
+          }
 
           // The client serializes the widget the user is currently viewing (id +
           // its declared actions) into `<active_widget>`; append it per-message
@@ -335,7 +387,10 @@ export function createConnection(
             await session.prompt(
               withActiveWidget(
                 widgetNotice,
-                withBrowserState(browserNotice, buildSkillPrompt(skill.entry, skill.args))
+                withBrowserState(
+                  browserNotice,
+                  withContextUpdate(contextNotice, buildSkillPrompt(skill.entry, skill.args))
+                )
               )
             );
             break;
@@ -363,7 +418,10 @@ export function createConnection(
           await session.prompt(
             withActiveWidget(
               widgetNotice,
-              withBrowserState(browserNotice, withSkillMentions(text, mentioned))
+              withBrowserState(
+                browserNotice,
+                withContextUpdate(contextNotice, withSkillMentions(text, mentioned))
+              )
             ),
             images.length > 0 ? { images } : undefined
           );
@@ -558,6 +616,12 @@ function withBrowserState(notice: string | null, text: string): string {
 
 /** Append the `<active_widget>` notice (when present) to a prompt. */
 function withActiveWidget(notice: string | null, text: string): string {
+  if (!notice) return text;
+  return `${text}\n\n${notice}`;
+}
+
+/** Append the `<workspace-context-update>` notice (when present) to a prompt. */
+function withContextUpdate(notice: string | null, text: string): string {
   if (!notice) return text;
   return `${text}\n\n${notice}`;
 }

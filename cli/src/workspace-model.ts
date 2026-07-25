@@ -24,6 +24,7 @@ import {
   PROJECT_DIR,
   MANUAL_TESTS_SUBDIR,
   CUSTOM_SKILLS_SUBDIR,
+  ensureProjectDirGuards,
   manualTestsCachePath,
   projectMetaPath,
 } from "./project-dir.js";
@@ -219,8 +220,7 @@ export function readProjectMeta(cwd: string): ProjectMeta | null {
 
 export function writeProjectMeta(cwd: string, meta: ProjectMeta): void {
   writeJson(projectMetaPath(cwd), meta);
-  // Keep the cache out of the user's repo history.
-  fs.writeFileSync(path.join(cwd, PROJECT_DIR, ".gitignore"), "*\n", "utf8");
+  ensureProjectDirGuards(cwd);
 }
 
 /** Combined view for the file-tree response. */

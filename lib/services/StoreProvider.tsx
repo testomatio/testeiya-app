@@ -67,3 +67,5 @@ export const useChatTabsService = () => useRootStore().chatTabs;
 export const useWidgetService = () => useRootStore().widget;
 export const useDebugLogService = () => useRootStore().debug;
 export const useWorkflowsService = () => useRootStore().workflows;
+export const useContextService = () => useRootStore().context;
+export const usePaletteService = () => useRootStore().palette;

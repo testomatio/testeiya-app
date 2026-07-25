@@ -7,6 +7,11 @@ import {
 } from "./testomatio.js";
 import { appUiGuidance } from "./app-ui.js";
 import { browserControl } from "./browser.js";
+import {
+  contextPromptSection,
+  type ContextEntry,
+  type ContextFolder,
+} from "../context-store.js";
 import type { TestomatioProjectInfo } from "../project-info.js";
 
 export function buildSystemPrompt(options?: SystemPromptOptions): string {
@@ -23,6 +28,11 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
 
   if (options?.promptContext) {
     parts.push(`## Project Test Context\n\n${options.promptContext}`);
+  }
+  if (options?.contextEntries?.length || options?.contextFolders?.length) {
+    parts.push(
+      contextPromptSection(options.contextEntries ?? [], options.contextFolders ?? [])
+    );
   }
   if (options?.projectInfo) {
     parts.push(projectSettings(options.projectInfo));
@@ -45,4 +55,8 @@ export interface SystemPromptOptions {
   mode?: "tui" | "web";
   browser?: boolean;
   projectInfo?: TestomatioProjectInfo | null;
+  /** User-added context (linked folders, cloned repos, uploaded docs). */
+  contextEntries?: ContextEntry[];
+  /** Non-empty predefined `.testeiya` context folders (manual-tests, code, …). */
+  contextFolders?: ContextFolder[];
 }

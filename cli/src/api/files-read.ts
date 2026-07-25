@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { getSession } from "../session-store.js";
-import { safeResolve } from "../workspace/safe-path.js";
+import { safeResolveThroughLinks } from "../workspace/safe-path.js";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -14,7 +14,7 @@ export async function filesRead(request: Request): Promise<Response> {
   const session = getSession(sessionId);
   if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
 
-  const abs = safeResolve(session.cwd, relPath);
+  const abs = safeResolveThroughLinks(session.cwd, relPath);
   if (!abs) {
     return Response.json({ error: "path outside workspace" }, { status: 400 });
   }

@@ -44,6 +44,7 @@ import {
   providersLoginCode,
 } from "./api/providers.js";
 import { workspaceOpen, workspacePick, workspaceDefault, workspaceReveal } from "./api/workspace.js";
+import { contextList, contextAdd, contextUpload, contextRemove } from "./api/context.js";
 import { workspaceSync } from "./api/workspace-sync.js";
 import { workspaceSearch } from "./api/workspace-search.js";
 import { memoryGet, memoryPost } from "./api/memory.js";
@@ -59,7 +60,7 @@ import { debugStream } from "./api/debug-stream.js";
 import { debugReport } from "./api/debug-report.js";
 import { debugSnapshot } from "./api/debug-snapshot.js";
 import { debugLayout } from "./api/debug-layout.js";
-import { captureServerConsole } from "./debug-bus.js";
+import { log } from "evlog";
 import { writeServerInfo } from "./server-info.js";
 import { initFileLog, logStartupConfig, appLogPath } from "./file-log.js";
 import {
@@ -281,6 +282,16 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   if (pathname === "/api/workspace/reveal" && method === "POST") {
     return workspaceReveal(req);
   }
+  if (pathname === "/api/context/upload" && method === "POST") {
+    return contextUpload(req);
+  }
+  if (pathname === "/api/context/remove" && method === "POST") {
+    return contextRemove(req);
+  }
+  if (pathname === "/api/context") {
+    if (method === "GET") return contextList(req);
+    if (method === "POST") return contextAdd(req);
+  }
   if (pathname === "/api/sessions" && method === "GET") {
     return sessionsList(req);
   }
@@ -357,9 +368,6 @@ async function serveStatic(staticDir: string, pathname: string): Promise<Respons
 }
 
 function startServer(options: AppServerOptions = {}) {
-  // Mirror the server's own stdout into the debug snapshot's `server.console`.
-  captureServerConsole();
-
   // Carry over an existing ~/.testclaw state dir to ~/.testeiya (rename) before
   // any session/auth/config read or the migrated ~/.testeiya/.env is loaded.
   migrateLegacyHomeDir();
@@ -435,10 +443,14 @@ function startServer(options: AppServerOptions = {}) {
       }
 
       if (url.pathname.startsWith("/api/")) {
+        const started = Date.now();
         try {
-          return await handleApi(req, url.pathname);
+          const res = await handleApi(req, url.pathname);
+          logApiEvent(req.method, url.pathname, res.status, started);
+          return res;
         } catch (err: any) {
           console.error("[api] error:", err?.message || err);
+          logApiEvent(req.method, url.pathname, 500, started, err?.message || String(err));
           return Response.json(
             { error: err?.message || "Internal error" },
             { status: 500 }
@@ -497,6 +509,31 @@ if (import.meta.main) {
 
 function isLoopbackHost(host: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host === "localhost";
+}
+
+// One wide event per /api request (status + duration + error), quiet-prefix
+// suppressed like the `[api]` console line in handleApi.
+function logApiEvent(
+  method: string,
+  path: string,
+  status: number,
+  started: number,
+  error?: string
+): void {
+  if (QUIET_API_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
+  const event: Record<string, unknown> = {
+    channel: "api",
+    method: method.toUpperCase(),
+    path,
+    status,
+    durationMs: Date.now() - started,
+  };
+  if (error) event.error = error;
+  if (status >= 500) {
+    log.error(event);
+    return;
+  }
+  log.info(event);
 }
 
 export { startServer as startAppServer, DEFAULT_PORT, HOSTNAME };

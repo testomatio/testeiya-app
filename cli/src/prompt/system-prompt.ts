@@ -15,12 +15,13 @@ export function getSystemPrompt(cwd?: string): string {
     You have access to the workspace - a folder where you have access to files.
     Workspace can contain source code, e2e tests, or just manual tests. You must understand yourself what is inside workspace.
 
-    * Workspace is ${cwd || process.cwd()} - Exclude system folders like \`.git/\`, \`src/\`, \`${TESTEIYA_DIR_NAME}\` from analysis and modification.
+    * Workspace is ${cwd || process.cwd()} - Exclude system folders like \`.git/\`, \`src/\` from analysis and modification.
     * **Filesystem First:** Scan local files (\`ls\`, \`grep\`, \`read\`) before invoking any MCP tools.
     * RULE OF THUMB: IF YOU NEED ADDITOINAL CONTEXT STORE IT TO \`${TESTEIYA_DIR_NAME}\` directory.
       * **Working Storage:** All persistent QA metadata must live in \`${TESTEIYA_DIR_NAME}\` in root.
-      * **Safety root:** Ensure \`${TESTEIYA_DIR_NAME}\` is in \`.gitignore\`
+      * **Safety root:** Never add \`${TESTEIYA_DIR_NAME}\` to the repo's \`.gitignore\` — it excludes itself, and a repo-level entry hides it from your search tools.
     * **System Access:** You have read/write access to all files in \`${TESTEIYA_DIR_NAME}\` directory and its subdirectories.
+    * **Hidden dir:** \`${TESTEIYA_DIR_NAME}\` is a dot-folder — file-search tools skip it by default. Search it with hidden:true or an explicit \`${TESTEIYA_DIR_NAME}/\` path prefix. Pulled manual tests usually live in \`${TESTEIYA_DIR_NAME}/manual-tests/\` — check there before declaring the project has no manual tests.
 
     * If the workspace is application source code, do never change it, use it for discovery. Save your data into \`${TESTEIYA_DIR_NAME}\` context directory.
     * If the workspace is e2e tests directory you can write tests for it. All additional context
@@ -28,13 +29,13 @@ export function getSystemPrompt(cwd?: string): string {
 
     * Organize all external files into \`${TESTEIYA_DIR_NAME}\` context directory.
     * \`${TESTEIYA_DIR_NAME}\` Context Structure:
-      - \`code/\`: contains the user's source code (read-only unless explicitly modifying for tests).
+      - \`<name>/\`: a linked or cloned external project, named after its source (read-only reference).
       - \`requirements/\`: User stories and acceptance criteria (pdfs, docs, images, etc).
       - \`docs/\`: Feature explanations, test planing and strategy files.
       - \`manual-tests/\`: Markdown-based test cases
       - \`auto-tests/\`: Relevant automated (e2e) tests
       - \`exploratory/\`: For explorbot setup
-    * When user needs external Git repository or local path, clone/symlink the project strictly into \`${TESTEIYA_DIR_NAME}/code/\`:
+    * When user needs an external Git repository or local path, clone or symlink it to \`${TESTEIYA_DIR_NAME}/<name>\` (the source's basename; \`extra-\` prefix if taken). Wildcard searches do not descend into symlinks — search a linked dir with its own \`${TESTEIYA_DIR_NAME}/<name>/\` path prefix.
     * Directory is empty or contains mostly \`.test.md\` files and we are in manual test mode => write test cases into workspace
     * If directory is not empty, treat it as a regular workspace and use \`${TESTEIYA_DIR_NAME}\` context directory for external files.
   </context-workspace>

@@ -52,7 +52,7 @@ export const ChatHistoryDialog = observer(function ChatHistoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Chats</DialogTitle>
+          <DialogTitle>Agents</DialogTitle>
         </DialogHeader>
         <div className="mt-3 flex min-h-0 flex-col border-t">
           <div className="border-b p-2">
@@ -61,7 +61,7 @@ export const ChatHistoryDialog = observer(function ChatHistoryDialog({
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search chats"
+                placeholder="Search agents"
                 className="pl-7"
               />
             </div>
@@ -70,22 +70,22 @@ export const ChatHistoryDialog = observer(function ChatHistoryDialog({
             {sessions.loading && sessions.conversations.length === 0 && (
               <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                 <Spinner className="size-3.5" />
-                Loading chats…
+                Loading agents…
               </div>
             )}
             {!sessions.loading && sessions.conversations.length === 0 && (
               <div className="px-2 py-2 text-xs text-muted-foreground">
-                No chats yet.
+                No agents yet.
               </div>
             )}
             {sessions.conversations.length > 0 && filtered.length === 0 && (
               <div className="px-2 py-2 text-xs text-muted-foreground">
-                No matching chats.
+                No matching agents.
               </div>
             )}
             {filtered.map((conv) => {
               const isActive = conv.id === sessions.activeId;
-              const label = conv.title || conv.firstMessage || "Untitled chat";
+              const label = conv.title || conv.firstMessage || "Untitled agent";
               return (
                 <button
                   key={conv.id}
@@ -114,8 +114,8 @@ export const ChatHistoryDialog = observer(function ChatHistoryDialog({
                       void sessions.remove(conv.id);
                     }}
                     className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/row:opacity-100"
-                    aria-label="Delete chat"
-                    title="Delete chat"
+                    aria-label="Delete agent"
+                    title="Delete agent"
                   >
                     <Trash2Icon className="size-3.5" />
                   </span>
@@ -132,7 +132,7 @@ export const ChatHistoryDialog = observer(function ChatHistoryDialog({
               onClick={createNew}
             >
               <PlusIcon className="size-3.5" />
-              New chat
+              New agent
             </Button>
           </div>
         </div>

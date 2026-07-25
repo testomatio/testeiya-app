@@ -113,7 +113,7 @@ export class SessionsService {
         if (conv) conv.title = title;
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to rename chat");
+      toast.error(err instanceof Error ? err.message : "Failed to rename agent");
     }
   }
 
@@ -133,9 +133,9 @@ export class SessionsService {
       } else if (conversationId === this.activeId) {
         this.startNew();
       }
-      toast.success("Chat deleted");
+      toast.success("Agent deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete chat");
+      toast.error(err instanceof Error ? err.message : "Failed to delete agent");
     }
   }
 }

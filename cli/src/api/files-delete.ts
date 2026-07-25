@@ -14,7 +14,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getSession } from "../session-store.js";
-import { safeResolve } from "../workspace/safe-path.js";
+import { safeResolve, workspaceSymlink } from "../workspace/safe-path.js";
+import { loadContextEntries, saveContextEntries } from "../context-store.js";
 import { VENDOR_DIRS } from "../workspace-model.js";
 import {
   TEST_MD_RE,
@@ -45,6 +46,20 @@ export async function filesDelete(request: Request): Promise<Response> {
   if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
 
   const cwd = path.resolve(session.cwd);
+
+  // A symlink (a linked context dir under `.testeiya/`) is deleted as itself:
+  // unlink only — never walk its target, never touch Testomat.io for it. The
+  // manifest is re-saved so the entry doesn't resurrect if the path reappears.
+  const linkAbs = workspaceSymlink(cwd, relPath);
+  if (linkAbs && !body.anchor) {
+    fs.unlinkSync(linkAbs);
+    saveContextEntries(
+      cwd,
+      loadContextEntries(cwd).filter((e) => e.path !== relPath)
+    );
+    return Response.json({ ok: true, path: relPath, deletedLink: true });
+  }
+
   const abs = safeResolve(cwd, relPath);
   if (!abs) return Response.json({ error: "path outside workspace" }, { status: 400 });
   if (abs === cwd) {

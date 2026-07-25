@@ -52,6 +52,8 @@ export class ChatTabsService {
       key: `tab-${this.counter}`,
       conversationId: null,
       status: "ready",
+      doneUnseen: false,
+      error: null,
       mcpTools: [],
       expectedMcpServers: [],
       mcpLoaded: false,
@@ -76,7 +78,9 @@ export class ChatTabsService {
   }
 
   activate(key: string): void {
-    if (!this.tabs.some((t) => t.key === key)) return;
+    const target = this.tabs.find((t) => t.key === key);
+    if (!target) return;
+    target.doneUnseen = false;
     this.activeKey = key;
     this.tabs = this.tabs.filter((t) => t.key === key || !isBlankTab(t));
   }
@@ -84,7 +88,12 @@ export class ChatTabsService {
   report(key: string, patch: Partial<ChatTab>): void {
     const tab = this.tabs.find((t) => t.key === key);
     if (!tab) return;
+    const wasBusy = tab.status === "submitted" || tab.status === "streaming";
     Object.assign(tab, patch);
+    if (patch.status === "submitted") tab.doneUnseen = false;
+    if (wasBusy && patch.status === "ready" && key !== this.activeKey) {
+      tab.doneUnseen = true;
+    }
   }
 
   findByConversation(conversationId: string): ChatTab | undefined {
@@ -107,6 +116,9 @@ export interface ChatTab {
   key: string;
   conversationId: string | null;
   status: ChatStatus;
+  /** Finished a run while this tab was in the background; cleared on activate. */
+  doneUnseen: boolean;
+  error: string | null;
   mcpTools: string[];
   expectedMcpServers: string[];
   mcpLoaded: boolean;

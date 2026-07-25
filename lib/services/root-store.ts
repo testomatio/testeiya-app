@@ -12,6 +12,8 @@ import { ChatTabsService } from "./chat-tabs-service";
 import { WidgetService } from "./widget-service";
 import { DebugLogService } from "./debug-log-service";
 import { WorkflowsService } from "./workflows-service";
+import { ContextService } from "./context-service";
+import { PaletteService } from "./palette-service";
 
 /**
  * Composition root for the client service layer. Owns the shared, observable
@@ -37,6 +39,8 @@ export class RootStore {
   widget: WidgetService;
   debug: DebugLogService;
   workflows: WorkflowsService;
+  context: ContextService;
+  palette: PaletteService;
 
   constructor() {
     // Only `sessionId` is observable here; service instances are assigned after
@@ -55,6 +59,8 @@ export class RootStore {
     this.widget = new WidgetService(this);
     this.debug = new DebugLogService(this);
     this.workflows = new WorkflowsService(this);
+    this.context = new ContextService(this);
+    this.palette = new PaletteService(this);
   }
 
   setSessionId(id: string | null) {

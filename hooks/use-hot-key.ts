@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 export function useHotKey(
   callback: () => void,
   key: string,
-  options?: { shift?: boolean },
+  options?: { shift?: boolean; preventDefault?: boolean },
 ): void {
   // Use ref to always have the latest callback without re-registering the listener
   const callbackRef = useRef(callback);
@@ -18,7 +18,7 @@ export function useHotKey(
         (e.metaKey || e.ctrlKey) &&
         shiftMatch
       ) {
-        // e.preventDefault();
+        if (options?.preventDefault) e.preventDefault();
         callbackRef.current();
       }
     }
@@ -27,5 +27,5 @@ export function useHotKey(
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, [key, options?.shift]);
+  }, [key, options?.shift, options?.preventDefault]);
 }

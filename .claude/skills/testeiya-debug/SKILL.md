@@ -17,31 +17,31 @@ UI (React + MobX)  ──/api/*──►  Bun app-server (cli/)  ──REST─�
 
 ## Step 0 — Read the persistent app log (no running server required)
 
-Every process start writes one app log — `~/.testeiya/logs/app-<yyyyMMdd-HHmmss>-<pid>.log` — as plain, greppable, timestamped lines. It captures the **basic** interactions needed to debug LLM connection/usage and API/connection issues (it is *not* a full transcript — the deep per-session detail lives in Langfuse, Step 1b). It holds:
+The app log is **NDJSON** (evlog) — one `~/.testeiya/logs/<yyyy-MM-dd>.jsonl` per day, one JSON event per line, `jq`-queryable. It captures the **basic** interactions needed to debug LLM connection/usage and API/connection issues (it is *not* a full transcript — the deep per-session detail lives in Langfuse, Step 1b). It holds:
 
-- A `[start]` header (mode + runtime) and a `[config]` block near the top: the resolved provider/model/permissions + an env presence summary (**no keys**).
-- Every teed `console.*` line: `[api]` (noise is suppressed — the `/api/playwright/status` poll and all `/api/debug/*` plumbing), `[testomatio→]` outbound REST, `[session]` (session creation, `[session] prompt error:` on a failed turn), `[webview]` browser errors, and `[error]` for thrown errors + `uncaughtException`.
-- `[ai]` LLM events — the key line for usage/connection debugging. A response looks like:
-  `[ai] response — gpt-5.6-terra · stop · 5 chars · 370/5 tok · session:152c18412a32650d`
-  (model · stopReason · output chars · input/output tokens · **Langfuse session id**). Retries, fallbacks, compaction, and turn errors show as `[ai] retry|fallback|compaction|error FAIL — …`.
+- `tag:"start"` (pid, mode, runtime) and `tag:"config"` per process start: the resolved provider/model/permissions + an env presence summary (**no keys**).
+- `tag:"console"` — every teed `console.*` line: `[api]` (noise suppressed — the `/api/playwright/status` poll and all `/api/debug/*` plumbing), `[testomatio→]`, `[session]` (incl. `[session] prompt error:`), `[webview]`, thrown errors + `uncaughtException` (level `error`).
+- `channel:"api"` — one structured event per `/api` request: method, path, **status, durationMs**, error.
+- `channel:"testomatio"` — outbound REST with status, timing, truncated bodies.
+- `channel:"ai"` — per-LLM-call events (model, tokens, retries/fallbacks/compaction; `ok:false` on errors). The `summary` carries `session:<id>` — the **Langfuse session id**, feed it to `bun run debug:trace session:<id>` (Step 1b).
+- `channel:"prompt"` — **one event per agent prompt**: model, calls, retries, durationMs, outputTokens, peakContext, session, error.
 
-The `session:<id>` on every `[ai]` line is the Langfuse session id — feed it straight to `bun run debug:trace session:<id>` (Step 1b) for the full transcript.
-
-Logs older than 7 days are pruned on each start, and only the 30 newest app logs are kept (so a `bun --watch` dev loop doesn't pile up).
+7 daily files are kept (evlog fs drain rotation).
 
 ```bash
-ls -t ~/.testeiya/logs/app-*.log | head -1                 # newest start
-tail -80 "$(ls -t ~/.testeiya/logs/app-*.log | head -1)"   # crash / last activity
-LOG="$(ls -t ~/.testeiya/logs/app-*.log | head -1)"
-grep -n '\[config\]' "$LOG"   # how was it configured?
-grep -n '\[error\]'  "$LOG"   # server errors / crashes / prompt failures
-grep -n '\[ai\]'     "$LOG"   # LLM usage: model, chars, tokens, session id, retries/errors
+LOG=~/.testeiya/logs/$(date +%F).jsonl
+tail -40 "$LOG" | jq -c .                                  # crash / last activity
+jq -c 'select(.tag=="config")' "$LOG"                      # how was it configured?
+jq -c 'select(.level=="error")' "$LOG"                     # errors / crashes / failed calls
+jq -c 'select(.channel=="ai")' "$LOG"                      # LLM usage: model, tokens, session id
+jq -c 'select(.channel=="prompt")' "$LOG"                  # one row per agent prompt
+jq -c 'select(.channel=="api" and .status>=400)' "$LOG"    # failed /api requests
 cat ~/.testeiya/server.json   # live server: url, pid, and logFile path
 ```
 
 **Decision guide:**
-- **Server crashed / won't start** → the newest app log's `tail` is the whole story (look for `[error] uncaughtException`, and the `[config]` block to confirm how it was configured). The live snapshot won't work — stay here.
-- **LLM connection/usage looks wrong** (slow, empty, retrying, wrong size) → grep `[ai]`: retries/fallbacks/`error FAIL` signal a provider/connection problem; `chars`/`tok` show the response size; then open the Langfuse trace for that `session:<id>`.
+- **Server crashed / won't start** → the newest daily log's `tail` is the whole story (look for `uncaughtException` at level `error`, and the `tag:"config"` event to confirm how it was configured). The live snapshot won't work — stay here.
+- **LLM connection/usage looks wrong** (slow, empty, retrying, wrong size) → filter `channel:"ai"` / `channel:"prompt"`: retries/fallbacks/`ok:false` signal a provider/connection problem; token counts show the response size; then open the Langfuse trace for that `session:<id>`.
 - **UI looks idle but nothing happens when you send a message** → the socket never reached the server. The browser's own view lands in the snapshot's `client.entries` as `ws-error` / `ws-close` / `ws-connect-timeout` (visible once the server is back). Cause is usually the agent server being down or the port blocked.
 - **Server is alive** → skim the app log for the failing area, then pull the snapshot (Step 1) for the structured, correlated view.
 
@@ -118,7 +118,7 @@ jq '.client.store' <snapshot>                                        # what stat
 jq '[.server.ai[] | select(.ok==false)]' <snapshot>                  # LLM error / exhausted retries
 ```
 
-Correlate the **app log** by ISO timestamp: the app log and the snapshot stamp the same wall clock, so an `[ai]`/`[session]`/`[testomatio→]`/`[error]` line lines up with the `server.*` entries in the snapshot. For the full per-turn detail behind an `[ai]` line, jump to its Langfuse trace via the `session:<id>` it carries.
+Correlate the **app log** by ISO timestamp: the app log and the snapshot stamp the same wall clock, so an `ai`/`api`/`testomatio`/`console` event lines up with the `server.*` entries in the snapshot (the snapshot's `server.api`/`server.prompts` hold the same wide events). For the full per-turn detail behind an `ai` event, jump to its Langfuse trace via the `session:<id>` it carries.
 
 Trace a failure **downstream to upstream**:
 - UI shows an error → find the `client.entries` request that failed → find the matching `server.requests` (the real Testomat.io call) → check `server.console` / the app log `[error]` lines for the thrown error → confirm the exact request/response in `testomatio.http`.
@@ -131,14 +131,14 @@ Trace a failure **downstream to upstream**:
 | Symptom | Look at | Likely cause |
 |---|---|---|
 | UI looks idle, message never gets a reply | `client.entries` `ws-close`/`ws-connect-timeout`; no `Client connected` in the app log | Agent server down / port blocked / wrong WS URL |
-| Server crashed / won't start | Newest `app-*.log` tail (`[error] uncaughtException`, the `[config]` block) | Bad config, thrown at boot, missing dep |
-| Crash mid-turn | App-log tail has the throw (`[error]` / `[session] prompt error:`); the `[ai]` line for that `session:<id>` shows `error FAIL` | Handler threw, provider crash |
+| Server crashed / won't start | Today's `.jsonl` tail (`uncaughtException` at level `error`, the `tag:"config"` event) | Bad config, thrown at boot, missing dep |
+| Crash mid-turn | App-log tail has the throw (level `error` / `[session] prompt error:`); the `ai` event for that `session:<id>` has `ok:false` | Handler threw, provider crash |
 | Red error banner in the app | `server.console` / app-log `[error]` + failing `/api/*` in `client.entries` | Missing API key, unreachable backend, thrown handler |
 | Project won't load / empty tree | `server.requests` (v2 REST status), `client.store.workspace`/`project` | Bad token, wrong `TESTOMATIO_URL`, classification (`resolveManualTestsDir`) |
 | Pull/Push does nothing or errors | `server.checkTests`, `client.entries` `/api/workspace/sync` | Token resolution, dir classification |
-| Agent picked the wrong tool / bad output | Langfuse trace (`session:<id>` from the `[ai]` line) `GENERATION` input + tool observations | Prompt/context gap, wrong skill, missing MCP tool |
-| Agent turn failed / retried | App-log `[ai]` (`retry`/`fallback`/`error FAIL`) or `server.ai` | Provider error, context overflow → compaction |
-| Slow / oversized LLM response | App-log `[ai] response` `chars` + `tok`; the Langfuse generation | Big context, runaway output |
+| Agent picked the wrong tool / bad output | Langfuse trace (`session:<id>` from the `ai` event) `GENERATION` input + tool observations | Prompt/context gap, wrong skill, missing MCP tool |
+| Agent turn failed / retried | App-log `channel:"ai"` (`retry`/`fallback`/`ok:false`) or `channel:"prompt"` `retries` / `server.ai` | Provider error, context overflow → compaction |
+| Slow / oversized LLM response | App-log `channel:"prompt"` (`durationMs`, `outputTokens`, `peakContext`); the Langfuse generation | Big context, runaway output |
 | UI crash / blank | `client.entries` `console`/`uncaught`, app-log `[webview]` | React render error, bad state |
 
 ## Step 4 — Fix, then verify
@@ -157,7 +157,7 @@ The app log + snapshot + store cover most bugs — you should rarely need the li
 
 ## How capture is wired (reference)
 
-- App log: `cli/src/file-log.ts` (`initFileLog`, `logStartupConfig`, `logApp`) — the `~/.testeiya/logs/app-*.log` console tee + config header, shared by every surface, 7-day + 30-file prune. The live app log's path is published in `~/.testeiya/server.json` (`logFile`).
-- Server (in-memory + snapshot): `cli/src/debug-bus.ts` (ring buffer, `captureServerConsole`, `buildSnapshot`, `teeToAppLog` for `[ai]`/`[check-tests]`), endpoints `cli/src/api/debug-{stream,snapshot,report}.ts`, `~/.testeiya/server.json` from `cli/src/server-info.ts`; prompt-error capture in `cli/src/connection.ts`; LLM events + the `session:<id>` tag in `cli/src/ai-debug.ts`.
+- App log: `cli/src/file-log.ts` (`initFileLog`, `logStartupConfig`) — boots the evlog pipeline shared by every surface: NDJSON fs drain (`~/.testeiya/logs/<date>.jsonl`, 7 files), memory ring buffer, Debug-panel SSE drain, console tee. The current day's path is published in `~/.testeiya/server.json` (`logFile`).
+- Server (in-memory + snapshot): `cli/src/debug-bus.ts` (`loggedServerFetch`/`publish` emit evlog wide events; `panelDrain` maps them onto the SSE wire shapes; `buildSnapshot` reads the evlog memory store), endpoints `cli/src/api/debug-{stream,snapshot,report}.ts`, `~/.testeiya/server.json` from `cli/src/server-info.ts`; prompt-error capture + the per-prompt wide event in `cli/src/connection.ts`; LLM events + the `session:<id>` tag in `cli/src/ai-debug.ts`.
 - Client: `lib/debug/external-log.ts` (`initConsoleCapture`, `logAgentEvent`, `logWsEvent`), `lib/services/debug-log-service.ts` (`report()` → `POST /api/debug/report`, flush-on-reconnect), `lib/debug/store-snapshot.ts`; WS lifecycle capture in `hooks/use-testeiya.ts`.
 - Scripts: `cli/scripts/debug-snapshot.ts`, `cli/scripts/langfuse-trace.ts`.

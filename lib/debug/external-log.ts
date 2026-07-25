@@ -17,6 +17,10 @@ const SKIP_EVENTS = new Set([
   "tool-output-partial",
   "ping",
 ]);
+// Endpoints the UI polls on a timer, plus the debug plumbing itself — recording
+// every hit would drown the panel. Mirrors QUIET_API_PREFIXES in
+// cli/src/app-server.ts; failures are still recorded.
+const QUIET_API_PREFIXES = ["/api/playwright/status", "/api/files/tree", "/api/debug"];
 
 let sink: Sink | null = null;
 let seq = 0;
@@ -143,6 +147,7 @@ export function initConsoleCapture(): void {
 function recordRequest(
   partial: Omit<RequestLogEntry, "id" | "ts" | "kind">
 ): void {
+  if (partial.ok && QUIET_API_PREFIXES.some((prefix) => partial.url.startsWith(prefix))) return;
   record({ kind: "request", ...partial });
 }
 

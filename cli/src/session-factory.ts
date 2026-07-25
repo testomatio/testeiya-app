@@ -12,7 +12,7 @@ import type { ExtensionFactory } from "@oh-my-pi/pi-coding-agent";
 import { hasPlaywrightCli, loadBundledSkills, loadCustomSkills, dedupeSkillsByName } from "./skills.js";
 import { SOURCE_PATHS } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
 import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
-import { PROJECT_DIR, HOME_DIR } from "./project-dir.js";
+import { PROJECT_DIR, HOME_DIR, ensureProjectDirGuards } from "./project-dir.js";
 
 // Rebrand the SDK's project-level config dir from `.omp` to `.testeiya`.
 // The SDK has no supported override for this (PI_CONFIG_DIR only affects the
@@ -75,6 +75,7 @@ const BASH_GUARD_RULES = [
 ];
 
 import { loadConfig, type TesteiyaConfig } from "./config.js";
+import { listContext, listContextFolders } from "./context-store.js";
 import { resolveProjectInfo } from "./project-info.js";
 import { buildSystemPrompt } from "./prompt/index.js";
 import { createPermissionExtension } from "./permissions.js";
@@ -252,6 +253,10 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     projects: options?.projects ?? [],
   });
 
+  // Backfill the `.gitignore`/`.ignore` guard pair for workspaces whose
+  // `.testeiya` predates the `.ignore` search whitelist.
+  ensureProjectDirGuards(cwd);
+
   // Gate the browser-automation guidance on whether the @playwright/cli tool is
   // actually installed (the playwright-cli skill itself is vendored from GitHub).
   const systemPrompt = buildSystemPrompt({
@@ -263,6 +268,8 @@ export async function createTesteiyaSession(options?: SessionOptions) {
     mode: options?.mode,
     browser: hasPlaywrightCli(),
     projectInfo,
+    contextEntries: listContext(cwd),
+    contextFolders: listContextFolders(cwd),
   });
 
   // Load skills: the prebuilt skills vendored from GitHub into cli/skills

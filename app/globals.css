@@ -474,3 +474,30 @@
   padding-right: 60px !important;
 }
 
+.testeiya-palette-list {
+  scrollbar-width: auto;
+  -ms-overflow-style: auto;
+
+  &::-webkit-scrollbar {
+    display: block;
+    width: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    min-height: 32px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--foreground);
+    background-clip: content-box;
+  }
+}
+

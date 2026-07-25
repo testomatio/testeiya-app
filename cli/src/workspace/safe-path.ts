@@ -33,6 +33,41 @@ export function safeResolve(cwd: string, relPath: string): string | null {
   return abs;
 }
 
+/**
+ * Like `safeResolve` but without the realpath escape check: containment is
+ * lexical only, so paths that traverse a workspace symlink (a linked context
+ * dir under `.testeiya/`) resolve to their real target. For read-only
+ * endpoints — the link is workspace content the user placed deliberately, and
+ * reading through it is the point. Still rejects `..` escapes.
+ */
+export function safeResolveThroughLinks(cwd: string, relPath: string): string | null {
+  const normalizedCwd = path.resolve(cwd);
+  const abs = path.resolve(normalizedCwd, relPath || ".");
+  if (abs !== normalizedCwd && !abs.startsWith(normalizedCwd + path.sep)) return null;
+  return abs;
+}
+
+/**
+ * When `relPath` names a symlink that lives inside the workspace (its parent
+ * dir realpaths into the workspace — not a link found inside another linked
+ * dir), return its absolute path; else null. Callers use this to operate on
+ * the link itself (unlink) without ever touching what it points at.
+ */
+export function workspaceSymlink(cwd: string, relPath: string): string | null {
+  const normalizedCwd = path.resolve(cwd);
+  const abs = safeResolveThroughLinks(cwd, relPath);
+  if (!abs || abs === normalizedCwd) return null;
+  try {
+    if (!fs.lstatSync(abs).isSymbolicLink()) return null;
+    const realCwd = fs.realpathSync(normalizedCwd);
+    const parentReal = fs.realpathSync(path.dirname(abs));
+    if (parentReal === realCwd || parentReal.startsWith(realCwd + path.sep)) return abs;
+  } catch {
+    // dangling parent or race — treat as not a workspace symlink
+  }
+  return null;
+}
+
 // Realpath the deepest existing ancestor of `p`, so a not-yet-created write
 // target resolves through any symlinked parent dirs without requiring the leaf
 // to exist.
