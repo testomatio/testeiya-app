@@ -52,12 +52,10 @@ import {
   useSearchService,
   useContextService,
 } from "@/lib/services/StoreProvider";
+import { splitTags } from "@/lib/test-md";
 import type { FileStatus, TreeNode, WorkspaceType } from "@/lib/services/types";
 import type { PanelSectionProps } from "@/lib/panel/types";
 
-// `@tag` tokens in a test title — Testomat.io's TAG_ALLOWED_SYMBOLS, anchored to
-// a word boundary so emails (`a@b.com`) aren't mistaken for tags.
-const TAG_RE = /(^|\s)(@[\w=().:&-]*[\w)])/g;
 const TEST_MD_RE = /\.test\.md$/i;
 
 const NodeRow = observer(function NodeRow({ node }: { node: TreeNode }) {
@@ -222,18 +220,6 @@ function subtreeStatus(
 function countTests(node: TreeNode): number {
   if (node.kind === "test") return 1;
   return (node.children ?? []).reduce((sum, child) => sum + countTests(child), 0);
-}
-
-function splitTags(name: string): { title: string; tags: string[] } {
-  const tags: string[] = [];
-  const title = name
-    .replace(TAG_RE, (_match, pre: string, tag: string) => {
-      tags.push(tag);
-      return pre;
-    })
-    .replace(/\s+/g, " ")
-    .trim();
-  return { title: title || name, tags };
 }
 
 /**
@@ -470,9 +456,9 @@ export const WorkspaceSection = observer(function WorkspaceSection({
           <FileTree
             className="min-h-0 flex-1 overflow-auto"
             expanded={ws.expanded}
-            onExpandedChange={(s) => ws.setExpanded(s)}
+            onExpandedChange={ws.setExpanded}
             selectedPath={ws.openFile?.path}
-            onSelect={(p) => ws.openPath(p)}
+            onSelect={ws.openPath}
           >
             {ws.visibleTree.map((node) => (
               <NodeRow key={node.path} node={node} />

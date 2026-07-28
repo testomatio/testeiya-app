@@ -65,7 +65,8 @@ export function createRenderListTool(cache: Map<string, CachedList>): ToolDefini
         Type.Array(Type.String(), {
           description:
             "Row fields to show as columns, rendered in exactly this order " +
-            "(e.g. ['title', 'status', 'priority']). Omit for the kind's defaults.",
+            "(e.g. ['title', 'status']). Priority is never a column — it " +
+            "renders as an icon next to the title. Omit for the kind's defaults.",
         })
       ),
       summary: Type.Optional(

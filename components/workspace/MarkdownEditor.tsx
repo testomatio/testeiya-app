@@ -9,6 +9,7 @@ import { SuiteGlyph } from "@/components/icons";
 import {
   ChevronDownIcon,
   Expand,
+  Icon,
   Minimize2,
   SaveIcon,
   Blocks,
@@ -21,9 +22,15 @@ import { useTheme } from "@/lib/theme";
 import { BlockEditor } from "./BlockEditor";
 import { OverTypeEditor } from "./OverTypeEditor";
 import { CodeEditor } from "./CodeEditor";
+import { SuiteToc } from "./SuiteToc";
+import type { SuiteTest } from "@/lib/test-md";
 
 type Size = "collapsed" | "default" | "expanded";
 type EditorMode = "rich" | "markdown";
+type View = "toc" | "editor";
+
+const TEST_MD_RE = /\.test\.md$/i;
+const TEST_MARKER_RE = /^<!--\s*test\b/m;
 
 export type MarkdownEditorProps = {
   sessionId: string;
@@ -74,9 +81,17 @@ export function MarkdownEditor({
   const [mode, setMode] = useState<EditorMode>(
     () => (localStorage.getItem("editor-mode") as EditorMode | null) ?? "rich"
   );
+  // A suite file opens on its contents list; picking a test (here or in the
+  // sidebar, which passes `scrollToText`) drops into the editor at that test.
+  const [pickedView, setPickedView] = useState<View | null>(null);
+  const [scrollTarget, setScrollTarget] = useState(scrollToText);
   const [loading, setLoading] = useState<boolean>(initialContent === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A failed read is kept apart from a failed save: it replaces the body (there
+  // is no file to show), while a save error must never hide the user's edits.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   // The rich editor seeds its document once, so content replaced from disk has
   // to remount it.
   const [seed, setSeed] = useState(0);
@@ -89,6 +104,12 @@ export function MarkdownEditor({
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const isMarkdown = /\.(md|markdown)$/i.test(path);
+  const isSuite = TEST_MD_RE.test(path);
+  let view: View = "editor";
+  if (isSuite && !scrollToText && TEST_MARKER_RE.test(content)) view = "toc";
+  if (pickedView) view = pickedView;
+  let tabValue: string = mode;
+  if (view === "toc") tabValue = "toc";
 
   // Load when path changes (or when initialContent not provided); a bumped
   // `reloadToken` re-reads the file in place, but never over unsaved edits.
@@ -104,22 +125,25 @@ export function MarkdownEditor({
       return;
     }
     if (!reloading) setLoading(true);
-    setError(null);
+    setLoadError(null);
     fetch(
       `/api/files/read?session=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`
     )
       .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error((data as { error?: string }).error ?? `HTTP ${r.status}`);
+        }
+        return data as { content: string };
       })
-      .then((data: { content: string }) => {
+      .then((data) => {
         if (cancelled) return;
         if (data.content !== contentRef.current) setSeed((s) => s + 1);
         setContent(data.content);
         setOriginal(data.content);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -127,7 +151,7 @@ export function MarkdownEditor({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, path, initialContent, reloadToken]);
+  }, [sessionId, path, initialContent, reloadToken, retry]);
 
   useWidgetSnapshot({ kind: "file", path, content, unsaved: dirty }, !loading);
 
@@ -159,6 +183,11 @@ export function MarkdownEditor({
 
   const saveRef = useRef(save);
   saveRef.current = save;
+
+  const openTest = useCallback((test: SuiteTest) => {
+    setScrollTarget(test.anchor);
+    setPickedView("editor");
+  }, []);
 
   const heightClass =
     size === "collapsed"
@@ -212,9 +241,9 @@ export function MarkdownEditor({
           {dirty && (
             <span className="text-[11px] text-amber-500 shrink-0">● unsaved</span>
           )}
-          {error && (
-            <span className="text-[11px] text-red-500 truncate" title={error}>
-              {error}
+          {(error ?? loadError) && (
+            <span className="text-[11px] text-red-500 truncate" title={error ?? loadError ?? ""}>
+              {error ?? loadError}
             </span>
           )}
         </div>
@@ -224,13 +253,28 @@ export function MarkdownEditor({
               the code editor below. */}
           {isMarkdown && (
           <Tabs
-            value={mode}
+            value={tabValue}
             onValueChange={(v) => {
+              if (v === "toc") {
+                setPickedView("toc");
+                return;
+              }
+              setPickedView("editor");
               setMode(v as EditorMode);
               localStorage.setItem("editor-mode", String(v));
             }}
           >
             <TabsList className="h-7">
+              {isSuite && (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <TabsTrigger value="toc" className="px-1.5" aria-label="Contents">
+                      <Icon name="toc" className="size-3.5" />
+                    </TabsTrigger>
+                  } />
+                  <TooltipContent><p>Contents</p></TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger render={
                   <TabsTrigger value="rich" className="px-1.5" aria-label="Rich editor">
@@ -321,28 +365,51 @@ export function MarkdownEditor({
             <Shimmer as="span">Loading file…</Shimmer>
           </div>
         )}
-        {!loading && isMarkdown && mode === "rich" && (
+        {!loading && loadError && (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-sm">Could not open {basename(path)}</p>
+            <p className="text-xs text-muted-foreground">{loadError}</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-1"
+              onClick={() => setRetry((n) => n + 1)}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+        {!loading && !loadError && view === "toc" && (
+          <SuiteToc
+            content={content}
+            fallbackTitle={basename(path)}
+            onOpenTest={openTest}
+            className="min-w-0 flex-1"
+          />
+        )}
+        {!loading && !loadError && view === "editor" && isMarkdown && mode === "rich" && (
           <BlockEditor
             key={seed}
             value={content}
             onChange={setContent}
             readOnly={readOnly || saving}
             theme={isDark ? "dark" : "light"}
-            scrollToText={scrollToText}
+            scrollToText={scrollTarget}
             onSaveShortcut={() => void saveRef.current()}
           />
         )}
-        {!loading && isMarkdown && mode === "markdown" && (
+        {!loading && !loadError && view === "editor" && isMarkdown && mode === "markdown" && (
           <OverTypeEditor
             value={content}
             onChange={setContent}
             readOnly={readOnly || saving}
             theme={isDark ? "dark" : "light"}
-            scrollToText={scrollToText}
+            scrollToText={scrollTarget}
             onSaveShortcut={() => void saveRef.current()}
           />
         )}
-        {!loading && !isMarkdown && (
+        {!loading && !loadError && !isMarkdown && (
           <CodeEditor
             value={content}
             onChange={setContent}

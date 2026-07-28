@@ -8,11 +8,12 @@ import {
   ListRowGroup,
   ListRowHeader,
 } from "./list-row";
-import { LabelsRow, MetaPill, RunStatusDot } from "./status-pill";
+import { PriorityIcon } from "./priority-icon";
+import { LabelsRow, RunStatusDot } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
 
 const DEFAULT_COLUMNS: Record<string, string[]> = {
-  tests: ["suite_title", "title", "status", "priority"],
+  tests: ["suite_title", "title", "status"],
   runs: ["title", "status", "env"],
   suites: ["title", "tests_count"],
   plans: ["title", "kind"],
@@ -54,6 +55,8 @@ export default function ResultTableRenderer({
   if (cols.length === 0) cols = defaultColumns(kind, items[0]);
   const withData = cols.filter((c) => items.some((row) => row[c] != null && row[c] !== ""));
   if (withData.length > 0) cols = withData;
+  // Priority rides along with the title as an icon, never as its own column.
+  if (cols.some((c) => WIDE_COLUMNS.has(c))) cols = cols.filter((c) => c !== "priority");
   const grid = cols
     .map((c) => (WIDE_COLUMNS.has(c) ? "minmax(0,4fr)" : "minmax(0,2fr)"))
     .join(" ");
@@ -110,17 +113,19 @@ function Cell({ field, row }: { field: string; row: Record<string, unknown> }) {
     );
   }
   if (field === "priority") {
-    if (!value || value === "normal") return null;
-    return <MetaPill>{String(value)}</MetaPill>;
+    return <PriorityIcon priority={value as string} />;
   }
   if (field === "labels" || field === "tags" || field === "self_tags") {
     return <LabelsRow labels={field === "labels" ? value : undefined} tags={field === "labels" ? undefined : value} />;
   }
   if (WIDE_COLUMNS.has(field)) {
     return (
-      <span className="truncate font-medium" title={String(value ?? "")}>
-        {String(value ?? "—")}
-      </span>
+      <>
+        <PriorityIcon priority={row.priority as string} />
+        <span className="truncate font-medium" title={String(value ?? "")}>
+          {String(value ?? "—")}
+        </span>
+      </>
     );
   }
   if (field === "suite_title") {

@@ -81,9 +81,11 @@ export function OverTypeEditor({
         return;
       }
       const lines = textarea.value.split("\n");
-      const lineIndex = lines.findIndex((l) =>
-        l.replace(/^#+\s*/, "").trim().toLowerCase() === needle
-      );
+      const normalized = lines.map((l) => l.replace(/^#+\s*/, "").trim().toLowerCase());
+      // A heading match wins; the fallback catches anchors that live inside a
+      // line, such as the `id: @T…` of a test's metadata block.
+      let lineIndex = normalized.indexOf(needle);
+      if (lineIndex === -1) lineIndex = normalized.findIndex((l) => l.includes(needle));
       if (lineIndex === -1) return;
       const lineHeight = textarea.scrollHeight / Math.max(lines.length, 1);
       textarea.scrollTop = Math.max(0, lineIndex * lineHeight - 48);

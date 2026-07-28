@@ -22,11 +22,18 @@ export class BrowserService {
   browserOpen = false;
   incognito = false;
   busy = false;
+  capturing = false;
+  signals: CaptureSignals | null = null;
 
   pollTimer: ReturnType<typeof setInterval> | null = null;
+  signalsTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(readonly root: RootStore) {
-    makeAutoObservable(this, { root: false, pollTimer: false }, { autoBind: true });
+    makeAutoObservable(
+      this,
+      { root: false, pollTimer: false, signalsTimer: false },
+      { autoBind: true }
+    );
 
     // Each session is its own workspace/browser — drop state, re-seed, re-poll.
     reaction(
@@ -121,6 +128,70 @@ export class BrowserService {
     }, "Failed to change mode", { incognito });
   }
 
+  /**
+   * Begin capturing evidence for a manual test (trace + fresh console/request
+   * lists) and start polling the live signal counts for the badge.
+   */
+  async startCapture(): Promise<boolean> {
+    const sessionId = this.sessionId;
+    if (!sessionId || this.capturing) return this.capturing;
+    try {
+      await postJson("/api/playwright/capture/start", { session: sessionId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start capturing");
+      return false;
+    }
+    runInAction(() => {
+      this.capturing = true;
+      this.signals = null;
+    });
+    this.startSignalsPolling();
+    return true;
+  }
+
+  /** Stop the capture and return its harvested evidence (or null). */
+  async stopCapture(): Promise<CaptureResult | null> {
+    const sessionId = this.sessionId;
+    this.stopSignalsPolling();
+    if (!sessionId || !this.capturing) return null;
+    runInAction(() => {
+      this.capturing = false;
+      this.signals = null;
+    });
+    try {
+      return await postJson<CaptureResult>("/api/playwright/capture/stop", {
+        session: sessionId,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async refreshSignals() {
+    const sessionId = this.sessionId;
+    if (!sessionId || !this.capturing) return;
+    try {
+      const data = await getJson<SignalsStatus>(
+        `/api/playwright/signals?session=${encodeURIComponent(sessionId)}`
+      );
+      runInAction(() => {
+        if (!data.capturing) {
+          this.capturing = false;
+          this.signals = null;
+          this.stopSignalsPolling();
+          return;
+        }
+        this.signals = {
+          consoleErrors: data.consoleErrors ?? 0,
+          failedRequests: data.failedRequests ?? 0,
+          elapsedMs: data.elapsedMs ?? 0,
+        };
+      });
+    } catch {
+      // best-effort — leave state as-is until the next poll
+    }
+  }
+
   async refreshStatus() {
     const sessionId = this.root.sessionId;
     if (!sessionId) return;
@@ -136,6 +207,12 @@ export class BrowserService {
         if (this.recording && !data.recording) {
           this.recording = false;
           toast.error("Browser closed — recording stopped");
+        }
+        // Same for a capture — the server drops it with the browser.
+        if (this.capturing && !data.capturing) {
+          this.capturing = false;
+          this.signals = null;
+          this.stopSignalsPolling();
         }
       });
     } catch {
@@ -174,11 +251,25 @@ export class BrowserService {
     this.pollTimer = null;
   }
 
+  private startSignalsPolling() {
+    if (this.signalsTimer) return;
+    this.signalsTimer = setInterval(() => void this.refreshSignals(), POLL_MS);
+  }
+
+  private stopSignalsPolling() {
+    if (!this.signalsTimer) return;
+    clearInterval(this.signalsTimer);
+    this.signalsTimer = null;
+  }
+
   private reset() {
     this.stopPolling();
+    this.stopSignalsPolling();
     this.recording = false;
     this.browserOpen = false;
     this.incognito = false;
+    this.capturing = false;
+    this.signals = null;
   }
 }
 
@@ -199,5 +290,38 @@ interface BrowserStatus {
   ok?: boolean;
   browserOpen?: boolean;
   recording?: boolean;
+  capturing?: boolean;
   incognito?: boolean;
+}
+
+export interface CaptureSignals {
+  consoleErrors: number;
+  failedRequests: number;
+  elapsedMs: number;
+}
+
+export interface CaptureResult {
+  ok?: boolean;
+  durationMs?: number;
+  browserClosed?: boolean;
+  consoleErrors?: number;
+  consoleText?: string;
+  failedRequests?: FailedRequestInfo[];
+  tracePath?: string | null;
+}
+
+export interface FailedRequestInfo {
+  method: string;
+  url: string;
+  status: string;
+  statusText: string;
+}
+
+interface SignalsStatus {
+  ok?: boolean;
+  capturing?: boolean;
+  browserClosed?: boolean;
+  consoleErrors?: number;
+  failedRequests?: number;
+  elapsedMs?: number;
 }

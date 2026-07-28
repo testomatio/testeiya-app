@@ -42,6 +42,20 @@ Results report to Testomat.io live, so the run's progress is visible to the whol
 > [!TIP]
 > Keep the run widget open while chatting. It's attached to your prompt as context, so *"write a bug report for the failing test"* refers to exactly what you're looking at.
 
+### Semi-automated execution with the agent
+
+Ask the agent to assist the run — *"help me pass this manual run"* (the `manual-run-assistant` skill). It opens the managed browser, navigates to the page each test starts on, and hands the window to you.
+
+Press **Start test** on a test to launch its execution timer. With the browser open, Testeiya also starts capturing what happens while you test: console errors, failing requests, and a full Playwright trace. A live badge shows the counts as you go — click it anytime to have the agent look at the signals mid-test.
+
+When you save a verdict:
+
+- the timed duration is stored as the result's `run_time`;
+- a browser screenshot is attached automatically (toggle **Auto-attach on save** in the screenshot menu);
+- on a failure — or when errors were captured — the agent analyzes the evidence and, if it validates a real bug, proposes a note under the message field. **Add to message** appends it to your comment; it never overwrites what you typed.
+
+The timer is yours to control: pause it, reset it, or click the time to type a corrected `mm:ss` value before saving.
+
 ## Exploratory testing
 
 For testing beyond scripted cases, the bundled Explorbot skills plan and drive exploratory sessions — ask the agent to *"plan an exploratory testing session for the checkout flow"*. The agent can also use its managed browser (the **Browser** control in the header) to open your application and verify behavior itself.

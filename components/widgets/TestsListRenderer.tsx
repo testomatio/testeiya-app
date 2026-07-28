@@ -11,6 +11,7 @@ import {
   ListRowHeader,
 } from "./list-row";
 import { PreviewPane } from "./preview-pane";
+import { PriorityIcon } from "./priority-icon";
 import { LabelsRow, MetaPill, RunStatusDot, StatusCount, StatusFilterChip, statusKind } from "./status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "./type-icons";
 
@@ -120,6 +121,7 @@ export default function TestsListRenderer({
               <SuiteGlyph className="size-4 shrink-0 text-muted-foreground" />
             );
           })()}
+          <PriorityIcon priority={t.priority} />
           <span className="truncate font-medium" title={title}>
             {title}
           </span>
@@ -138,9 +140,6 @@ export default function TestsListRenderer({
               <RunStatusDot status={t.status} title={t.status} />
               {t.status}
             </span>
-          )}
-          {t.priority && t.priority !== "normal" && (
-            <MetaPill>{t.priority}</MetaPill>
           )}
           {t.state &&
             t.state !== "manual" &&

@@ -1,6 +1,7 @@
 "use client";
 
 import { col, createTableSchema } from "@/lib/table-schema";
+import { PriorityIcon } from "@/components/widgets/priority-icon";
 import {
   formatDuration,
   MetaPill,
@@ -56,7 +57,12 @@ export function buildTestrunsSchema(opts: {
       .size(140)
       .display("custom", { cell: (_v, row) => <EnvCell tr={row as TestRun} /> }),
     kind: col.enum(TESTRUN_KINDS).label("Kind").icon("category").hidden(),
-    priority: col.enum(PRIORITIES).label("Priority").icon("flag").hidden(),
+    priority: col
+      .enum(PRIORITIES)
+      .label("Priority")
+      .icon("flag")
+      .hidden()
+      .display("custom", { cell: (v) => <PriorityIcon priority={v as string} /> }),
     defects: col.enum(DEFECTS).label("Defects").icon("bug_report").hidden(),
     envs: col
       .array(col.enum(opts.environments))
@@ -122,6 +128,7 @@ function TestRunTitleCell({ tr }: { tr: TestRun }) {
         <span className="flex size-5 shrink-0 items-center justify-center">
           {kind ? <TypeIcon type={kind} /> : null}
         </span>
+        <PriorityIcon priority={tr.priority} />
         <span className="truncate font-medium" title={String(title)}>
           {title}
         </span>
@@ -172,6 +179,7 @@ interface TestRun {
   test?: { title?: string };
   status?: string;
   substatus?: string;
+  priority?: string;
   run_time?: number;
   duration?: number;
   automated?: boolean;

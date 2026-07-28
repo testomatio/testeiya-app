@@ -73,6 +73,9 @@ import {
   playwrightAttachScreenshot,
   playwrightStatus,
   playwrightIncognito,
+  playwrightCaptureStart,
+  playwrightCaptureStop,
+  playwrightSignals,
   configurePlaywrightCliEnv,
 } from "./api/playwright-cli.js";
 import { loadEnvFiles } from "./load-env.js";
@@ -98,7 +101,12 @@ const HOSTNAME = process.env.HOST || "127.0.0.1";
 // Endpoints the UI polls on a timer, plus the debug plumbing itself — logging
 // every hit floods the app log with noise. Suppress the per-request `[api]` line
 // for anything under these path prefixes.
-const QUIET_API_PREFIXES = ["/api/playwright/status", "/api/files/tree", "/api/debug"];
+const QUIET_API_PREFIXES = [
+  "/api/playwright/status",
+  "/api/playwright/signals",
+  "/api/files/tree",
+  "/api/debug",
+];
 
 // Where the static Next export lives. Defaults to `<repo>/out`; the Electrobun
 // entry passes the bundled location (or set TESTEIYA_STATIC_DIR).
@@ -337,6 +345,15 @@ async function handleApi(req: Request, pathname: string): Promise<Response> {
   }
   if (pathname === "/api/playwright/status" && method === "GET") {
     return playwrightStatus(req);
+  }
+  if (pathname === "/api/playwright/capture/start" && method === "POST") {
+    return playwrightCaptureStart(req);
+  }
+  if (pathname === "/api/playwright/capture/stop" && method === "POST") {
+    return playwrightCaptureStop(req);
+  }
+  if (pathname === "/api/playwright/signals" && method === "GET") {
+    return playwrightSignals(req);
   }
   if (pathname === "/api/playwright/incognito" && method === "POST") {
     return playwrightIncognito(req);

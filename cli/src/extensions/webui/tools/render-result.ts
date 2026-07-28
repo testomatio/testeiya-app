@@ -30,7 +30,8 @@ export function createRenderResultTool(cache: Map<string, CachedList>): ToolDefi
         Type.Array(Type.String(), {
           description:
             "Row fields to show as columns, rendered in exactly this order " +
-            "(e.g. ['suite_title', 'title', 'status', 'priority']). Omit for " +
+            "(e.g. ['suite_title', 'title', 'status']). Priority is never a " +
+            "column — it renders as an icon next to the title. Omit for " +
             "the kind's defaults.",
         })
       ),

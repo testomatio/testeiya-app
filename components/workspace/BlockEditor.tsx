@@ -328,15 +328,19 @@ export function BlockEditor({
     let attempts = 0;
     let cleanup: ReturnType<typeof setTimeout> | null = null;
     const tryScroll = () => {
-      const blocks = containerRef.current?.querySelectorAll<HTMLElement>(
+      const container = containerRef.current;
+      const blocks = container?.querySelectorAll<HTMLElement>(
         '[data-node-type="blockContainer"]'
       );
       const target = blocks && findMatchingBlock(blocks, needle);
-      if (!target) {
+      if (!container || !target) {
         if (attempts++ < SCROLL_MAX_FRAMES) frame = requestAnimationFrame(tryScroll);
         return;
       }
-      target.scrollIntoView({ block: "start" });
+      // Scroll the editor's own container — `scrollIntoView` would also scroll
+      // the app shell around it, pushing the header off screen.
+      container.scrollTop +=
+        target.getBoundingClientRect().top - container.getBoundingClientRect().top;
       target.classList.add("testeiya-search-hit");
       cleanup = setTimeout(
         () => target.classList.remove("testeiya-search-hit"),

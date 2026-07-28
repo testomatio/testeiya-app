@@ -65,6 +65,11 @@ export const SidebarPanel = observer(function SidebarPanel({
     return () => clearTimeout(t);
   }, []);
 
+  // Keep-alive: once the panel has been opened its content stays mounted (just
+  // hidden) so collapsing/expanding it doesn't rebuild the sections.
+  const openedRef = useRef(open);
+  if (open) openedRef.current = true;
+
   const widthRef = useRef(width);
   widthRef.current = width;
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -178,9 +183,12 @@ export const SidebarPanel = observer(function SidebarPanel({
         </div>
       </nav>
 
-      {/* Content panel — only when open */}
-      {open && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Content panel — mounted once opened, hidden while collapsed */}
+      {openedRef.current && (
+        <div
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          style={open ? undefined : { display: "none" }}
+        >
           {/* Sidebar header: project info */}
           <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
             <Tooltip>

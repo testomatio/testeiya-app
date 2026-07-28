@@ -38,10 +38,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   mutateTestomatio,
   uploadTestRunAttachment,
   useTestomatio,
 } from "@/lib/agent-output/use-testomatio";
+import type { CaptureResult } from "@/lib/services/browser-service";
 import {
   useBrowserService,
   useProjectService,
@@ -123,7 +129,17 @@ function ManualRunRenderer({
   const testruns = useMemo(() => fetched ?? [], [fetched]);
 
   // Expose the run and its per-test rows to the agent's `get` action.
-  useWidgetSnapshot({ kind: "manual-run", run, testruns, total: meta?.total });
+  useWidgetSnapshot({
+    kind: "manual-run",
+    run,
+    testruns,
+    total: meta?.total,
+    capture: {
+      active: browser.capturing,
+      consoleErrors: browser.signals?.consoleErrors ?? 0,
+      failedRequests: browser.signals?.failedRequests ?? 0,
+    },
+  });
 
   const [index, setIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -133,6 +149,14 @@ function ManualRunRenderer({
   const [attaching, setAttaching] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [shots, setShots] = useState<Record<string, Shot[]>>({});
+  const [timers, setTimers] = useState<Record<string, TimerState>>({});
+  const [suggestions, setSuggestions] = useState<Record<string, string>>({});
+  const [editingTime, setEditingTime] = useState(false);
+  const [, setTick] = useState(0);
+  const [autoShot, setAutoShot] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("testeiya.manualRunAutoShot") !== "0";
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const activeRowRef = useRef<HTMLDivElement>(null);
@@ -271,6 +295,33 @@ function ManualRunRenderer({
     current?.test_title ?? current?.title ?? String(current?.id ?? "");
   const currentTestId = current?.test_id;
   const isLast = visiblePos === visibleIndices.length - 1 && !hasNextPage;
+  const currentKey = current ? String(current.id) : null;
+  const currentTimer = currentKey ? timers[currentKey] : undefined;
+  const timerRunning = !!currentTimer?.startedAt;
+  const currentSuggestion = currentKey ? suggestions[currentKey] : undefined;
+
+  // Re-render each second while the visible timer runs, so the clock ticks.
+  useEffect(() => {
+    if (!timerRunning) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [timerRunning]);
+
+  // Moving to another test pauses whatever timer was running.
+  useEffect(() => {
+    setEditingTime(false);
+    setTimers((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [key, t] of Object.entries(prev)) {
+        if (key === currentKey || !t.startedAt) continue;
+        next[key] = { base: elapsedSeconds(t), startedAt: null };
+        changed = true;
+      }
+      if (!changed) return prev;
+      return next;
+    });
+  }, [currentKey]);
 
   const { data: testDetail, loading: stepsLoading } = useTestomatio<TestDetail>(
     "tests",
@@ -335,6 +386,23 @@ function ManualRunRenderer({
       const text = String(params.text ?? "");
       setMessage(text);
       return { id: current.id, message: text };
+    }
+    if (action === "start_test") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      startTest();
+      return { started: true, id: current.id, capturing: browser.browserOpen };
+    }
+    if (action === "suggest_message") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      const text = String(params.text ?? "").trim();
+      if (!text) throw new Error("text is required.");
+      setSuggestions((prev) => ({ ...prev, [String(current.id)]: text }));
+      return { suggested: true, id: current.id };
+    }
+    if (action === "attach_screenshot") {
+      if (!current) throw new Error("No test selected — call select_test first.");
+      if (!browser.browserOpen) throw new Error("No browser is open.");
+      return attach().then(() => ({ attached: true, id: current.id }));
     }
     if (action === "save_next") {
       if (!current) throw new Error("No test selected — call select_test first.");
@@ -577,6 +645,134 @@ function ManualRunRenderer({
               </div>
 
               <div className="space-y-3">
+                <div className="flex min-h-7 flex-wrap items-center gap-1.5 text-xs">
+                  {!timerRunning && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={startTest}
+                      className="h-7 gap-1 px-2 text-xs"
+                    >
+                      <Icon name="play_arrow" className="size-3.5" />
+                      {(currentTimer?.base ?? 0) > 0 ? "Resume" : "Start test"}
+                    </Button>
+                  )}
+                  {timerRunning && (
+                    <>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={pauseTimer}
+                              aria-label="Pause timer"
+                              className="h-7 px-1.5"
+                            />
+                          }
+                        >
+                          <Icon name="pause" className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent><p>Pause timer</p></TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={stopTest}
+                              aria-label="Stop test"
+                              className="h-7 px-1.5"
+                            />
+                          }
+                        >
+                          <Icon name="stop" className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent><p>Stop test — ends signal capture</p></TooltipContent>
+                      </Tooltip>
+                    </>
+                  )}
+                  {(timerRunning || (currentTimer?.base ?? 0) > 0) && (
+                    <>
+                      {editingTime ? (
+                        <Input
+                          autoFocus
+                          defaultValue={formatClock(elapsedSeconds(currentTimer))}
+                          onBlur={(e) => commitTime(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitTime(e.currentTarget.value);
+                            if (e.key === "Escape") setEditingTime(false);
+                          }}
+                          aria-label="Edit elapsed time (mm:ss)"
+                          className="h-7 w-16 text-center font-mono text-xs"
+                        />
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                onClick={() => setEditingTime(true)}
+                                className="rounded px-1 py-0.5 font-mono text-sm tabular-nums hover:bg-muted"
+                              />
+                            }
+                          >
+                            {formatClock(elapsedSeconds(currentTimer))}
+                          </TooltipTrigger>
+                          <TooltipContent><p>Click to edit time</p></TooltipContent>
+                        </Tooltip>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={resetTimer}
+                              aria-label="Reset timer"
+                              className="h-7 px-1.5 text-muted-foreground"
+                            />
+                          }
+                        >
+                          <Icon name="restart_alt" className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent><p>Reset timer</p></TooltipContent>
+                      </Tooltip>
+                    </>
+                  )}
+                  {browser.capturing && (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={analyzeNow}
+                            className={cn(
+                              "ml-auto flex items-center gap-1.5 rounded-full border px-2 py-0.5 hover:bg-muted",
+                              (browser.signals?.consoleErrors ?? 0) +
+                                (browser.signals?.failedRequests ?? 0) >
+                                0
+                                ? "text-run-failed"
+                                : "text-muted-foreground"
+                            )}
+                          />
+                        }
+                      >
+                        <span className="size-1.5 animate-pulse rounded-full bg-run-failed" />
+                        {browser.signals
+                          ? `${browser.signals.consoleErrors} console errors · ${browser.signals.failedRequests} failed requests`
+                          : "capturing…"}
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ask the agent to analyze the captured signals</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   {STATUSES.map((s) => {
                     const selected = draft?.status === s.value;
@@ -603,6 +799,36 @@ function ManualRunRenderer({
                 value={draft?.message ?? ""}
                 onChange={(e) => setMessage(e.target.value)}
               />
+
+              {currentSuggestion && (
+                <div className="rounded-md border border-primary/40 bg-primary/5 p-2 text-xs">
+                  <div className="mb-1 flex items-center gap-1 font-medium text-primary">
+                    <Icon name="auto_awesome" className="size-3.5" />
+                    Suggested note
+                  </div>
+                  <p className="whitespace-pre-wrap">{currentSuggestion}</p>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={applySuggestion}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Add to message
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={dismissSuggestion}
+                      className="h-6 px-2 text-xs text-muted-foreground"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {actionError && (
                 <p className="text-xs text-destructive">{actionError}</p>
@@ -709,6 +935,13 @@ function ManualRunRenderer({
                       >
                         <UploadIcon className="size-4" />
                         Upload image…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={toggleAutoShot}>
+                        <Icon
+                          name={autoShot ? "check_box" : "check_box_outline_blank"}
+                          className="size-4"
+                        />
+                        Auto-attach on save
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -847,26 +1080,119 @@ function ManualRunRenderer({
     }
   }
 
+  // Start executing the selected test: launch its timer and, when the shared
+  // browser is up, begin capturing signals (trace + console/request lists).
+  function startTest() {
+    if (!currentKey) return;
+    setTimers((prev) => {
+      const t = prev[currentKey] ?? { base: 0, startedAt: null };
+      return { ...prev, [currentKey]: { ...t, startedAt: Date.now() } };
+    });
+    if (browser.browserOpen && !browser.capturing) void browser.startCapture();
+  }
+
+  function pauseTimer() {
+    if (!currentKey) return;
+    setTimers((prev) => {
+      const t = prev[currentKey];
+      if (!t?.startedAt) return prev;
+      return {
+        ...prev,
+        [currentKey]: { base: elapsedSeconds(t), startedAt: null },
+      };
+    });
+  }
+
+  function stopTest() {
+    pauseTimer();
+    if (browser.capturing) void browser.stopCapture();
+  }
+
+  function resetTimer() {
+    if (!currentKey) return;
+    setTimers((prev) => {
+      const running = !!prev[currentKey]?.startedAt;
+      const startedAt = running ? Date.now() : null;
+      return { ...prev, [currentKey]: { base: 0, startedAt } };
+    });
+  }
+
+  function commitTime(value: string) {
+    setEditingTime(false);
+    if (!currentKey) return;
+    const seconds = parseClock(value);
+    if (seconds == null) return;
+    setTimers((prev) => {
+      const running = !!prev[currentKey]?.startedAt;
+      const startedAt = running ? Date.now() : null;
+      return { ...prev, [currentKey]: { base: seconds, startedAt } };
+    });
+  }
+
+  function toggleAutoShot() {
+    setAutoShot((v) => {
+      localStorage.setItem("testeiya.manualRunAutoShot", v ? "0" : "1");
+      return !v;
+    });
+  }
+
+  function applySuggestion() {
+    if (!currentKey || !currentSuggestion) return;
+    setDrafts((d) => {
+      const prev = d[currentKey]?.message ?? "";
+      let message = currentSuggestion;
+      if (prev.trim()) message = `${prev}\n\n${currentSuggestion}`;
+      return { ...d, [currentKey]: { ...d[currentKey], message } };
+    });
+    setSuggestions((prev) => ({ ...prev, [currentKey]: "" }));
+  }
+
+  function dismissSuggestion() {
+    if (!currentKey) return;
+    setSuggestions((prev) => ({ ...prev, [currentKey]: "" }));
+  }
+
+  // The user asked for a look at the live signals mid-test — the agent reads
+  // the shared browser itself, so only the counts ride along.
+  function analyzeNow() {
+    const signals = browser.signals;
+    store.agentEvents.emit(
+      [
+        "<manual-run-event>",
+        `The user asked you to analyze the browser signals captured so far while manually testing "${currentTitle}" (testrun id ${currentKey}) — the test is still in progress.`,
+        `Counts so far: ${signals?.consoleErrors ?? 0} console errors, ${signals?.failedRequests ?? 0} failed requests.`,
+        "Read the details from the shared browser with `playwright-cli console error` and `playwright-cli requests`, diagnose the cause, and if a real problem is visible propose a short note via the manual-run widget action suggest_message. Do not save or change the result yourself.",
+        "</manual-run-event>",
+      ].join("\n")
+    );
+    toast.info("Asking the agent to analyze the captured signals");
+  }
+
   async function save(advance: boolean, statusOverride?: string) {
     const sessionId = store.sessionId;
     if (saving || !current || !draft || !runId || !sessionId) return;
     const status = statusOverride ?? draft.status;
     if (statusOverride) setStatus(statusOverride);
+    const target = current;
+    const key = String(target.id);
+    const runTime = elapsedSeconds(timers[key]);
+    pauseTimer();
     setSaving(true);
     setActionError(null);
     try {
+      const body: Record<string, unknown> = {
+        run_id: runId,
+        status,
+        message: draft.message,
+      };
+      if (runTime > 0) body.run_time = runTime;
       await mutateTestomatio(
         "testruns",
-        {
-          id: current.id as string | number,
-          body: {
-            run_id: runId,
-            status,
-            message: draft.message,
-          },
-        },
+        { id: target.id as string | number, body },
         sessionId
       );
+      if (autoShot && browser.browserOpen) void attach(undefined, target);
+      void harvestCapture(target, status);
       if (advance) goNext();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
@@ -875,17 +1201,39 @@ function ManualRunRenderer({
     }
   }
 
-  async function attach(file?: File) {
+  // Close the capture opened by Start and, when the verdict is a failure or the
+  // browser logged problems, hand the evidence to the agent for analysis.
+  async function harvestCapture(target: TestRunRow, status: string) {
+    if (!browser.capturing) return;
+    const capture = await browser.stopCapture();
+    if (!capture) return;
+    const failedRequests = capture.failedRequests ?? [];
+    const hasSignals = (capture.consoleErrors ?? 0) > 0 || failedRequests.length > 0;
+    if (status !== "failed" && !hasSignals) return;
+    store.agentEvents.emit(
+      manualRunEventBlock({
+        runTitle: title,
+        target,
+        status,
+        capture,
+        screenshotAttached: autoShot && browser.browserOpen,
+      })
+    );
+    toast.info("Asking the agent to analyze the captured signals");
+  }
+
+  async function attach(file?: File, targetRow?: TestRunRow) {
     const sessionId = store.sessionId;
-    if (attaching || !current || !sessionId) return;
+    const target = targetRow ?? current;
+    if (attaching || !target || !sessionId) return;
     setAttaching(true);
     setActionError(null);
     try {
       const res = await uploadTestRunAttachment({
         sessionId,
-        testrunId: current.id,
+        testrunId: target.id,
         runId,
-        testId: current.test_id,
+        testId: target.test_id,
         file,
       });
       let url: string | null = null;
@@ -896,7 +1244,7 @@ function ManualRunRenderer({
         url = attachmentUrl(res, project.baseUrl);
       }
       if (url) {
-        const key = String(current.id);
+        const key = String(target.id);
         const next = url;
         setShots((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { url: next }] }));
       }
@@ -946,6 +1294,67 @@ export default observer(ManualRunRenderer);
 
 function isPending(status?: string): boolean {
   return !status || status.toLowerCase() === "pending";
+}
+
+function elapsedSeconds(t?: TimerState): number {
+  if (!t) return 0;
+  let s = t.base;
+  if (t.startedAt) s += (Date.now() - t.startedAt) / 1000;
+  return Math.round(s);
+}
+
+function formatClock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+// Accepts `mm:ss` or plain seconds; null when the value isn't a time.
+function parseClock(value: string): number | null {
+  const v = value.trim();
+  const clock = v.match(/^(\d+):(\d{1,2})$/);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]);
+  if (/^\d+$/.test(v)) return Number(v);
+  return null;
+}
+
+// The event block handed to the agent when a saved verdict has evidence worth
+// analyzing. One paired tag wrapping everything — the transcript replay strips
+// it, so it never resurfaces as a user bubble (see AgentEventsService).
+function manualRunEventBlock(input: {
+  runTitle: string;
+  target: TestRunRow;
+  status: string;
+  capture: CaptureResult;
+  screenshotAttached: boolean;
+}): string {
+  const { runTitle, target, status, capture, screenshotAttached } = input;
+  const testTitle = target.test_title ?? target.title ?? String(target.id);
+  const failed = capture.failedRequests ?? [];
+  const lines = [
+    "<manual-run-event>",
+    `The user marked manual test "${testTitle}" as ${status} in run "${runTitle}".`,
+    `testrun id: ${target.id}, test id: ${target.test_id ?? "unknown"}`,
+  ];
+  lines.push(`Console errors captured while the test ran: ${capture.consoleErrors ?? 0}`);
+  if (capture.consoleText) lines.push(capture.consoleText);
+  lines.push(`Failed requests: ${failed.length}`);
+  for (const r of failed) {
+    lines.push(`- [${r.method}] ${r.url} => [${r.status}] ${r.statusText}`);
+  }
+  if (capture.tracePath) {
+    lines.push(
+      `Trace: ${capture.tracePath} (a Playwright trace; its .network sibling holds full request/response data)`
+    );
+  }
+  if (screenshotAttached) lines.push("A browser screenshot was attached to the result.");
+  lines.push(
+    "Analyze these signals. If they point to a real problem (even on a passed test), verify against the live browser and propose a short factual note via the manual-run widget action suggest_message. Do not save or change the result yourself."
+  );
+  lines.push("</manual-run-event>");
+  return lines.join("\n");
 }
 
 function statusBucket(status?: string): StatusBucket {
@@ -1050,6 +1459,11 @@ interface TestDetail {
 interface Draft {
   status: string;
   message: string;
+}
+
+interface TimerState {
+  base: number;
+  startedAt: number | null;
 }
 
 interface Shot {

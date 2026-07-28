@@ -191,7 +191,7 @@ export const CommandPalette = observer(function CommandPalette() {
     <CommandDialog
       open={palette.open}
       onOpenChange={palette.setOpen}
-      className="sm:max-w-[min(56rem,calc(100vw-2rem))] sm:min-w-[min(48rem,calc(100vw-2rem))]"
+      className="top-[22vh] translate-y-0 sm:max-w-[min(56rem,calc(100vw-2rem))] sm:min-w-[min(48rem,calc(100vw-2rem))]"
     >
       <Command shouldFilter={false} loop>
         <CommandInput

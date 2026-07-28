@@ -12,6 +12,7 @@ import { ChatTabsService } from "./chat-tabs-service";
 import { WidgetService } from "./widget-service";
 import { DebugLogService } from "./debug-log-service";
 import { WorkflowsService } from "./workflows-service";
+import { AgentEventsService } from "./agent-events-service";
 import { ContextService } from "./context-service";
 import { PaletteService } from "./palette-service";
 
@@ -39,6 +40,7 @@ export class RootStore {
   widget: WidgetService;
   debug: DebugLogService;
   workflows: WorkflowsService;
+  agentEvents: AgentEventsService;
   context: ContextService;
   palette: PaletteService;
 
@@ -59,6 +61,7 @@ export class RootStore {
     this.widget = new WidgetService(this);
     this.debug = new DebugLogService(this);
     this.workflows = new WorkflowsService(this);
+    this.agentEvents = new AgentEventsService(this);
     this.context = new ContextService(this);
     this.palette = new PaletteService(this);
   }

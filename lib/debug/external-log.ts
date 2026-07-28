@@ -20,7 +20,12 @@ const SKIP_EVENTS = new Set([
 // Endpoints the UI polls on a timer, plus the debug plumbing itself — recording
 // every hit would drown the panel. Mirrors QUIET_API_PREFIXES in
 // cli/src/app-server.ts; failures are still recorded.
-const QUIET_API_PREFIXES = ["/api/playwright/status", "/api/files/tree", "/api/debug"];
+const QUIET_API_PREFIXES = [
+  "/api/playwright/status",
+  "/api/playwright/signals",
+  "/api/files/tree",
+  "/api/debug",
+];
 
 let sink: Sink | null = null;
 let seq = 0;

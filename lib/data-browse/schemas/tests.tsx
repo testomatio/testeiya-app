@@ -1,6 +1,7 @@
 "use client";
 
 import { col, createTableSchema } from "@/lib/table-schema";
+import { PriorityIcon } from "@/components/widgets/priority-icon";
 import { LabelsRow, MetaPill } from "@/components/widgets/status-pill";
 import { resolveType, SuiteGlyph, TypeIcon } from "@/components/widgets/type-icons";
 import type { FilterMap } from "../params";
@@ -50,7 +51,13 @@ export function buildTestsSchema(opts: {
       .size(120)
       .tql("state")
       .display("custom", { cell: (_v, row) => <StateCell test={row as Test} /> }),
-    priority: col.enum(PRIORITIES).label("Priority").icon("flag").tql("priority").hidden(),
+    priority: col
+      .enum(PRIORITIES)
+      .label("Priority")
+      .icon("flag")
+      .tql("priority")
+      .hidden()
+      .display("custom", { cell: (v) => <PriorityIcon priority={v as string} /> }),
     sync_status: col.enum(SYNC).label("Sync").icon("sync").hidden(),
     suites: col
       .array(col.enum(suiteIds))
@@ -112,6 +119,7 @@ function TestTitleCell({ test }: { test: Test }) {
           <SuiteGlyph className="size-4 text-muted-foreground" />
         )}
       </span>
+      <PriorityIcon priority={test.priority} />
       <span className="truncate font-medium" title={title}>
         {title}
       </span>
@@ -131,9 +139,6 @@ function TagsCell({ test }: { test: Test }) {
 function StateCell({ test }: { test: Test }) {
   return (
     <div className="flex min-w-0 items-center gap-x-1 overflow-hidden">
-      {test.priority && test.priority !== "normal" ? (
-        <MetaPill>{test.priority}</MetaPill>
-      ) : null}
       {test.state && test.state !== "manual" && test.state !== "automated" ? (
         <MetaPill>{test.state}</MetaPill>
       ) : null}

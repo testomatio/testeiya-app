@@ -30,6 +30,10 @@ const PROFILE_DIR = path.join(PW_HOME, "profile");
 // Last recording file per Testeiya session, so `stop` can report where it landed.
 const recordings = new Map<string, string>();
 
+// Live manual-test capture per Testeiya session: tracing + cleared console and
+// request lists, started when the user begins a test, harvested on the verdict.
+const captures = new Map<string, Capture>();
+
 let cachedBin: string | null | undefined;
 
 /**
@@ -77,10 +81,111 @@ export async function playwrightClose(req: Request): Promise<Response> {
   if (session instanceof Response) return session;
 
   recordings.delete(session.sessionId);
+  captures.delete(session.sessionId);
   const result = await runPlaywrightCli(["close"], session.cwd);
   // Already closed is fine — the goal state (no browser) is reached either way.
   if (!result.ok && !isBrowserClosedError(result.output)) return cliError(result.output);
   return Response.json({ ok: true, browserOpen: false });
+}
+
+/**
+ * Begin capturing evidence for one manual test: start a trace and reset the
+ * per-tab console/request lists so `capture/stop` and `signals` report only
+ * what happened during this test. The trace keeps the lossless record.
+ */
+export async function playwrightCaptureStart(req: Request): Promise<Response> {
+  const session = await resolveSession(req);
+  if (session instanceof Response) return session;
+
+  if (!(await isBrowserOpen(session.cwd))) {
+    return Response.json(
+      { error: "No browser is open — start one first." },
+      { status: 409 },
+    );
+  }
+  // A capture left running (next test started without a save) — close its trace
+  // so tracing-start doesn't fail on an already-active trace.
+  if (captures.get(session.sessionId)?.tracing) {
+    await runPlaywrightCli(["tracing-stop"], session.cwd);
+  }
+  await runPlaywrightCli(["console", "--clear"], session.cwd);
+  await runPlaywrightCli(["requests", "--clear"], session.cwd);
+  const trace = await runPlaywrightCli(["tracing-start"], session.cwd);
+  captures.set(session.sessionId, { startedAt: Date.now(), tracing: trace.ok });
+  return Response.json({ ok: true, capturing: true, tracing: trace.ok });
+}
+
+/**
+ * Stop the capture and harvest its evidence: console errors, failed/4xx+
+ * requests (accumulated per tab across navigations, last 100), and the trace
+ * file path. Safe when the browser died mid-test — reports what it can.
+ */
+export async function playwrightCaptureStop(req: Request): Promise<Response> {
+  const session = await resolveSession(req);
+  if (session instanceof Response) return session;
+
+  const capture = captures.get(session.sessionId);
+  captures.delete(session.sessionId);
+  if (!capture) {
+    return Response.json({ error: "No capture in progress." }, { status: 409 });
+  }
+
+  const durationMs = Date.now() - capture.startedAt;
+  const consoleResult = await runPlaywrightCli(["console", "error", "--json"], session.cwd);
+  if (isBrowserClosedError(consoleResult.output)) {
+    return Response.json({
+      ok: true,
+      durationMs,
+      browserClosed: true,
+      consoleErrors: 0,
+      consoleText: "",
+      failedRequests: [],
+      tracePath: null,
+    });
+  }
+  const requestsResult = await runPlaywrightCli(["requests", "--json"], session.cwd);
+  let tracePath: string | null = null;
+  if (capture.tracing) {
+    const trace = await runPlaywrightCli(["tracing-stop", "--json"], session.cwd);
+    tracePath = findTracePath(trace.ok ? resultText(trace.output) : "");
+  }
+  const parsed = parseConsole(consoleResult.ok ? resultText(consoleResult.output) : "");
+  return Response.json({
+    ok: true,
+    durationMs,
+    consoleErrors: parsed.errors,
+    consoleText: parsed.text,
+    failedRequests: parseFailedRequests(
+      requestsResult.ok ? resultText(requestsResult.output) : "",
+    ),
+    tracePath,
+  });
+}
+
+/** Cheap live counts for the capture badge — polled while a test is running. */
+export async function playwrightSignals(req: Request): Promise<Response> {
+  const session = await resolveSession(req);
+  if (session instanceof Response) return session;
+
+  const capture = captures.get(session.sessionId);
+  if (!capture) return Response.json({ ok: true, capturing: false });
+
+  const consoleResult = await runPlaywrightCli(["console", "error", "--json"], session.cwd);
+  if (isBrowserClosedError(consoleResult.output)) {
+    captures.delete(session.sessionId);
+    return Response.json({ ok: true, capturing: false, browserClosed: true });
+  }
+  const requestsResult = await runPlaywrightCli(["requests", "--json"], session.cwd);
+  const parsed = parseConsole(consoleResult.ok ? resultText(consoleResult.output) : "");
+  return Response.json({
+    ok: true,
+    capturing: true,
+    elapsedMs: Date.now() - capture.startedAt,
+    consoleErrors: parsed.errors,
+    failedRequests: parseFailedRequests(
+      requestsResult.ok ? resultText(requestsResult.output) : "",
+    ).length,
+  });
 }
 
 /**
@@ -197,7 +302,12 @@ export async function playwrightStatus(req: Request): Promise<Response> {
     recordings.delete(session.sessionId);
     recording = false;
   }
-  return Response.json({ ok: true, browserOpen, recording, incognito: isIncognito() });
+  let capturing = captures.has(session.sessionId);
+  if (capturing && !browserOpen) {
+    captures.delete(session.sessionId);
+    capturing = false;
+  }
+  return Response.json({ ok: true, browserOpen, recording, capturing, incognito: isIncognito() });
 }
 
 /** Toggle persistent vs incognito mode; restarts the browser if one is open. */
@@ -218,6 +328,7 @@ export async function playwrightIncognito(req: Request): Promise<Response> {
   let browserOpen = await isBrowserOpen(session.cwd);
   if (browserOpen) {
     recordings.delete(session.sessionId);
+    captures.delete(session.sessionId);
     await runPlaywrightCli(["close"], session.cwd);
     const result = await runPlaywrightCli(["open", "--headed"], session.cwd);
     browserOpen = result.ok;
@@ -297,6 +408,66 @@ function outputPath(sub: string, prefix: string, ext: string): string {
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return path.join(dir, `${prefix}-${stamp}.${ext}`);
+}
+
+// Unwrap a `--json` reply (`{ result: "text" }`) to its text, tolerating raw output.
+function resultText(output: string): string {
+  try {
+    return JSON.parse(output)?.result ?? output;
+  } catch {
+    return output;
+  }
+}
+
+// `console` output: a `Total messages: N (Errors: X, Warnings: Y)` header, then
+// the error-level messages (`[ERROR] text @ url:line` lines and page-error
+// stacks). The list resets on navigation — the trace keeps the full log.
+function parseConsole(output: string): { errors: number; text: string } {
+  const header = output.match(/Total messages:\s*\d+\s*\(Errors:\s*(\d+)/i);
+  const messages = output
+    .split("\n")
+    .filter((l) => l.trim())
+    .filter((l) => !/^(Total messages:|Returning \d+ message)/.test(l.trim()));
+  let errors = messages.length;
+  if (header) errors = Number(header[1]);
+  return { errors, text: messages.slice(0, 40).join("\n") };
+}
+
+// `requests` lines: `3. [GET] https://x => [404] Not Found` or `=> [FAILED]
+// net::ERR_…`. Keep only failures: no-response, FAILED, or status >= 400.
+function parseFailedRequests(output: string): FailedRequest[] {
+  const failed: FailedRequest[] = [];
+  for (const line of output.split("\n")) {
+    const m = line.match(/^\s*\d+\.\s+\[([A-Z]+)\]\s+(\S+)\s+=>\s+\[(\d+|FAILED)\]\s*(.*)$/);
+    if (!m) continue;
+    if (m[3] !== "FAILED" && Number(m[3]) < 400) continue;
+    failed.push({ method: m[1], url: m[2], status: m[3], statusText: m[4].trim() });
+  }
+  return failed;
+}
+
+// tracing-stop names the trace in a markdown file link with a relative path, so
+// take just the `trace-<ts>.trace` name and resolve it in the traces dir (under
+// the shared output dir, see configurePlaywrightCliEnv). Fall back to the
+// newest trace on disk.
+function findTracePath(output: string): string | null {
+  const dir = path.join(
+    process.env.PLAYWRIGHT_MCP_OUTPUT_DIR || path.join(PW_HOME, "output"),
+    "traces",
+  );
+  const named = output.match(/trace-\d+\.trace/);
+  if (named) {
+    const file = path.join(dir, named[0]);
+    if (fs.existsSync(file)) return file;
+  }
+  try {
+    const entries = fs.readdirSync(dir).filter((f) => /^trace-\d+\.trace$/.test(f));
+    if (entries.length === 0) return null;
+    entries.sort();
+    return path.join(dir, entries[entries.length - 1]);
+  } catch {
+    return null;
+  }
 }
 
 // `tab-list --json` returns `{ result: "- 0: [title](url)\n- 1: (current) [..]" }`.
@@ -412,6 +583,18 @@ function resolveBinDir(): string | null {
 interface CliResult {
   ok: boolean;
   output: string;
+}
+
+interface Capture {
+  startedAt: number;
+  tracing: boolean;
+}
+
+interface FailedRequest {
+  method: string;
+  url: string;
+  status: string;
+  statusText: string;
 }
 
 interface BrowserEntry {

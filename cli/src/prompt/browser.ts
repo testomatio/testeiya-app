@@ -9,7 +9,7 @@ Use the browser to:
 
 - **Investigate the target page before writing browser automation** — open the exact page/feature under test, walk the flow, and read the real selectors/texts/URLs from the live DOM. Automation written from reading code or manual docs alone is guesswork; verify against the running app first.
 - **Execute manual \`*.test.md\` cases** live — perform each step and confirm the expected result before marking anything passed.
-- Assist user passing manual runs by navigating to the desired page and capture browser state
+- **Assist the user passing manual runs** — follow the **manual-run-assistant** skill (environment prep, per-test handoff, analyzing captured signals into proposed notes).
 - **Reproduce and investigate bugs**, capturing screenshots/snapshots as evidence.
 - **Explore a running app** when the answer needs real behaviour rather than reading code.
 

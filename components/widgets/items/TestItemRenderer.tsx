@@ -8,6 +8,7 @@ import { mermaid } from "@streamdown/mermaid";
 import { CodeBlock } from "@/components/ai-elements/code-block";
 import { resizableTableComponents } from "@/components/ai-elements/resizable-table";
 import type { BundledLanguage } from "shiki";
+import { PriorityIcon } from "../priority-icon";
 import { LabelsRow, MetaPill } from "../status-pill";
 import { resolveType, TypeIcon } from "../type-icons";
 
@@ -67,12 +68,10 @@ export default function TestItemRenderer({
             const kind = resolveType({ state: t.state });
             return kind ? <TypeIcon type={kind} /> : null;
           })()}
+          <PriorityIcon priority={t.priority} />
           <div className="text-base font-semibold">{title}</div>
         </div>
         <div className="mt-1 flex flex-wrap gap-1 text-xs">
-          {t.priority && t.priority !== "normal" && (
-            <MetaPill>{t.priority}</MetaPill>
-          )}
           {t.state &&
             t.state !== "manual" &&
             t.state !== "automated" && <MetaPill>{t.state}</MetaPill>}

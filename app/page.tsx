@@ -72,6 +72,7 @@ import {
   useSessionsService,
   useChatTabsService,
   useWorkflowsService,
+  useAgentEventsService,
   useSkillsService,
   useDebugLogService,
 } from "@/lib/services/StoreProvider";
@@ -1156,6 +1157,7 @@ const ChatView = observer(function ChatView({
   const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
   const panel = usePanel();
   const workflows = useWorkflowsService();
+  const agentEvents = useAgentEventsService();
   const workspace = useWorkspaceService();
   const project = useProjectService();
   const providers = useProvidersService();
@@ -1365,6 +1367,27 @@ const ChatView = observer(function ChatView({
     if (!isActive) return;
     workflows.setRunner(runWorkflowPrompt);
   }, [isActive, workflows, runWorkflowPrompt]);
+
+  // UI-emitted event prompts (e.g. a failed manual test's captured signals):
+  // sent hidden — no user bubble — and queued while the agent is mid-turn.
+  const runEventPrompt = useCallback(
+    (text: string) => {
+      const sent = sendMessage(text, undefined, { hidden: true });
+      if (sent) panel.setChatOpen(true);
+      return sent;
+    },
+    [sendMessage, panel]
+  );
+
+  useEffect(() => {
+    if (!isActive) return;
+    agentEvents.setSender(runEventPrompt);
+  }, [isActive, agentEvents, runEventPrompt]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    agentEvents.setBusy(status === "streaming" || status === "submitted");
+  }, [isActive, agentEvents, status]);
 
   const handleInsertSkill = useCallback((name: string) => {
     chatInputRef.current?.insertSkill(name);

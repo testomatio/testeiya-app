@@ -181,6 +181,26 @@ export const WIDGET_DEFS: Record<string, WidgetDef> = {
         params: [{ name: "text", type: "string", required: true, description: "Message." }],
       },
       {
+        name: "start_test",
+        description:
+          "Start executing the selected test: launches its execution timer and, " +
+          "when the shared browser is open, begins capturing signals (trace, " +
+          "console, network). The timed duration is saved as the result's run_time.",
+      },
+      {
+        name: "suggest_message",
+        description:
+          "Propose a note for the selected test — shown as an Apply/Dismiss " +
+          "suggestion under the message field, never overwriting what the user " +
+          "typed. Use it for findings validated from captured browser signals.",
+        params: [{ name: "text", type: "string", required: true, description: "Proposed note." }],
+      },
+      {
+        name: "attach_screenshot",
+        description:
+          "Screenshot the controlled browser and attach it to the selected test's result.",
+      },
+      {
         name: "save_next",
         description: "Save the selected test's result to Testomat.io and move to the next test.",
         destructive: true,

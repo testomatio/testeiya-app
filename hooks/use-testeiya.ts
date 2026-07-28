@@ -540,29 +540,33 @@ export function useTesteiya(params?: TesteiyaParams) {
   statusRef.current = status;
 
   const sendMessage = useCallback(
-    (text: string, files?: AttachedFile[]) => {
+    (text: string, files?: AttachedFile[], opts?: { hidden?: boolean }) => {
       const hasFiles = !!files && files.length > 0;
-      if (!text.trim() && !hasFiles) return;
+      if (!text.trim() && !hasFiles) return false;
 
       // Block while the agent is still processing the previous turn.
       // Otherwise pi-coding-agent throws "Agent is already processing".
       if (statusRef.current === "submitted" || statusRef.current === "streaming") {
-        return;
+        return false;
       }
 
       setError(null);
       pendingSkillRef.current = null;
-      setMessages((prev) => [
-        ...prev,
-        { id: `user-${Date.now()}`, role: "user", content: text, files },
-      ]);
+      // A hidden prompt is a UI-emitted event block, not something the user
+      // typed — start the turn without adding a user bubble.
+      if (!opts?.hidden) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `user-${Date.now()}`, role: "user", content: text, files },
+        ]);
+      }
       setStatus("submitted");
 
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         // Store the message and connect — it'll be sent after session_created
         pendingMessageRef.current = { text, files };
         connect();
-        return;
+        return true;
       }
 
       const { sessionId: _, ...wsParams } = paramsRef.current || {};
@@ -570,6 +574,7 @@ export function useTesteiya(params?: TesteiyaParams) {
         JSON.stringify({ type: "prompt", message: text, files, ...wsParams })
       );
       armWatchdog();
+      return true;
     },
     [connect, armWatchdog]
   );
