@@ -21,8 +21,8 @@ Semi-automated manual testing. The user executes tests and records verdicts in t
 
 ## The flow
 
-1. **Find or create the run.** Existing runs via MCP `runs_list`/`runs_get`. New: `runs_create` with `kind: "manual"` and the chosen `test_ids`/`suite_ids`/`plan_ids` — ask which tests belong in the run if unclear. Then `render_item` (kind `run`) and `ui_widget` `start_manual_run` to open the executor.
-2. **Prepare the browser.** Check `<browser_state>`; open a headed browser if none. Resolve the application-under-test URL by the browser rules — never guess; ask with the candidates you found. If login is needed, let the user sign in (bring the window to front), then offer `playwright-cli state-save` so later sessions skip it (`state-load` restores).
+1. **Find or create the run.** Existing runs via MCP `runs_list`/`runs_get`. New: `runs_create` with `kind: "manual"` and the chosen `test_ids`/`suite_ids`/`plan_ids` — ask which tests belong in the run if unclear. The MCP create/update tools may be disabled — `enable_tools` them first. Then `render_item` (kind `run`) and drive the rendered card via the `widget_id` its ack names: `ui_widget` `start_manual_run` opens the executor, same turn.
+2. **Prepare the browser.** Check `<browser_state>`; no browser → `playwright-cli open --headed` (the shared session — never `attach --cdp`). Resolve the application-under-test URL by the browser rules — never guess; ask with the candidates you found. If login is needed, let the user sign in (bring the window to front), then offer `playwright-cli state-save` so later sessions skip it (`state-load` restores).
 3. **Per test.** `ui_widget` `select_test`, read its steps from `get()`, navigate the browser to the page step 1 starts on. Then hand off via `ask_question`: the user drives, or you execute while they verify. When the user drives: bring the browser to front, tell them to press **Start test** in the executor (starts the timer and signal capture), and **end your turn** — their verdict reaches you as a `<manual-run-event>` when you are idle.
 4. **On a `<manual-run-event>`** — see below.
 5. **Finish.** `ui_widget` `finish_run` when every test has a verdict (confirm first if some are pending). Then `runs_update` with a short `description`: outcome counts, validated findings, notable signals.
@@ -41,6 +41,8 @@ The executor emits one when a saved verdict has evidence (failed, or browser err
 
 - **Verdicts belong to the user.** Never set or save a status for a test you did not execute and verify yourself.
 - **Propose, don't write.** Findings go through `suggest_message` — never `set_message` over the user's text, never `save_next` after a suggestion.
+- **`runs_create` without `test_ids`/`suite_ids`/`plan_ids` creates an EMPTY run** — zero testruns, nothing to execute. Always scope it, then confirm with `testruns_list` that the tests are there. Created an empty one by mistake? Delete it (`runs_delete`) — never leave orphan runs and create another.
+- **Runs are created via MCP, not `@testomatio/reporter`.** The reporter CLI is for automated/CI result reporting; its `--filter` needs tags registered in the project and fails otherwise.
 - **End the turn after a handoff.** Events can only start your turn while you are idle; a turn left open blocks them.
 - **Don't set run_time.** The executor's timer records it on save.
 - Never guess the target URL — the browser-testing rules apply to every navigation here.

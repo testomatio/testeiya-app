@@ -49,11 +49,12 @@ export const renderItemTool: ToolDefinition = {
       })
     ),
   }),
-  async execute(_toolCallId, params) {
+  async execute(toolCallId, params) {
     const p = params as { kind: string; title?: string };
     console.log(`[render_item] kind=${p.kind} title="${p.title ?? "(none)"}"`);
     return widgetResult(
-      `Rendered a ${p.kind} detail card${p.title ? ` "${p.title}"` : ""}.`,
+      `Rendered a ${p.kind} detail card${p.title ? ` "${p.title}"` : ""} ` +
+        `(widget_id: ${toolCallId} — drivable via ui_widget this turn).`,
       params
     );
   },

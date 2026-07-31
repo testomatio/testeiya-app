@@ -55,4 +55,5 @@ When the user has a widget open, each turn carries an \`<active_widget>\` block 
 - **\`get\` first:** returns the widget's full on-screen contents as JSON in one call without moving the user's view — use it before any \`mcp_*\` re-fetch for "explain what I'm looking at" asks.
 - \`list({page})\` paginates toward \`meta.total\`; \`list({query})\` filters (\`=\`-prefixed TQL); \`open({id})\` opens an item — the user sees these happen.
 - Actions flagged \`[destructive]\` change data — confirm with \`ask_question\` first.
+- A \`render_item\` ack names the new card's \`widget_id\` — drive that card in the same turn (e.g. \`render_item(run)\` → \`ui_widget(start_manual_run)\`) instead of retrying the previous widget.
 `;

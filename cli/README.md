@@ -1,211 +1,242 @@
-# Testeiya
+<p align="center">
+  <a href="https://testomat.ai/testeiya/">
+    <img src="https://cdn.jsdelivr.net/npm/testeiya/assets/testeiya-icon.svg" alt="Testeiya logo" width="120">
+  </a>
+</p>
 
-AI-powered testing agent for QA teams, built on top of the [oh-my-pi](https://github.com/can1357/oh-my-pi) coding-agent SDK (a fork of [Pi](https://github.com/badlogic/pi-mono) by Mario Zechner).
+<h1 align="center">Testeiya CLI</h1>
 
-## About
+<p align="center">
+  A QA-focused AI agent for your terminal and CI.<br>
+  Built on the <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> harness (a fork of <a href="https://github.com/badlogic/pi-mono">Pi</a>).
+</p>
 
-Testeiya is an interactive terminal agent that helps developers analyze test suites, find coverage gaps, and plan testing strategies. It reads your codebase aggressively while keeping write operations locked down, so you can safely point it at any project.
+<p align="center">
+  <a href="https://testomat.ai/testeiya/">Website</a> ·
+  <a href="https://www.npmjs.com/package/testeiya">npm</a> ·
+  <a href="https://testomat.io">Testomat.io</a>
+</p>
 
-It ships with [Testomat.io](https://testomat.io) skills for test case management and connects to any OpenAI-compatible API (default: [OpenRouter](https://openrouter.ai)).
+```text
+████████ ███████ ███████ ████████ ███████ ██████ ██    ██  █████
+   ██    ██      ██         ██    ██        ██    ██  ██  ██   ██
+   ██    █████   ███████    ██    █████     ██     ████   ███████
+   ██    ██           ██    ██    ██        ██      ██    ██   ██
+   ██    ███████ ███████    ██    ███████ ██████    ██    ██   ██
 
-## Features
+                 AI Testing Agent · Testomat.io
+```
 
-- QA-focused system prompt tuned for test analysis
-- Read-permissive / write-restricted permission model
-- Safe bash commands (git log, cat, grep...) auto-allowed; destructive commands blocked
-- Testomat.io skills: test generation, duplicate detection, test improvement, reporter setup
-- Markdown-rendered output in terminal
-- Multi-line paste support
-- Configurable LLM provider and model (OpenRouter by default; any OpenAI-compatible endpoint)
+## What is Testeiya CLI?
 
-## Installation
+Testeiya is an AI testing agent: point it at a project and it analyzes test suites, finds coverage gaps, writes and improves test cases, and syncs them with [Testomat.io](https://testomat.io).
+
+**Testeiya CLI** is the terminal edition of that agent. It is made to:
+
+- **run in your terminal** — an interactive agent in the current working directory
+- **run in non-interactive environments like CI** — everything is configurable through environment variables and config files, with no GUI required
+
+It reads your codebase freely while keeping writes and destructive commands locked down by default, so you can safely point it at any project.
+
+> Looking for a visual app instead? **Testeiya Desktop** is a separate chat application built on the same agent. Testeiya CLI is the official name of this terminal tool — the two are not the same thing. Learn about both at [testomat.ai/testeiya](https://testomat.ai/testeiya/).
+
+## Quick start
+
+Requires [Bun](https://bun.sh) 1.3+.
 
 ```bash
-npm install -g testeiya    # requires Bun (https://bun.sh) on your PATH
+bunx testeiya
+```
+
+Or install it globally:
+
+```bash
+bun add -g testeiya
 testeiya
 ```
 
-Or run from source. This package lives in the [`cli/`](https://github.com/testomatio/testeiya-app/tree/main/cli) directory of the Testeiya monorepo:
+Bring an API key for your LLM provider, or sign in with an AI coding subscription you already have — see [Providers](#providers) below.
 
-```bash
-git clone git@github.com:testomatio/testeiya-app.git
-cd testeiya-app/cli
-bun install
-bun src/cli.ts
-```
-
-### Requirements
-
-- [Bun](https://bun.sh) — the CLI runs under Bun (its `testeiya` bin uses a `#!/usr/bin/env bun` shebang and runs the TypeScript directly)
-- An API key for whatever you set as `provider.name` in config (default is OpenRouter; see [API keys](#api-keys) below)
-
-## Running in Container (Optional)
-
-Instead of installing locally, you can run Testeiya in Docker. Requires [Docker](https://docker.com) to be installed.
-
-```bash
-# Build the container
-make build
-
-# Configure environment (copy example and edit)
-cp .env.example .env
-# Edit .env with your API keys
-
-# Run the container
-make run
-
-# Stop the container
-make stop
-
-# Clean up containers
-make clean
-```
-
-The container mounts `./src` to `/app/src`, so you can edit code locally and run it inside the container.
-
-### MCP (Testomat.io Integration)
-
-Testeiya includes MCP server for Testomat.io. To enable:
-
-1. Copy `.env.example` to `.env`
-2. Add your Testomat.io credentials:
-
-```bash
-# In .env file
-OPENROUTER_API_KEY=sk-or-your-key
-TESTOMATIO_PROJECT_TOKEN=tstmt_xxx
-TESTOMATIO_PROJECT_ID=your-project-id
-TESTOMATIO_BASE_URL=https://app.testomat.io # or any anoher one
-```
-
-3. Run `make run` - MCP will auto-connect
-
-## Usage
-
-```bash
-export OPENROUTER_API_KEY=sk-or-your-key-here
-bun src/cli.ts
-```
-
-Or build and run with Node:
-
-```bash
-npm run build
-node dist/cli.js
-```
-
-You'll see:
-
-```
-  Model: openrouter/anthropic/claude-sonnet-4
-  Skills: analyze-tests, find-duplicate-cases, generate-test-cases, ...
-
-  Testeiya - AI Testing Agent
-
-  What can I do for you?
-```
-
-Type a request like:
+Then ask it things like:
 
 - "Analyze the test suite in this project"
 - "Find untested code paths in src/controllers"
 - "Generate test cases for the auth module"
+- "Find duplicate test cases and suggest which to remove"
 
-Paste multi-line text (API docs, specs, requirements) directly into the prompt.
+Multi-line pastes (API docs, specs, requirements) go straight into the prompt.
 
-## Configuration
+## Providers
 
-Edit `testeiya.config.json` in the project root:
+Testeiya is not tied to a single LLM vendor, and it takes two kinds of access: pay-as-you-go API keys, or the AI coding subscription you may already have.
 
-```json
-{
-  "provider": {
-    "name": "openrouter",
-    "baseUrl": "https://openrouter.ai/api/v1",
-    "model": "anthropic/claude-sonnet-4",
-    "contextWindow": 200000,
-    "maxTokens": 16384
-  },
-  "permissions": {
-    "autoAllowRead": true,
-    "blockWrites": true,
-    "blockBash": true
+### API platform access
+
+Pick whichever provider your team already uses, export its API key, and go:
+
+| Provider | `provider.name` | API key variable |
+| -------------------- | ------------ | -------------------- |
+| OpenRouter (default) | `openrouter` | `OPENROUTER_API_KEY` |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+| Google Gemini | `google` | `GEMINI_API_KEY` |
+| Groq | `groq` | `GROQ_API_KEY` |
+| Mistral | `mistral` | `MISTRAL_API_KEY` |
+| xAI | `xai` | `XAI_API_KEY` |
+| Azure OpenAI | `azure-openai-responses` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_BASE_URL` |
+| Ollama (local) | `ollama` | not required |
+
+Many more work out of the box (Together, Cerebras, Moonshot, LM Studio, …), and any OpenAI-compatible endpoint — a vLLM or LiteLLM gateway, a corporate proxy — can be plugged in through `provider.baseUrl`.
+
+Keys can also live in a `.env` file in the working directory or in `~/.testeiya/.env`.
+
+### Subscriptions
+
+Already paying for an AI coding plan? Sign in with it instead of managing API keys — type `/login` inside the agent and pick the account:
+
+| Subscription | `provider.name` |
+| ---------------------------- | ---------------- |
+| Claude Pro / Max (Anthropic) | `anthropic` |
+| ChatGPT / Codex (OpenAI) | `openai-codex` |
+| GitHub Copilot | `github-copilot` |
+| Gemini (Google account) | `google-gemini-cli` |
+| Cursor | `cursor` |
+| Kimi Code | `kimi-code` |
+
+…plus GitLab Duo, Qwen, Z.ai and other coding plans — `/login` shows everything available. Credentials are stored locally and refreshed automatically.
+
+To switch providers or models at any time, type `/model` inside the agent, or set `provider.name` and `provider.model` in the config file (see [Configuration](#configuration)).
+
+## Connect to Testomat.io
+
+Testeiya works standalone, but connecting a [Testomat.io](https://testomat.io) project unlocks test management: pulling and pushing test cases, browsing runs, and the Testomat.io MCP tools.
+
+Interactively, type `/connect` inside the agent and pick a project.
+
+In CI or scripts, pass the project token via environment variables:
+
+```bash
+export TESTOMATIO=tstmt_your-project-token
+```
+
+## Skills
+
+Testeiya ships with a curated skill library, loaded automatically:
+
+- **Test management** (Testomat.io) — write and improve test cases, detect duplicates, analyze coverage, review requirements, sync cases with the TMS
+- **Test automation** (Testomat.io) — automate manual test cases, debug flaky tests, set up reporters and PR testing
+- **Frameworks** — CodeceptJS (writing, debugging, migrations from Cypress/Protractor/TestCafe/Selenium), Playwright best practices and the Playwright browser CLI
+- **Testomat.io docs** — the full product documentation, bundled and searchable, so platform questions are answered from the docs
+
+Add your own: drop a folder with a `SKILL.md` into `~/.testeiya/skills/` (all projects) or `<project>/.testeiya/skills/` (one project). Type `/skills` in the agent to list what's loaded.
+
+## Slash commands
+
+| Command | Purpose |
+| ---------- | ------------------------------------------------ |
+| `/connect` | Link a Testomat.io project and load its MCP tools |
+| `/project` | Switch the active Testomat.io project |
+| `/model` | Switch the LLM provider and model |
+| `/login` | Sign in with an AI subscription account |
+| `/skills` | List loaded skills |
+| `/help` | Show all commands |
+
+## Running in CI
+
+Testeiya CLI is built to run where no human is watching. The default permission model (reads allowed, writes and bash blocked) makes it safe to run against a checked-out repository.
+
+Each example below uses a different LLM provider — any provider works on any CI; just export the matching API key variable.
+
+### GitHub Actions
+
+```yaml
+- uses: oven-sh/setup-bun@v2
+- run: bunx testeiya
+  env:
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    TESTOMATIO: ${{ secrets.TESTOMATIO_TOKEN }}
+```
+
+### GitLab CI
+
+```yaml
+testeiya:
+  image: oven/bun:1
+  script:
+    - bunx testeiya
+  variables:
+    OPENAI_API_KEY: $OPENAI_API_KEY
+    TESTOMATIO: $TESTOMATIO_TOKEN
+```
+
+### Bitbucket Pipelines
+
+```yaml
+pipelines:
+  default:
+    - step:
+        name: testeiya
+        image: oven/bun:1
+        script:
+          # ANTHROPIC_API_KEY and TESTOMATIO are set as secured repository variables
+          - bunx testeiya
+```
+
+### Jenkins
+
+```groovy
+pipeline {
+  agent { docker { image 'oven/bun:1' } }
+  environment {
+    MISTRAL_API_KEY = credentials('mistral-api-key')
+    TESTOMATIO = credentials('testomatio-token')
+  }
+  stages {
+    stage('testeiya') {
+      steps {
+        sh 'bunx testeiya'
+      }
+    }
   }
 }
 ```
 
-- **provider.model** - Any model available on OpenRouter (e.g. `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gemini-2.5-pro`)
-- **permissions.blockWrites** - When `true`, edit/write tools are blocked
-- **permissions.blockBash** - When `true`, only read-only bash commands are allowed
+### Azure Pipelines
 
-Config is also loaded from `~/.testeiya/config.json` as a fallback.
-
-### API keys
-
-Read the API key from `process.env.<PROVIDER_NAME>_API_KEY`, where `<PROVIDER_NAME>` is your `provider.name` (uppercase) from config (e.g. `openrouter` in `testeiya.config.json`).
-
-Example: if `provider.name` is `openrouter`, read the API key from `process.env.OPENROUTER_API_KEY`.
-
-| `provider.name` | Environment variable   |
-| --------------- | ---------------------- |
-| `openrouter`    | `OPENROUTER_API_KEY`   |
-| `openai`        | `OPENAI_API_KEY`       |
-| `anthropic`     | `ANTHROPIC_API_KEY`    |
-| `groq`          | `GROQ_API_KEY`         |
-
-Or set any environment variable name depending of provider name.
-
-## Skills
-
-Testeiya loads skills from [@testomatio/skills](https://github.com/testomatio/skills) plus a built-in `analyze-tests` skill:
-
-| Skill                | Purpose                                  |
-| -------------------- | ---------------------------------------- |
-| analyze-tests        | Analyze test coverage, quality, and gaps |
-| generate-test-cases  | Create test cases from specs or code     |
-| find-duplicate-cases | Locate duplicate tests                   |
-| improve-test-cases   | Enhance existing test quality            |
-| reporter-setup       | Configure test reporters                 |
-| sync-cases           | Synchronize test cases with Testomat.io  |
-
-Update skills to latest:
-
-```bash
-npm update @testomatio/skills
+```yaml
+steps:
+  - script: |
+      curl -fsSL https://bun.sh/install | bash
+      export PATH="$HOME/.bun/bin:$PATH"
+      bunx testeiya
+    env:
+      AZURE_OPENAI_API_KEY: $(AZURE_OPENAI_API_KEY)
+      AZURE_OPENAI_BASE_URL: $(AZURE_OPENAI_BASE_URL)
+      TESTOMATIO: $(TESTOMATIO_TOKEN)
 ```
 
-## Architecture
+## Configuration
 
-Built on top of the [oh-my-pi coding-agent SDK](https://github.com/can1357/oh-my-pi) (a fork of [Pi](https://github.com/badlogic/pi-mono)):
+Configuration is layered, lowest to highest priority: built-in defaults, then `testeiya.config.json` in the working directory, then `~/.testeiya/config.json`. The in-app `/model` selection writes to the home file, so it persists across runs.
 
-- **`@oh-my-pi/pi-coding-agent`** - Agent session, tools (read/write/bash/grep/find), extensions
-- **`@oh-my-pi/pi-ai`** - Multi-provider LLM abstraction
-- **`@oh-my-pi/pi-tui`** - Markdown rendering
+All options:
 
-```
-src/
-  cli.ts              # Entry point
-  main.ts             # Bootstrap: config, auth, model, skills, session
-  config.ts           # Load testeiya.config.json
-  system-prompt.ts    # QA/testing system prompt
-  permissions.ts      # Read-allow / write-block permission gate
-  repl.ts             # Interactive REPL with markdown + paste support
-  skills/
-    analyze-tests.ts  # Built-in test analysis skill
-```
+| Option | Default | Purpose |
+| ------------------------- | ------------ | ------- |
+| `provider.name` | `openrouter` | LLM provider id (see [Providers](#providers)) |
+| `provider.model` | — | Model id, as your provider names it |
+| `provider.baseUrl` | provider's own | API endpoint override, for gateways and self-hosted OpenAI-compatible servers |
+| `provider.contextWindow` | `200000` | Context window size the agent budgets against |
+| `provider.maxTokens` | `16384` | Maximum output tokens per response |
+| `thinkingLevel` | `medium` | Reasoning effort: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
+| `permissions.autoAllowRead` | `true` | Auto-approve read-only tools |
+| `permissions.blockWrites` | `true` | Block edit and write tools |
+| `permissions.blockBash` | `true` | Allow only read-only bash commands |
+| `memoryEnabled` | `true` | Per-project agent memory |
+| `testomatioHost` | `https://app.testomat.io` | Testomat.io base URL, for self-hosted instances |
+| `toolGate.activeTools` | — | Per-MCP-server glob patterns of tool names to keep active; the rest load on demand |
 
-## Development
-
-```bash
-# Run directly (no build needed)
-bun src/cli.ts
-
-# Type-check
-npx tsc --noEmit
-
-# Build for Node
-npm run build
-```
+API keys are never stored in these files — they come from environment variables or `.env` files (working directory or `~/.testeiya/.env`).
 
 ## License
 

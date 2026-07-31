@@ -1,6 +1,6 @@
 {
   "name": "testeiya",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AI Testing Agent - QA and testing focused AI assistant",
   "type": "module",
   "repository": {
@@ -12,6 +12,7 @@
     "testeiya": "src/cli.ts"
   },
   "files": [
+    "assets",
     "src",
     "skills",
     "skills.yaml",

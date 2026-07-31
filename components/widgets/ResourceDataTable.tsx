@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { fetchTestomatioList } from "@/lib/agent-output/use-testomatio";
+import { useStores } from "@/lib/services/StoreProvider";
+import { useRegisterWidget } from "@/lib/widgets/command-bus";
+import { useWidgetSnapshot } from "./use-widget-snapshot";
 import {
   generateColumns,
   generateFilterFields,
@@ -55,6 +59,9 @@ import PlanItemRenderer from "./items/PlanItemRenderer";
 
 type RowData = Record<string, unknown>;
 
+// Page size for the agent's `list` action (mirrors the browse pane default).
+const PER_PAGE = 50;
+
 const HAS_DETAIL = new Set<ProjectResource>([
   "tests",
   "runs",
@@ -73,22 +80,28 @@ interface BuiltSchema {
 export function ResourceDataTable({
   resource,
   api,
+  widgetId,
 }: {
   resource: ProjectResource;
   api: string;
+  widgetId?: string;
 }) {
   // Filter state lives in a ref inside the memory adapter, which survives a
   // prop change — remounting per resource stops one table's query from
   // riding along into the next table's request.
-  return <ResourceTable key={resource} resource={resource} api={api} />;
+  return (
+    <ResourceTable key={resource} resource={resource} api={api} widgetId={widgetId} />
+  );
 }
 
 function ResourceTable({
   resource,
   api,
+  widgetId,
 }: {
   resource: ProjectResource;
   api: string;
+  widgetId?: string;
 }) {
   const built = useBrowseSchema(resource);
   const definition = built.tableSchema.definition;
@@ -124,6 +137,7 @@ function ResourceTable({
       <ResourceTableInner
         resource={resource}
         api={api}
+        widgetId={widgetId}
         columns={columns}
         filterFields={filterFields}
         tqlFields={tqlFields}
@@ -187,6 +201,7 @@ function useBrowseSchema(resource: ProjectResource): BuiltSchema {
 function ResourceTableInner({
   resource,
   api,
+  widgetId,
   columns,
   filterFields,
   tqlFields,
@@ -196,6 +211,7 @@ function ResourceTableInner({
 }: {
   resource: ProjectResource;
   api: string;
+  widgetId?: string;
   columns: ColumnDef<RowData>[];
   filterFields: DataTableFilterField<RowData>[];
   tqlFields: TqlField[];
@@ -203,6 +219,7 @@ function ResourceTableInner({
   filterMap: FilterMap;
   baseParams: Record<string, string>;
 }) {
+  const store = useStores();
   const state = useFilterState<Record<string, unknown>>((s) => s);
   const { setFilters } = useFilterActions();
 
@@ -243,13 +260,78 @@ function ResourceTableInner({
     return "cursor-pointer";
   }, [selectable]);
 
+  // Expose the loaded rows to the agent's `get` action — the same data the
+  // table shows.
+  useWidgetSnapshot({
+    kind: resource,
+    total: rows.totalRows,
+    showing: rows.rows.length,
+    items: rows.rows,
+  });
+
+  // Let the agent drive this browse table the way the user does: `list` filters
+  // (and returns matching rows), `open` swaps in a row's detail pane. While a
+  // detail is open its own renderer takes over the widget id (same handoff
+  // RunItemRenderer does for the manual-run executor).
+  const runCommand = async (action: string, params: Record<string, unknown>) => {
+    if (action === "open") {
+      if (!selectable) throw new Error(`A ${resource} row has no detail view.`);
+      const id = params.id != null ? String(params.id) : "";
+      if (!id) throw new Error("id is required.");
+      const row = rows.rows.find((r) => String(r.id) === id);
+      if (!row) {
+        throw new Error(
+          `No loaded row with id "${id}" — use list to bring it into view first.`
+        );
+      }
+      setFilters({ uuid: id });
+      return { opened: id, title: detailTitle(row) };
+    }
+    if (action === "list") {
+      const sessionId = store.sessionId;
+      if (!sessionId) throw new Error("No active session to load this list.");
+      const query =
+        params.query != null ? String(params.query).replace(/^=/, "").trim() : "";
+      if (params.query != null) setFilters({ q: query || null });
+      const page = Math.max(1, Number(params.page ?? 1));
+      const { items, meta } = await fetchTestomatioList<unknown>(
+        api,
+        { ...baseParams, page, per_page: PER_PAGE, query: query || undefined },
+        sessionId
+      );
+      return {
+        page,
+        per_page: PER_PAGE,
+        total: meta?.total ?? null,
+        count: items.length,
+        items,
+      };
+    }
+    throw new Error(`Unknown action "${action}" for this list.`);
+  };
+  useRegisterWidget(selected ? undefined : widgetId, runCommand);
+
+  // An open run detail exposes run-item actions (start_manual_run, …) — tell
+  // the agent by overriding the reported widget kind while it's showing.
+  const runDetailId = selected && resource === "runs" ? String(selected.id) : null;
+  const runDetailTitle = selected ? detailTitle(selected) : null;
+  useEffect(() => {
+    if (!runDetailId) return;
+    store.widget.setActiveOverride({
+      kind: "run-item",
+      id: runDetailId,
+      title: runDetailTitle ?? undefined,
+    });
+    return () => store.widget.clearActiveOverride();
+  }, [store, runDetailId, runDetailTitle]);
+
   if (selected) {
     return (
       <PreviewPane
         title={detailTitle(selected)}
         onBack={() => setFilters({ uuid: null })}
       >
-        {renderDetail(resource, selected)}
+        {renderDetail(resource, selected, widgetId)}
       </PreviewPane>
     );
   }
@@ -278,13 +360,13 @@ function ResourceTableInner({
   );
 }
 
-function renderDetail(resource: ProjectResource, row: RowData) {
+function renderDetail(resource: ProjectResource, row: RowData, widgetId?: string) {
   if (resource === "tests") return <TestItemRenderer data={row} />;
   if (resource === "testruns") return <TestRunItemRenderer data={row} />;
   if (resource === "plans") return <PlanItemRenderer data={row} />;
   if (resource === "requirements") return <RequirementDetail req={row} />;
   if (resource === "ci") return <CiProfileDetail row={row as unknown as CiProfileRow} />;
-  return <RunItemRenderer data={row} />;
+  return <RunItemRenderer data={row} widgetId={widgetId} />;
 }
 
 function detailTitle(row: RowData): string {

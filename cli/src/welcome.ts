@@ -1,12 +1,12 @@
 import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 
-const BRIGHT = "\x1b[38;2;77;255;79m"; // #4dff4f
-const SHADOW = "\x1b[38;2;0;70;28m"; // #00461c — deep forest green
-const PALE = "\x1b[38;2;168;255;233m"; // #a8ffe9
+const BRIGHT = "\x1b[38;2;158;102;255m"; // #9e66ff — brand light violet
+const SHADOW = "\x1b[38;2;46;16;101m"; // #2e1065 — deep violet
+const PALE = "\x1b[38;2;221;214;254m"; // #ddd6fe — pale violet
 
 // Top-to-bottom gradient: brightest at the first row, darkening downward.
-const GRAD_TOP = [120, 255, 130]; // light spring green
-const GRAD_BOT = [16, 110, 44]; // deep forest green
+const GRAD_TOP = [196, 181, 253]; // #c4b5fd light violet
+const GRAD_BOT = [109, 40, 217]; // #6d28d9 deep violet
 
 function gradientFg(row: number, rows: number): string {
   const t = rows <= 1 ? 0 : row / (rows - 1);
@@ -60,6 +60,66 @@ function buildShadowedWordmark(): { lines: string[]; width: number } {
 const SHADOWED = buildShadowedWordmark();
 const WORDMARK_WIDTH = SHADOWED.width;
 
+// The Testeiya logo mark (violet circle + white check) as a 12×12 pixel bitmap.
+// L = light violet #9e66ff, P = deep violet #7e33ff, W = white #f5f3ff, . = transparent.
+const LOGO_PIXELS = [
+  "....LLLP....",
+  "..LLLLLPPPWW",
+  ".LLLLLLPPWW.",
+  ".LLLLLLPWWP.",
+  "LLLLLLLWWPPP",
+  "LWWLLLWWPPPP",
+  "LLWWLWWPPPPP",
+  "LLLWWWLPPPPP",
+  ".LLWWLLPPPP.",
+  ".LLLLLLPPPP.",
+  "..LLLLLPPP..",
+  "....LLLP....",
+];
+
+const LOGO_FG: Record<string, string> = {
+  L: "\x1b[38;2;158;102;255m",
+  P: "\x1b[38;2;126;51;255m",
+  W: "\x1b[38;2;245;243;255m",
+};
+
+const LOGO_BG: Record<string, string> = {
+  L: "\x1b[48;2;158;102;255m",
+  P: "\x1b[48;2;126;51;255m",
+  W: "\x1b[48;2;245;243;255m",
+};
+
+// Renders the bitmap with half-blocks: each character cell stacks two pixel
+// rows (▀ fg = top pixel, bg = bottom pixel), so the 12×12 logo takes 6 lines.
+function buildLogo(): { lines: string[]; width: number } {
+  const lines: string[] = [];
+  for (let r = 0; r < LOGO_PIXELS.length; r += 2) {
+    const top = LOGO_PIXELS[r];
+    const bot = LOGO_PIXELS[r + 1] ?? "";
+    let out = "";
+    for (let c = 0; c < top.length; c++) {
+      const t = top[c] ?? ".";
+      const b = bot[c] ?? ".";
+      if (t === "." && b === ".") {
+        out += " ";
+      } else if (b === ".") {
+        out += `${LOGO_FG[t]}▀${RESET}`;
+      } else if (t === ".") {
+        out += `${LOGO_FG[b]}▄${RESET}`;
+      } else if (t === b) {
+        out += `${LOGO_FG[t]}█${RESET}`;
+      } else {
+        out += `${LOGO_FG[t]}${LOGO_BG[b]}▀${RESET}`;
+      }
+    }
+    lines.push(out);
+  }
+  return { lines, width: LOGO_PIXELS[0].length };
+}
+
+const LOGO = buildLogo();
+const LOGO_GAP = 1;
+
 const COMPACT_MARK = "▰ TESTEIYA ▰";
 
 export class TesteiyaWelcome implements Component {
@@ -85,7 +145,14 @@ export class TesteiyaWelcome implements Component {
 
     const lines: string[] = [""];
 
-    if (width >= WORDMARK_WIDTH + 2) {
+    const combinedWidth = LOGO.width + LOGO_GAP + WORDMARK_WIDTH;
+    if (width >= combinedWidth) {
+      const leftPad = padding(Math.floor((width - combinedWidth) / 2));
+      for (let i = 0; i < SHADOWED.lines.length; i++) {
+        const logoRow = LOGO.lines[i] ?? padding(LOGO.width);
+        lines.push(this.#fit(`${leftPad}${logoRow}${padding(LOGO_GAP)}${SHADOWED.lines[i]}`, width));
+      }
+    } else if (width >= WORDMARK_WIDTH + 2) {
       const leftPad = padding(Math.floor((width - WORDMARK_WIDTH) / 2));
       for (const row of SHADOWED.lines) {
         lines.push(this.#fit(`${leftPad}${row}`, width));
