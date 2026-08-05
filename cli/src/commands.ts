@@ -39,10 +39,10 @@ export function createCommandsExtension(runtime: CommandsRuntime): ExtensionFact
       const { projectId, backendUrl } = runtime.connection;
       return {
         systemPrompt: [
-          event.systemPrompt,
+          ...event.systemPrompt,
           testomatioTms,
           testomatioConnection([projectId], backendUrl),
-        ].join("\n\n"),
+        ],
       };
     });
   }) as ExtensionFactory;

@@ -312,7 +312,7 @@ export function createConnection(
               }
               send(transformed);
             }
-            if (event.type === "agent_end") {
+            if (event.type === "agent_end" && event.isTerminal !== false) {
               const promptError = lastTurnError;
               if (lastTurnError) {
                 send({ type: "error", error: lastTurnError });

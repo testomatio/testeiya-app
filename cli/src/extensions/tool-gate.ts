@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ExtensionAPI, ExtensionFactory } from "@oh-my-pi/pi-coding-agent";
 
 /**
@@ -34,6 +34,8 @@ export function createToolGateExtension(
     pi.registerTool({
       name: "enable_tools",
       label: "Enable Tools",
+      loadMode: "essential",
+      approval: "read",
       description:
         "Activate deferred MCP tools listed in <deferred_tools>. Pass their " +
         "exact names; they stay active for the rest of the session. Call this " +
@@ -71,7 +73,7 @@ export function createToolGateExtension(
         return undefined;
       }
       if (!block) return undefined;
-      return { systemPrompt: `${event.systemPrompt}\n\n${block}` };
+      return { systemPrompt: [...event.systemPrompt, block] };
     });
 
     async function applyGate(): Promise<string | null> {

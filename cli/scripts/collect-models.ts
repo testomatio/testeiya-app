@@ -22,14 +22,13 @@
  */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Api, type Model } from "@oh-my-pi/pi-ai";
 import {
   getBundledModels,
   getBundledProviders,
   PROVIDER_DESCRIPTORS,
-  type Api,
-  type Model,
   type ProviderDescriptor,
-} from "@oh-my-pi/pi-ai";
+} from "@oh-my-pi/pi-catalog";
 import { loadEnvFiles } from "../src/load-env.js";
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;

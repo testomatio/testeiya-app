@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { widgetResult } from "./widget-result.js";
 
@@ -10,6 +10,8 @@ import { widgetResult } from "./widget-result.js";
 export const renderItemTool: ToolDefinition = {
   name: "render_item",
   label: "Render Item",
+  loadMode: "essential",
+  approval: "read",
   description:
     "Display one Testomat.io entity (a single test, suite, run, testrun, " +
     "or plan) as a detail card. Use when the user asked about one thing " +

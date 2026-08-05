@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { getBundledModels, type GeneratedProvider } from "@oh-my-pi/pi-ai";
+import { getBundledModels, type GeneratedProvider } from "@oh-my-pi/pi-catalog";
 import { resolveModelsCatalogPath } from "./project-dir.js";
 
 /**

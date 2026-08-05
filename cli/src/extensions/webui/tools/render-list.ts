@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import vm from "node:vm";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import type { CachedList } from "./render-result.js";
@@ -16,6 +16,8 @@ export function createRenderListTool(cache: Map<string, CachedList>): ToolDefini
   return {
     name: "render_list",
     label: "Render List",
+    loadMode: "essential",
+    approval: "read",
     description:
       "Display a list as a rich table in the chat UI. Pass rows via `data`, " +
       "or derive them server-side: `from` = call ids of fetched *_list/*_search " +

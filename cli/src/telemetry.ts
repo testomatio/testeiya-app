@@ -150,6 +150,7 @@ export function createTelemetryExtension(meta: TelemetryMeta): ExtensionFactory 
 
     pi.on("agent_end", (event: any) => {
       if (!root) return;
+      if (event?.isTerminal === false) return;
       const output = finalText(event?.messages);
       root.otelSpan.setAttribute(
         LangfuseOtelSpanAttributes.TRACE_OUTPUT,

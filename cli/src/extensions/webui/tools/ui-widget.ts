@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import type { WidgetCommandChannel } from "../widget-channel.js";
 
@@ -18,6 +18,8 @@ export function createUiWidgetTool(channel: WidgetCommandChannel): ToolDefinitio
   return {
     name: "ui_widget",
     label: "Control widget",
+    loadMode: "essential",
+    approval: "read",
     description:
       "Drive the widget currently shown to the user (the one described in the " +
       "<active_widget> context block). Pass that block's `id` as `widget_id`, an " +

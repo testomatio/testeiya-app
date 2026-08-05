@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import vm from "node:vm";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import type { CachedList } from "./render-result.js";
@@ -15,6 +15,8 @@ export function createQueryResultTool(cache: Map<string, CachedList>): ToolDefin
   return {
     name: "query_result",
     label: "Query Result",
+    loadMode: "essential",
+    approval: "read",
     description:
       "Compute over previously fetched *_list/*_search results — counts, " +
       "filters, grouping, joins — without re-reading their rows. `fn` is a " +

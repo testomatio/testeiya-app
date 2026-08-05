@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import type { AskChannel } from "../ask-channel.js";
 
@@ -20,6 +20,8 @@ export function createAskQuestionTool(channel: AskChannel): ToolDefinition {
   return {
     name: "ask_question",
     label: "Ask the user",
+    loadMode: "essential",
+    approval: "read",
     description:
       "Present a question to the user with a set of clickable options. " +
       "Use this WHENEVER you need the user to make a choice (yes/no, " +

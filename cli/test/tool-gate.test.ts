@@ -35,7 +35,7 @@ function makeGate(mcpTools: unknown[], config?: ToolGateConfig) {
   createToolGateExtension(runtime, config)(pi as never);
   return {
     tools,
-    start: (systemPrompt = "SYS") => onBeforeAgentStart({ type: "before_agent_start", prompt: "q", systemPrompt }),
+    start: (systemPrompt: string[] = ["SYS"]) => onBeforeAgentStart({ type: "before_agent_start", prompt: "q", systemPrompt }),
     getActive: () => activeTools,
   };
 }
@@ -63,9 +63,9 @@ describe("tool gate", () => {
     expect(active).toContain("mcp_testomatio_uat_system_ping");
     expect(active).not.toContain("mcp_testomatio_uat_tests_create");
     expect(active).not.toContain("mcp_testomatio_uat_tests_issues_link");
-    expect(result.systemPrompt).toContain("<deferred_tools>");
-    expect(result.systemPrompt).toContain("mcp_testomatio_uat_tests_create");
-    expect(result.systemPrompt).toStartWith("SYS\n\n");
+    expect(result.systemPrompt.at(-1)).toContain("<deferred_tools>");
+    expect(result.systemPrompt.at(-1)).toContain("mcp_testomatio_uat_tests_create");
+    expect(result.systemPrompt[0]).toBe("SYS");
   });
 
   test("non-MCP tools always stay active", async () => {
@@ -90,7 +90,7 @@ describe("tool gate", () => {
     expect(active).not.toContain("mcp_jira_create_issue");
     expect(active).not.toContain("mcp_jira_transition_issue");
     expect(active).not.toContain("mcp_jira_add_comment");
-    expect(result.systemPrompt).toContain("jira: mcp_jira_add_comment");
+    expect(result.systemPrompt.at(-1)).toContain("jira: mcp_jira_add_comment");
   });
 
   test("generic server: budget caps active reads, prioritizing search/list/get", async () => {
@@ -129,7 +129,7 @@ describe("tool gate", () => {
     expect(gate.getActive()!).toContain("mcp_testomatio_uat_tests_create");
     const next = await gate.start();
     expect(gate.getActive()!).toContain("mcp_testomatio_uat_tests_create");
-    expect(next.systemPrompt).toContain("mcp_testomatio_uat_tests_create");
+    expect(next.systemPrompt.at(-1)).toContain("mcp_testomatio_uat_tests_create");
   });
 
   test("enable_tools rejects unknown names", async () => {
@@ -143,7 +143,7 @@ describe("tool gate", () => {
     const gate = makeGate(testomatTools);
     const first = await gate.start();
     const second = await gate.start();
-    expect(second.systemPrompt).toBe(first.systemPrompt);
+    expect(second.systemPrompt).toEqual(first.systemPrompt);
   });
 
   test("no MCP tools → prompt untouched, no setActiveTools call", async () => {

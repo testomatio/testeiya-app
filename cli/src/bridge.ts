@@ -60,6 +60,7 @@ export function transformEvent(event: any, messageId: string): Record<string, an
       return { type: "finish-step" };
 
     case "agent_end":
+      if (event.isTerminal === false) return null;
       return { type: "finish" };
 
     default:

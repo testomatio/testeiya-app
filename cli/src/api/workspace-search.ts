@@ -1,5 +1,5 @@
 import path from "node:path";
-import { grep, type ContextLine, type GrepMatch } from "@oh-my-pi/pi-natives";
+import { grep, GrepOutputMode, type ContextLine, type GrepMatch } from "@oh-my-pi/pi-natives";
 import { getSession } from "../session-store.js";
 import { safeResolve } from "../workspace/safe-path.js";
 import { resolveManualTestsDir, VENDOR_DIRS } from "../workspace-model.js";
@@ -38,7 +38,7 @@ export async function workspaceSearch(request: Request): Promise<Response> {
       contextBefore: CONTEXT_LINES,
       contextAfter: CONTEXT_LINES,
       maxCount: MAX_MATCHES,
-      mode: "content",
+      mode: GrepOutputMode.Content,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

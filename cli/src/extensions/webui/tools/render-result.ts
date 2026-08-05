@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { widgetResult } from "./widget-result.js";
 
@@ -13,6 +13,8 @@ export function createRenderResultTool(cache: Map<string, CachedList>): ToolDefi
   return {
     name: "render_result",
     label: "Render Result",
+    loadMode: "essential",
+    approval: "read",
     description:
       "Show the full result of a previous *_list/*_search call as a rich " +
       "table in the chat UI, referenced by that call's id (given in the " +

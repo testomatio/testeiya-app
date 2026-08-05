@@ -47,9 +47,10 @@ const config = {
       external: [
         "@oh-my-pi/pi-coding-agent",
         "@oh-my-pi/pi-ai",
+        "@oh-my-pi/pi-catalog",
+        "@oh-my-pi/pi-natives",
         "@testomatio/mcp",
         "check-tests",
-        "markit-ai",
         "mupdf",
         "ws",
       ],
@@ -74,11 +75,11 @@ const config = {
       // above resolve, and so the agent's dynamic require()/readFile/subprocess
       // loads (@testomatio/mcp bin, check-tests, @playwright/cli skill) find
       // their packages at runtime.
+      // @oh-my-pi/pi-natives ships no binaries of its own: its loader resolves
+      // `@oh-my-pi/pi-natives-<platform>/` at runtime via require.resolve. It is
+      // externalized above so that lookup runs against this copied tree, where
+      // the platform sibling package lives.
       "cli/node_modules": "node_modules",
-      // @oh-my-pi/pi-natives is bundled INTO index.js (not externalized), so its
-      // loader resolves the prebuilt addon at import.meta.dir/../native i.e.
-      // Resources/app/native/. Ship the .node files there so the loader finds them.
-      "cli/node_modules/@oh-my-pi/pi-natives/native": "native",
     },
     mac: {
       // Enable once Apple Developer ID + notarization credentials are wired up.

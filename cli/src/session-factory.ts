@@ -11,7 +11,9 @@ import {
 import type { ExtensionFactory } from "@oh-my-pi/pi-coding-agent";
 import { hasPlaywrightCli, loadBundledSkills, loadCustomSkills, dedupeSkillsByName } from "./skills.js";
 import { SOURCE_PATHS } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
+import { initializeExtensions } from "@oh-my-pi/pi-coding-agent/modes/runtime-init";
+import { getAllProvidersInfo } from "@oh-my-pi/pi-coding-agent/discovery";
+import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-catalog";
 import { PROJECT_DIR, HOME_DIR, ensureProjectDirGuards } from "./project-dir.js";
 
 // Rebrand the SDK's project-level config dir from `.omp` to `.testeiya`.
@@ -36,18 +38,10 @@ import "./shell-env.js";
 
 // Every discovery provider that loads MCP configs from another tool
 // (Cursor, Claude, VSCode, etc.) or from arbitrary project-root files.
-// We keep only `builtin` — it reads our per-session `<cwd>/.testeiya/mcp.json`.
-const OTHER_MCP_PROVIDERS = [
-  "mcp-json",
-  "cursor",
-  "claude",
-  "claude-plugins",
-  "codex",
-  "gemini",
-  "opencode",
-  "vscode",
-  "windsurf",
-];
+// We keep only `native` — it reads our per-session `<cwd>/.testeiya/mcp.json`.
+// Derived from the SDK's own registry rather than hardcoded, so a provider
+// added by a future SDK release is isolated too.
+const NATIVE_MCP_PROVIDER = "native";
 
 // The SDK's bash tool runs on the brush shell, where a heredoc inside $(...)
 // intermittently fails with a bogus "syntax error near token" — and
@@ -139,16 +133,31 @@ export async function createTesteiyaSession(options?: SessionOptions) {
 
   const settings = await Settings.init({ cwd, agentDir });
   const existing = new Set((settings.get("disabledProviders") ?? []) as string[]);
-  for (const id of OTHER_MCP_PROVIDERS) existing.add(id);
+  for (const info of getAllProvidersInfo()) {
+    if (info.id === NATIVE_MCP_PROVIDER) continue;
+    if (!info.capabilities.includes("mcps")) continue;
+    existing.add(info.id);
+  }
   settings.set("disabledProviders", Array.from(existing));
 
-  // Per-project autonomous memory: the SDK extracts durable signal from this
-  // workspace's past session transcripts, consolidates it under
-  // `~/.testeiya/memories/state/--<cwd>--/`, and auto-injects a summary into the
-  // system prompt of future sessions for the same `cwd`. On by default; the user
-  // toggles it in Settings (persisted to config.json). Our sessions are persisted
-  // and run at taskDepth 0, so this flag is all that gates activation.
-  settings.set("memories.enabled", config.memoryEnabled);
+  // Per-project autonomous memory, backed by Mnemopi's local SQLite store under
+  // the agent memories dir (`mnemopi.scoping` defaults to per-project, so each
+  // cwd gets an isolated bank). Recall/retain are injected into the session and
+  // surfaced through the retain/recall tools.
+  // `memory.backend` is the live switch — the legacy `memories.enabled` boolean
+  // is migration input only, and its migration is skipped once `memory.backend`
+  // has been materialised, so writing the old key would be inert.
+  settings.set("memory.backend", config.memoryEnabled ? "mnemopi" : "off");
+
+  // Keep Mnemopi dependency-free. Embeddings default to ON, and the local path
+  // `bun install`s fastembed + onnxruntime (~270MB of native assets) into a side
+  // runtime dir on first use — so recall is pinned to deterministic FTS instead.
+  // The embedding/LLM endpoint settings are left unset: `providerOptions.llm` is
+  // only populated for llmMode "remote", and fact extraction runs on the tiny
+  // model role from our own provider ("online"), never an on-device download.
+  settings.set("mnemopi.noEmbeddings", true);
+  settings.set("mnemopi.llmMode", "smol");
+  settings.set("providers.memoryModel", "online");
 
   settings.set("bashInterceptor.enabled", true);
   settings.set("bashInterceptor.patterns", BASH_GUARD_RULES);
@@ -356,7 +365,10 @@ export async function createTesteiyaSession(options?: SessionOptions) {
 
   commandsRuntime.mcpManager = result.mcpManager;
   toolGateRuntime.mcpManager = result.mcpManager;
-  initExtensionRunner(result.session);
+  await initializeExtensions(result.session, {
+    reportSendError: (action, error) => console.warn(`[ext] ${action} failed:`, error.message),
+    reportRuntimeError: (error) => console.warn("[ext] runtime error:", error),
+  });
 
   return {
     ...result,
@@ -380,63 +392,4 @@ async function resolveSessionManager(
   const match = infos.find((i) => i.id === resumeConversationId);
   if (!match) return SessionManager.create(cwd, sessionDir);
   return SessionManager.open(match.path, sessionDir);
-}
-
-// The SDK wires extension runtime *actions* (setActiveTools, sendMessage, …)
-// only from its own mode controllers (print/interactive/rpc). Testeiya drives
-// the session directly, so without this call every action method throws
-// ExtensionRuntimeNotInitializedError forever. Mirrors print-mode.ts.
-function initExtensionRunner(sessionValue: unknown): void {
-  const session = sessionValue as any;
-  const runner = session?.extensionRunner;
-  if (!runner) return;
-  runner.initialize(
-    {
-      sendMessage: (message: unknown, options: unknown) => {
-        session.sendCustomMessage(message, options).catch((e: any) => {
-          console.warn("[ext] sendMessage failed:", e?.message ?? e);
-        });
-      },
-      sendUserMessage: (content: unknown, options: unknown) => {
-        session.sendUserMessage(content, options).catch((e: any) => {
-          console.warn("[ext] sendUserMessage failed:", e?.message ?? e);
-        });
-      },
-      appendEntry: (customType: string, data: unknown) =>
-        session.sessionManager.appendCustomEntry(customType, data),
-      setLabel: (targetId: string, label: unknown) =>
-        session.sessionManager.appendLabelChange(targetId, label),
-      getActiveTools: () => session.getActiveToolNames(),
-      getAllTools: () => session.getAllToolNames(),
-      setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
-      getCommands: () => [],
-      setModel: async (model: unknown) => {
-        const key = await session.modelRegistry.getApiKey(model);
-        if (!key) return false;
-        await session.setModel(model);
-        return true;
-      },
-      getThinkingLevel: () => session.thinkingLevel,
-      setThinkingLevel: (level: unknown) => session.setThinkingLevel(level),
-    },
-    {
-      getModel: () => session.model,
-      getSearchDb: () => session.searchDb,
-      isIdle: () => !session.isStreaming,
-      abort: () => session.abort(),
-      hasPendingMessages: () => session.queuedMessageCount > 0,
-      shutdown: () => {},
-      getContextUsage: () => session.getContextUsage(),
-      getSystemPrompt: () => session.systemPrompt,
-      compact: async (instructionsOrOptions: unknown) => {
-        const instructions =
-          typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
-        const options =
-          instructionsOrOptions && typeof instructionsOrOptions === "object"
-            ? instructionsOrOptions
-            : undefined;
-        await session.compact(instructions, options);
-      },
-    }
-  );
 }

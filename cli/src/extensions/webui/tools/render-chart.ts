@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "@oh-my-pi/omptype/typebox";
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { widgetResult } from "./widget-result.js";
 
@@ -10,6 +10,8 @@ import { widgetResult } from "./widget-result.js";
 export const renderChartTool: ToolDefinition = {
   name: "render_chart",
   label: "Render Chart",
+  loadMode: "essential",
+  approval: "read",
   description:
     "Display a chart in the chat UI. Use for any aggregate — counts, pass " +
     "rate, distribution, trend, comparison.",

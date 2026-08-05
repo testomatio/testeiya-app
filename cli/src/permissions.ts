@@ -4,7 +4,7 @@ import type { TesteiyaConfig } from "./config.js";
 
 type ExtensionFactory = (pi: any) => void;
 
-const READ_TOOLS = ["read", "grep", "find", "ls"];
+const READ_TOOLS = ["read", "grep", "glob", "ls"];
 const WRITE_TOOLS = ["write", "edit"];
 
 // Bash commands that are read-only and safe to auto-allow

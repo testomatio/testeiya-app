@@ -6,7 +6,7 @@ process.title = "testeiya";
 // counts as visible chars, exceeding terminal width. Patch the prototype to skip them.
 import { UserMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/user-message";
 import { Container } from "@oh-my-pi/pi-tui";
-UserMessageComponent.prototype.render = function (width: number): string[] {
+UserMessageComponent.prototype.render = function (width: number): readonly string[] {
   return Container.prototype.render.call(this, width);
 };
 

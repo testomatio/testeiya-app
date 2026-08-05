@@ -2,11 +2,11 @@ import { join } from "node:path";
 import { HOME_DIR } from "../project-dir.js";
 import { mkdirSync } from "node:fs";
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+import { getOAuthProviders } from "@oh-my-pi/pi-ai";
 import {
-  getOAuthProviders,
   PROVIDER_DESCRIPTORS,
   DEFAULT_MODEL_PER_PROVIDER,
-} from "@oh-my-pi/pi-ai";
+} from "@oh-my-pi/pi-catalog";
 import {
   loadConfig,
   saveProviderSelection,
