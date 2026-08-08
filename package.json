@@ -1,0 +1,55 @@
+{
+  "name": "testeiya",
+  "version": "1.0.0",
+  "description": "AI testing agent — QA-focused coding agent for manual and automated tests",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/testomatio/testeiya-app.git"
+  },
+  "homepage": "https://github.com/testomatio/testeiya-app#readme",
+  "bin": {
+    "testeiya": "dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "prompt",
+    "brand",
+    "skills",
+    "mcp-tools.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "testing",
+    "qa",
+    "ai",
+    "agent",
+    "testomatio",
+    "pi"
+  ],
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@testomatio/mcp": "^2.1.1",
+    "chalk": "^5.6.2",
+    "dedent": "^1.7.2",
+    "pi-mcp-adapter": "^2.21.1",
+    "typebox": "^1.3.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "typescript": "^5.9.3"
+  }
+}
