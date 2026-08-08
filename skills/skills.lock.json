@@ -1,0 +1,73 @@
+{
+  "sources": [
+    {
+      "source": "testomatio/skills",
+      "ref": null,
+      "sha": "",
+      "folder": "testomatio",
+      "skills": [
+        "testomatio-mcp",
+        "sync-test-cases-with-tms",
+        "scan-automation-project",
+        "qa-write-test-cases",
+        "qa-thinking",
+        "qa-test-code-coverage",
+        "qa-requirement-reviewer",
+        "qa-pr-requirements-analyzer",
+        "qa-e2e-tests-reporting",
+        "pull-request-diff-analyzer",
+        "improve-test-cases",
+        "detect-duplicate-test-cases",
+        "setup-ci-automation",
+        "setup-change-aware-pr-testing",
+        "run-tests-with-testomatio-reporter",
+        "qa-automation-test-consolidation",
+        "debug-fix-failed-flaky-autotests",
+        "automate-manual-test-cases",
+        "testomat-allure-adapter",
+        "explorbot-setup",
+        "explorbot-plan",
+        "explorbot-fundamentals"
+      ]
+    },
+    {
+      "source": "codeceptjs/skills",
+      "ref": null,
+      "sha": "e19ba9d0f513cbc9c3e4a4c5c6dd02cfedde4afd",
+      "folder": "codeceptjs",
+      "skills": [
+        "writing-codeceptjs-tests",
+        "refactoring-codeceptjs-tests",
+        "migrate-testcafe-to-codeceptjs",
+        "migrate-selenium-java-to-codeceptjs",
+        "migrate-protractor-to-codeceptjs",
+        "migrate-cypress-to-codeceptjs",
+        "migrate-codeceptjs-4",
+        "debugging-codeceptjs-tests",
+        "codeceptjs-run-analysis",
+        "codeceptjs-fundamentals",
+        "codeceptjs-exploration",
+        "codeceptjs-auth",
+        "ci-fix-tests"
+      ]
+    },
+    {
+      "source": "currents-dev/playwright-best-practices-skill",
+      "ref": null,
+      "sha": "ef329e7e65149918e1ff0eed2cf7d2e6e6f9eb5b",
+      "folder": "playwright-best-practices-skill",
+      "skills": [
+        "playwright-best-practices"
+      ]
+    },
+    {
+      "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
+      "ref": null,
+      "sha": "793cfb32572733cbcb401e6f28d05a7a914ce408",
+      "folder": "playwright-cli",
+      "skills": [
+        "playwright-cli"
+      ]
+    }
+  ]
+}

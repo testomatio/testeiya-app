@@ -1,0 +1,24 @@
+# External skills for Testeiya. ONE rule: every line is a GitHub repo.
+#
+#   owner/repo                        a skill repo (one skill, or many)
+#   owner/repo/tree/<ref>/<subdir>    pin a branch/tag/commit, or point at a subfolder
+#
+# Each source owns one vendor folder next to this file — the repo name, or the
+# owner when the repo is just "skills" (testomatio/skills -> testomatio/).
+# Updates replace only that folder; any folder this file does not own
+# (e.g. testeiya/) holds first-party skills and is never touched.
+#
+# Vendored folders are gitignored: they belong to their authors, under their own
+# licences. Send patches for them upstream, to the repo listed below.
+#
+# Categories are decided by the repo, never by this file:
+#   - repo with a Claude-plugin marketplace (.claude-plugin/marketplace.json)
+#     -> one category subfolder per plugin  (testomatio/ -> test-management / test-automation / explorbot)
+#   - repo without one -> skills sit right under the vendor folder (the vendor is the category)
+#
+# Edit the list, then run:  bunosh skills:update [vendor]      See the result:  bunosh skills:list
+
+- testomatio/skills
+- codeceptjs/skills
+- currents-dev/playwright-best-practices-skill
+- microsoft/playwright-cli/tree/main/skills/playwright-cli

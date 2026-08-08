@@ -1,0 +1,13 @@
+# Third-party skills are fetched by `bunosh skills:update` from the repos listed
+# in skills.yaml, pinned in skills.lock.json. They are not redistributed here —
+# patch them upstream, in the repo that owns them.
+/*
+!/.gitignore
+!/skills.yaml
+!/skills.lock.json
+!/testeiya/
+
+# Generated Testomat.io documentation cache (`bunosh docs:update`). SKILL.md and
+# docs.lock.json stay tracked: one is authored, the other pins the commit.
+/testeiya/testomatio-docs/docs/
+/testeiya/testomatio-docs/INDEX.md
