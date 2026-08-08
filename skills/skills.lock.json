@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "",
+      "sha": "2378e9feaddd7810ce23d3844ea323b7809699d2",
       "folder": "testomatio",
       "skills": [
         "testomatio-mcp",
@@ -12,6 +12,8 @@
         "qa-write-test-cases",
         "qa-thinking",
         "qa-test-code-coverage",
+        "qa-sprint-report-by-testomatio",
+        "qa-split-testing-levels-pyramid",
         "qa-requirement-reviewer",
         "qa-pr-requirements-analyzer",
         "qa-e2e-tests-reporting",
@@ -21,6 +23,7 @@
         "setup-ci-automation",
         "setup-change-aware-pr-testing",
         "run-tests-with-testomatio-reporter",
+        "qa-data-seeder",
         "qa-automation-test-consolidation",
         "debug-fix-failed-flaky-autotests",
         "automate-manual-test-cases",
@@ -54,7 +57,7 @@
     {
       "source": "currents-dev/playwright-best-practices-skill",
       "ref": null,
-      "sha": "ef329e7e65149918e1ff0eed2cf7d2e6e6f9eb5b",
+      "sha": "283d5cbc5d11aac1abda058b16ad22c317d54dc0",
       "folder": "playwright-best-practices-skill",
       "skills": [
         "playwright-best-practices"
@@ -63,7 +66,7 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "793cfb32572733cbcb401e6f28d05a7a914ce408",
+      "sha": "e2d8f311f38a4828fc44a1026481481442ed962b",
       "folder": "playwright-cli",
       "skills": [
         "playwright-cli"
