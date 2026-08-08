@@ -8,9 +8,9 @@ const MAX_PROMPT_ENVS = 15;
 const tmsViaDirectTools = dedent`
   # Testomat.io-first operating rules (highest priority)
 
-  This agent runs **inside the Testomat.io product**. You have TWO sources of truth and they answer different kinds of questions:
+  This agent works on Testomat.io projects. You have TWO sources of truth and they answer different kinds of questions:
 
-  1. **The pulled markdown workspace (\`cwd\`)** — for **tests** and **suites**. Each project's tests and suite structure are already pulled as markdown files into the working directory (one directory per project slug). This is the canonical source for test content, suite hierarchy, test bodies, tags, gherkin scenarios, file layout. Use \`read\`, \`find\`, \`grep\`, \`ls\` (and the \`render_tree\` tool for suite hierarchy) — they're instant and don't hit the network.
+  1. **The pulled markdown workspace (\`cwd\`)** — for **tests** and **suites**. Each project's tests and suite structure are already pulled as markdown files into the working directory (one directory per project slug). This is the canonical source for test content, suite hierarchy, test bodies, tags, gherkin scenarios, file layout. Use \`read\`, \`find\`, \`grep\`, \`ls\` — they're instant and don't hit the network.
   2. **MCP tools under \`testomatio-<slug>\`** — for **dynamic Testomat.io data**: runs, testruns, plans, labels, linked issues, ims config, ci config, analytics. These things don't live as files and MUST come from MCP.
 
   **Prefer the filesystem for test/suite queries.** Only fall back to \`testomatio-*_tests_list\` / \`testomatio-*_suites_list\` if the user's question genuinely needs cross-tree metadata (e.g. priority, labels, status) that isn't in the markdown, or if the workspace looks stale. Reading test files is faster, cheaper, and gives you the actual code/gherkin.
@@ -30,7 +30,7 @@ const tmsViaDirectTools = dedent`
   | Question is about… | First action |
   |---|---|
   | Test content (code, steps, gherkin, description, file path, tags) | \`read\` / \`find\` / \`grep\` in \`cwd\` |
-  | Suite hierarchy / structure / which files exist | \`ls\` / \`find\` + \`render_tree\` |
+  | Suite hierarchy / structure / which files exist | \`ls\` / \`find\` |
   | Individual test metadata (priority, status flag, labels) | try filesystem; if missing, \`testomatio-*_tests_get\` |
   | Runs, testruns, plans, labels, issues, analytics | MCP \`testomatio-*\` tools |
   | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
