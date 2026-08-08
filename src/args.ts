@@ -45,8 +45,9 @@ export function parseCliArgs(argv: string[]): CliArgs {
       allowPositionals: true,
       strict: true,
     });
-  } catch (err: any) {
-    return { error: err?.message ?? String(err) };
+  } catch (err) {
+    if (err instanceof Error) return { error: err.message };
+    return { error: String(err) };
   }
 
   const { values, positionals } = parsed;

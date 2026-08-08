@@ -141,10 +141,10 @@ function readSeedTools(): SeedTool[] {
 
 async function computeServerHash(definition: unknown): Promise<string | null> {
   try {
-    const module = (await import(vendorBundle())) as {
+    const vendor = (await import(vendorBundle())) as {
       computeServerHash: (definition: unknown) => string;
     };
-    return module.computeServerHash(definition);
+    return vendor.computeServerHash(definition);
   } catch {
     return null;
   }
