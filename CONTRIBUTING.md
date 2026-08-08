@@ -23,6 +23,7 @@ Every file in `prompt/` is a `dedent` template that ends up in the agent's syste
 - Prefer rewording a principle over adding a case. A rule per scenario grows without bound and the model weights it worse than a single clear principle.
 - State what to do, not what not to do, unless a specific wrong move needs banning.
 - Remember two harnesses share these fragments. `buildSystemPrompt`'s `tms` option covers the difference in how each reaches Testomat.io — use it instead of forking a fragment.
+- **Only describe what every harness has.** This CLI cannot open a browser and has nobody to ask, so guidance about driving a browser, asking the user, or a chat app's widgets does not belong here — an agent told about a tool it does not have wastes turns discovering that. A harness contributes its own through `sections`, `toolBullets` and `rules`.
 - Say in your pull request what behaviour you saw before the change and what you expect after. Prompt changes are hard to review from the diff alone.
 
 ## Skill changes
