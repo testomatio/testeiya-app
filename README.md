@@ -31,7 +31,13 @@ testeiya "<task>" --model openrouter/anthropic/claude-sonnet-4.5
 cat task.md | testeiya --output report.md
 ```
 
-Set `TESTOMATIO` to a project API key and the agent can read and write that project's tests, suites, runs and plans.
+Set `TESTOMATIO` to a project API key and the agent can read and write that project's tests, suites, runs and plans through `check-tests` and the REST API. Add the project id as well and it also gets the Testomat.io tools:
+
+```bash
+TESTOMATIO=tstmt_xxx testeiya --project my-project "Which suites have no tests?"
+```
+
+The id can come from `--project` or `TESTOMATIO_PROJECT_ID`. The MCP server needs it: a token alone does not tell it which project to talk to.
 
 ## Skills
 
