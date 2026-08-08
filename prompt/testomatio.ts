@@ -5,7 +5,7 @@ const MAX_PROMPT_LABELS = 20;
 const MAX_PROMPT_TAGS = 30;
 const MAX_PROMPT_ENVS = 15;
 
-export const testomatioTms = dedent`
+const tmsViaDirectTools = dedent`
   # Testomat.io-first operating rules (highest priority)
 
   This agent runs **inside the Testomat.io product**. You have TWO sources of truth and they answer different kinds of questions:
@@ -41,10 +41,92 @@ export const testomatioTms = dedent`
   ---
 `;
 
+const tmsViaProxy = dedent`
+  # Testomat.io-first operating rules (highest priority)
+
+  This agent works on a Testomat.io project. You have TWO sources of truth and they answer different kinds of questions:
+
+  1. **The pulled markdown workspace (\`cwd\`)** — for **tests** and **suites**. Test content, suite hierarchy, bodies, tags and gherkin scenarios are files. Use \`read\`, \`find\`, \`grep\`, \`ls\` — they are instant and hit no network.
+  2. **The \`mcp\` tool** — for **dynamic Testomat.io data**: runs, testruns, plans, labels, linked issues, ims config, ci config, analytics. These do not live as files and MUST come from there.
+
+  Testomat.io is reached through **one \`mcp\` tool**, not a tool per operation. Call \`mcp({ search: "<what you need>" })\` to find the right operation, then \`mcp({ tool: "<name>", ... })\` to run it. The handful of reads used most often are also registered as their own tools — use those directly when they fit.
+
+  **Prefer the filesystem for test/suite queries.** Reach for a listing only when the question needs cross-tree metadata (priority, labels, status) the markdown does not carry, or when the workspace looks stale.
+
+  **Never** ask the user for the **Testomat.io** API token — it's configured. (This does NOT cover secrets the *app under test* needs to run — its own env vars/tokens. If a test run is blocked by one of those, report it.)
+
+  **Statuses and counts are live** — runs change them at any time. Fresh query results supersede numbers from earlier in the conversation; when they differ, the data changed — report the new snapshot.
+
+  ## Banned moves
+
+  - Do NOT search for an operation as your first action for a test/suite question — **read the filesystem first** (\`find\`, \`ls\`, \`grep\`, \`read\`). Fall back to a listing only if the metadata you need isn't in the markdown.
+  - Do NOT ask the user for the **Testomat.io** API token — it's already configured. (Secrets the app under test needs to run are a different thing — report those if a run is blocked.)
+  - Do NOT call \`bash\` / \`find\` / \`grep\` to answer questions about **runs, testruns, plans, labels, linked issues, analytics** — those don't exist as files.
+
+  ## Filesystem vs. Testomat.io cheat sheet
+
+  | Question is about… | First action |
+  |---|---|
+  | Test content (code, steps, gherkin, description, file path, tags) | \`read\` / \`find\` / \`grep\` in \`cwd\` |
+  | Suite hierarchy / structure / which files exist | \`ls\` / \`find\` |
+  | Individual test metadata (priority, status flag, labels) | try filesystem; if missing, \`mcp({ search: "get test" })\` |
+  | Runs, testruns, plans, labels, issues, analytics | \`mcp({ search: … })\`, then \`mcp({ tool: … })\` |
+  | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
+  | Creating/updating runs, linking issues | the matching \`mcp\` create/update operation |
+  | Launching automated or mixed Run remotely on CI | Use npx @testomatio/reporter run --remote <profile>, raise error if no CI profiles configured |
+  | Running automated Run | Use local test runner with testomatio reporter attached to report to current project |
+
+  ---
+`;
+
+const tmsViaCli = dedent`
+  # Testomat.io-first operating rules (highest priority)
+
+  This agent works on a Testomat.io project through the **shell only** — there are no Testomat.io tools in this session.
+
+  1. **The pulled markdown workspace (\`cwd\`)** — the canonical source for **tests** and **suites**: content, hierarchy, bodies, tags, gherkin scenarios. Use \`read\`, \`find\`, \`grep\`, \`ls\`.
+  2. **\`npx check-tests\`** — moves test cases between the markdown and Testomat.io (\`pull\`, \`push\`). It reads its credentials from the environment.
+  3. **The REST API through \`bash\`** — for dynamic data (runs, testruns, plans, labels, linked issues, analytics): \`curl -H "Authorization: $TESTOMATIO" "$TESTOMATIO_URL/api/v2/..."\`.
+
+  **Never** ask the user for the **Testomat.io** API token — it's configured as \`TESTOMATIO\`. (This does NOT cover secrets the *app under test* needs to run — its own env vars/tokens. If a test run is blocked by one of those, report it.)
+
+  **Statuses and counts are live** — runs change them at any time. Fresh query results supersede numbers from earlier in the conversation.
+
+  ## Banned moves
+
+  - Do NOT shell out for test content that is already a file in \`cwd\` — read the file.
+  - Do NOT invent REST paths or parameters. Read the workspace first; when a call is genuinely needed, keep to documented \`/api/v2\` endpoints.
+  - Do NOT ask the user for the **Testomat.io** API token.
+
+  ## Filesystem vs. shell cheat sheet
+
+  | Question is about… | First action |
+  |---|---|
+  | Test content (code, steps, gherkin, description, file path, tags) | \`read\` / \`find\` / \`grep\` in \`cwd\` |
+  | Suite hierarchy / structure / which files exist | \`ls\` / \`find\` |
+  | Runs, testruns, plans, labels, issues, analytics | \`curl\` against \`/api/v2\` |
+  | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
+  | Launching automated or mixed Run remotely on CI | Use npx @testomatio/reporter run --remote <profile>, raise error if no CI profiles configured |
+  | Running automated Run | Use local test runner with testomatio reporter attached to report to current project |
+
+  ---
+`;
+
+/**
+ * How the agent reaches Testomat.io in this session. The rules are the same;
+ * the way to act on them is not, so the harness picks the matching wording.
+ */
+export function testomatioTms(access: TmsAccess): string {
+  if (access === "mcp-proxy") return tmsViaProxy;
+  if (access === "cli-only") return tmsViaCli;
+  return tmsViaDirectTools;
+}
+
 export function testomatioConnection(
   tokenSlugs: string[],
   backendUrl?: string,
-  connection?: { projectId?: string; title?: string }
+  connection?: { projectId?: string; title?: string },
+  access: TmsAccess = "mcp-direct"
 ): string {
   let urlSuffix = "";
   if (backendUrl) urlSuffix = ` (\`${backendUrl}\`)`;
@@ -89,7 +171,7 @@ export function testomatioConnection(
     Projects pulled into this working directory (one dir per project):
     ${projects}
 
-    The **Testomat.io MCP server** is also auto-connected, one instance per project (tool prefix: \`testomatio-<slug>\`). Prefer MCP tools for structured actions (list/create/update tests, runs, labels, suites, etc.) — they are typed, safer, and faster than shell calls. Fall back to \`bash\` + \`check-tests\` only for things the MCP does not cover (e.g. pulling full markdown files).
+    ${structuredActions(access)}
 
     When you need to push changes back, run \`npx check-tests push\` (or similar \`npx @testomatio/*\` commands) directly — credentials are already in scope.
 
@@ -161,6 +243,19 @@ export function projectSettings(info: TestomatioProjectInfo): string {
   `;
 }
 
+// How to act on the connection, which differs per harness. Only the single-project
+// branch is parameterized: the other two are reachable from the desktop app alone,
+// and it always has one MCP server per project.
+function structuredActions(access: TmsAccess): string {
+  if (access === "mcp-proxy") {
+    return "The **Testomat.io MCP server** is also connected, reached through the `mcp` tool (`mcp({ search })` to find an operation, `mcp({ tool })` to run it). Prefer it for structured actions (list/create/update tests, runs, labels, suites, etc.) — those are typed, safer, and faster than shell calls. Fall back to `bash` + `check-tests` only for things it does not cover (e.g. pulling full markdown files).";
+  }
+  if (access === "cli-only") {
+    return "There are no Testomat.io tools in this session: use `npx check-tests` for test cases and `curl` against `/api/v2` for runs, plans and labels.";
+  }
+  return "The **Testomat.io MCP server** is also auto-connected, one instance per project (tool prefix: `testomatio-<slug>`). Prefer MCP tools for structured actions (list/create/update tests, runs, labels, suites, etc.) — they are typed, safer, and faster than shell calls. Fall back to `bash` + `check-tests` only for things the MCP does not cover (e.g. pulling full markdown files).";
+}
+
 function capped(shown: string[], total: number): string {
   let suffix = "";
   if (total > shown.length) {
@@ -168,3 +263,10 @@ function capped(shown: string[], total: number): string {
   }
   return shown.join(", ") + suffix;
 }
+
+/**
+ * `mcp-direct` — every Testomat.io operation is its own tool, prefixed
+ * `testomatio-<slug>`. `mcp-proxy` — one `mcp` tool with search and call.
+ * `cli-only` — no tools at all: `check-tests` and REST through the shell.
+ */
+export type TmsAccess = "mcp-direct" | "mcp-proxy" | "cli-only";

@@ -4,6 +4,7 @@ import {
   testomatioConnection,
   testomatioNotConnected,
   projectSettings,
+  type TmsAccess,
 } from "./testomatio.js";
 import { appUiGuidance } from "./app-ui.js";
 import { browserControl } from "./browser.js";
@@ -30,7 +31,8 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
   const tokenSlugs = options?.tokens ? Object.keys(options.tokens) : [];
   // The TUI passes no `connection`, so it keeps the managed-tokens gating.
   const tokenAvailable = options?.connection?.tokenAvailable ?? tokenSlugs.length > 0;
-  if (tokenSlugs.length > 0) parts.push(testomatioTms);
+  const tms = options?.tms ?? "mcp-direct";
+  if (tokenSlugs.length > 0) parts.push(testomatioTms(tms));
   if (mode === "web") parts.push(appUiGuidance);
   if (mode === "print") parts.push(nonInteractive);
   // No browser in a one-shot run: the guidance is written around a window the
@@ -50,7 +52,7 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
     parts.push(projectSettings(options.projectInfo));
   }
   if (tokenAvailable || tokenSlugs.length > 0) {
-    parts.push(testomatioConnection(tokenSlugs, options?.backendUrl, options?.connection));
+    parts.push(testomatioConnection(tokenSlugs, options?.backendUrl, options?.connection, tms));
   } else if (mode === "web" || mode === "print") {
     parts.push(testomatioNotConnected());
   }
@@ -68,6 +70,8 @@ export interface SystemPromptOptions {
   tokens?: Record<string, string>;
   connection?: { tokenAvailable?: boolean; projectId?: string; title?: string };
   mode?: "tui" | "web" | "print";
+  /** How the agent reaches Testomat.io; defaults to `mcp-direct`. */
+  tms?: TmsAccess;
   browser?: boolean;
   /** Absolute path the agent must write its final report to (`--output`). */
   outputFile?: string;
