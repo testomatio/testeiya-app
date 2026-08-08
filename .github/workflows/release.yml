@@ -1,0 +1,86 @@
+name: Release
+
+# Publishes the `testeiya` CLI to npm. The vendored skills and the Testomat.io
+# documentation are dev-time caches, so they are refreshed here rather than
+# committed: whatever ships is current as of the release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # OIDC token for npm Trusted Publishing + provenance (no NPM_TOKEN needed).
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm (Trusted Publishing support)
+        run: npm install -g npm@latest
+
+      - run: npm ci
+
+      - name: Fetch the vendored skills
+        run: npx bunosh skills:update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Vendor the Testomat.io documentation
+        run: npx bunosh docs:update --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Regenerate the MCP tool seed
+        run: npx bunosh mcp:seed
+
+      - name: Validate skill frontmatter
+        run: node scripts/validate-skills.mjs
+
+      - name: Build
+        run: npm run build
+
+      - name: Sync version from the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+
+      - name: Determine npm dist-tag
+        id: npm_tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if echo "$TAG" | grep -qE "alpha|-alpha|\.a\."; then
+            echo "tag=alpha" >> "$GITHUB_OUTPUT"
+          elif echo "$TAG" | grep -qE "beta|-beta|\.b\."; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          elif echo "$TAG" | grep -qE "rc|-rc|\.rc\."; then
+            echo "tag=rc" >> "$GITHUB_OUTPUT"
+          elif [ "$PRERELEASE" = "true" ]; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Skip when the version is already on the registry (a re-run, or a first
+      # version published by hand to bootstrap Trusted Publishing).
+      - name: Publish
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "testeiya@$version" version >/dev/null 2>&1; then
+            echo "testeiya@$version already published — skipping."
+            exit 0
+          fi
+          npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}

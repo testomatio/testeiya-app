@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Typecheck, validate skills, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The prompt fragments and the CLI must compile. Nothing here talks to a
+      # model or to Testomat.io, so a pull request costs nothing to validate.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate skill frontmatter
+        run: node scripts/validate-skills.mjs
+
+      - name: Build
+        run: npm run build
