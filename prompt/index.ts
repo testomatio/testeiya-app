@@ -32,7 +32,10 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
   // The TUI passes no `connection`, so it keeps the managed-tokens gating.
   const tokenAvailable = options?.connection?.tokenAvailable ?? tokenSlugs.length > 0;
   const tms = options?.tms ?? "mcp-direct";
-  if (tokenSlugs.length > 0) parts.push(testomatioTms(tms));
+  // Gated on the same condition as the connection section below: both describe
+  // the same connection, and the rules are just as needed when the token comes
+  // from the environment rather than from a per-project session token.
+  if (tokenAvailable || tokenSlugs.length > 0) parts.push(testomatioTms(tms));
   if (mode === "web") parts.push(appUiGuidance);
   if (mode === "print") parts.push(nonInteractive);
   // No browser in a one-shot run: the guidance is written around a window the

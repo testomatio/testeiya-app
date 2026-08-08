@@ -142,7 +142,7 @@ export function testomatioConnection(
 
       The project API key is **already set** as \`TESTOMATIO\` in the environment of every \`bash\` command you run, along with \`TESTOMATIO_URL\`${urlSuffix}. **Never ask the user for a Testomat.io token or API key** — it is already in scope.
 
-      Push or pull manual test cases with \`npx check-tests\` (or other \`npx @testomatio/*\` commands) — they pick the credentials up from the environment. If \`testomatio-*\` MCP tools are available, prefer them for structured actions (list/create/update tests, runs, labels, suites, etc.).
+      Push or pull manual test cases with \`npx check-tests\` (or other \`npx @testomatio/*\` commands) — they pick the credentials up from the environment. ${envTokenActions(access)}
 
     `;
   }
@@ -171,7 +171,7 @@ export function testomatioConnection(
     Projects pulled into this working directory (one dir per project):
     ${projects}
 
-    ${structuredActions(access)}
+    ${perProjectActions(access)}
 
     When you need to push changes back, run \`npx check-tests push\` (or similar \`npx @testomatio/*\` commands) directly — credentials are already in scope.
 
@@ -243,10 +243,19 @@ export function projectSettings(info: TestomatioProjectInfo): string {
   `;
 }
 
-// How to act on the connection, which differs per harness. Only the single-project
-// branch is parameterized: the other two are reachable from the desktop app alone,
-// and it always has one MCP server per project.
-function structuredActions(access: TmsAccess): string {
+// How to act on a connection whose token comes from the environment.
+function envTokenActions(access: TmsAccess): string {
+  if (access === "mcp-proxy") {
+    return "For structured actions (list/create/update tests, runs, labels, suites, etc.) prefer the `mcp` tool: `mcp({ search })` to find an operation, `mcp({ tool })` to run it.";
+  }
+  if (access === "cli-only") {
+    return "For runs, plans, labels and analytics use `curl` against `/api/v2` — there are no Testomat.io tools in this session.";
+  }
+  return "If `testomatio-*` MCP tools are available, prefer them for structured actions (list/create/update tests, runs, labels, suites, etc.).";
+}
+
+// The same, where the harness runs one MCP server per pulled project.
+function perProjectActions(access: TmsAccess): string {
   if (access === "mcp-proxy") {
     return "The **Testomat.io MCP server** is also connected, reached through the `mcp` tool (`mcp({ search })` to find an operation, `mcp({ tool })` to run it). Prefer it for structured actions (list/create/update tests, runs, labels, suites, etc.) — those are typed, safer, and faster than shell calls. Fall back to `bash` + `check-tests` only for things it does not cover (e.g. pulling full markdown files).";
   }
