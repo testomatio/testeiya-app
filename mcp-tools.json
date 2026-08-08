@@ -1,0 +1,2967 @@
+[
+  {
+    "name": "system_ping",
+    "description": "Check server status and active configuration",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "tests_list",
+    "description": "List tests (/api/v2/{project_id}/tests). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter tests. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for tests. Documented variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_get",
+    "description": "Get test by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_create",
+    "description": "Create test (/api/v2/{project_id}/tests)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "suite_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title",
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_update",
+    "description": "Update test (/api/v2/{project_id}/tests/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "suite_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "sync": {
+          "type": "boolean"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_delete",
+    "description": "Delete test",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_search",
+    "description": "Search tests using TQL (delegates to tests_list). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter tests. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for tests. Documented variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_issues_list",
+    "description": "List linked issues for a test (/api/v2/{project_id}/issues?test_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_issues_link",
+    "description": "Link issue to a test (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_issues_unlink",
+    "description": "Unlink issue from a test (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_list",
+    "description": "List suites as tree (/api/v2/{project_id}/suites)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "file_type": {
+          "type": "string",
+          "enum": [
+            "file",
+            "folder"
+          ]
+        },
+        "tag": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "string"
+        },
+        "search_text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_get",
+    "description": "Get suite by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_create",
+    "description": "Create suite (/api/v2/{project_id}/suites)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "file_type": {
+          "type": "string"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {}
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira",
+                  "requirement"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_update",
+    "description": "Update suite (/api/v2/{project_id}/suites/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "file_type": {
+          "type": "string"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {}
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira",
+                  "requirement"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_delete",
+    "description": "Delete suite",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_search",
+    "description": "Search suites by title (delegates to suites list with search_text)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search_text": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "file_type": {
+          "type": "string",
+          "enum": [
+            "file",
+            "folder"
+          ]
+        },
+        "tag": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_issues_list",
+    "description": "List linked issues for a suite (/api/v2/{project_id}/issues?suite_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_issues_link",
+    "description": "Link issue to a suite (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_issues_unlink",
+    "description": "Unlink issue from a suite (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_list",
+    "description": "List runs (/api/v2/{project_id}/runs). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter runs. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Runs also support boolean flags without comparison such as `failed`, `finished`, `automated`, or `with_defect`. Documented run variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Documented examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for runs. Documented variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_get",
+    "description": "Get run by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_create",
+    "description": "Create run (/api/v2/{project_id}/runs)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "plan_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "rungroup_id": {
+          "type": "string"
+        },
+        "env": {
+          "type": "string"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "assign_strategy": {
+          "type": "string",
+          "enum": [
+            "test",
+            "random",
+            "none"
+          ]
+        },
+        "test_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suite_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "envs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_update",
+    "description": "Update run (/api/v2/{project_id}/runs/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "rungroup_id": {
+          "type": "string"
+        },
+        "env": {
+          "type": "string"
+        },
+        "status_event": {
+          "type": "string",
+          "enum": [
+            "finish",
+            "finish_manual",
+            "launch",
+            "rerun",
+            "scheduled",
+            "terminate"
+          ]
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "assign_strategy": {
+          "type": "string",
+          "enum": [
+            "test",
+            "random",
+            "none"
+          ]
+        },
+        "test_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suite_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_delete",
+    "description": "Delete run (/api/v2/{project_id}/runs/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_search",
+    "description": "Search runs using TQL (delegates to runs_list). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter runs. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Runs also support boolean flags without comparison such as `failed`, `finished`, `automated`, or `with_defect`. Documented run variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Documented examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for runs. Documented variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_issues_list",
+    "description": "List linked issues for a run (/api/v2/{project_id}/issues?run_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_issues_link",
+    "description": "Link issue to a run (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "runs_issues_unlink",
+    "description": "Unlink issue from a run (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_list",
+    "description": "List testruns (/api/v2/{project_id}/testruns)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "test_ids": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "filter_status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "pending"
+          ]
+        },
+        "filter_kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated"
+          ]
+        },
+        "filter_user": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "filter_priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "important",
+            "high",
+            "critical"
+          ]
+        },
+        "filter_substatus": {
+          "type": "string"
+        },
+        "filter_search": {
+          "type": "string"
+        },
+        "filter_message": {
+          "type": "boolean"
+        },
+        "filter_link": {
+          "type": "boolean"
+        },
+        "filter_finished_at_date_range": {
+          "type": "string"
+        },
+        "tags": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "envs": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "rungroups": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "defects": {
+          "type": "string",
+          "enum": [
+            "has_defects",
+            "without_defects"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_get",
+    "description": "Get testrun by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_create",
+    "description": "Create testrun (/api/v2/{project_id}/testruns)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "test_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "run_time": {
+          "type": "number"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "test_title": {
+          "type": "string"
+        },
+        "automated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_update",
+    "description": "Update testrun (/api/v2/{project_id}/testruns/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "test_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "run_time": {
+          "type": "number"
+        },
+        "assigned_to": {
+          "type": "string"
+        },
+        "test_title": {
+          "type": "string"
+        },
+        "automated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_delete",
+    "description": "Delete testrun (/api/v2/{project_id}/testruns/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_search",
+    "description": "Search testruns (delegates to testruns list; docs has no dedicated search parameter)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "test_ids": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "filter_status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "pending"
+          ]
+        },
+        "filter_kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated"
+          ]
+        },
+        "filter_user": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "filter_priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "important",
+            "high",
+            "critical"
+          ]
+        },
+        "filter_substatus": {
+          "type": "string"
+        },
+        "filter_search": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "filter_message": {
+          "type": "boolean"
+        },
+        "filter_link": {
+          "type": "boolean"
+        },
+        "filter_finished_at_date_range": {
+          "type": "string"
+        },
+        "tags": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "envs": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "rungroups": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "defects": {
+          "type": "string",
+          "enum": [
+            "has_defects",
+            "without_defects"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_issues_list",
+    "description": "List linked issues for a testrun (/api/v2/{project_id}/issues?testrun_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_issues_link",
+    "description": "Link issue to a testrun (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_issues_unlink",
+    "description": "Unlink issue from a testrun (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rungroups_list",
+    "description": "List run groups as tree (/api/v2/{project_id}/rungroups)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rungroups_get",
+    "description": "Get run group by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "rungroup_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rungroup_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rungroups_create",
+    "description": "Create run group (/api/v2/{project_id}/rungroups)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "pin": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {}
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rungroups_update",
+    "description": "Update run group (/api/v2/{project_id}/rungroups/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "rungroup_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "pin": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {}
+        }
+      },
+      "required": [
+        "rungroup_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rungroups_delete",
+    "description": "Delete run group (/api/v2/{project_id}/rungroups/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "rungroup_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rungroup_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "steps_list",
+    "description": "List steps (/api/v2/{project_id}/steps)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "steps_get",
+    "description": "Get step by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "step_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "steps_create",
+    "description": "Create step (/api/v2/{project_id}/steps)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "steps_update",
+    "description": "Update step (/api/v2/{project_id}/steps/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "step_id": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "step_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "steps_delete",
+    "description": "Delete step (/api/v2/{project_id}/steps/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "step_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "snippets_list",
+    "description": "List snippets (/api/v2/{project_id}/snippets)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "snippets_get",
+    "description": "Get snippet by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "snippet_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "snippet_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "snippets_create",
+    "description": "Create snippet (/api/v2/{project_id}/snippets)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "snippets_update",
+    "description": "Update snippet (/api/v2/{project_id}/snippets/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "snippet_id": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "snippet_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "snippets_delete",
+    "description": "Delete snippet (/api/v2/{project_id}/snippets/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "snippet_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "snippet_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "labels_list",
+    "description": "List labels (/api/v2/{project_id}/labels)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "labels_get",
+    "description": "Get label by slug",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "label_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "labels_create",
+    "description": "Create label (/api/v2/{project_id}/labels)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "filter",
+              "list"
+            ]
+          }
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "tests",
+              "suites",
+              "runs",
+              "plans",
+              "steps",
+              "templates"
+            ]
+          }
+        },
+        "field": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "labels_update",
+    "description": "Update label (/api/v2/{project_id}/labels/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "label_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "filter",
+              "list"
+            ]
+          }
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "tests",
+              "suites",
+              "runs",
+              "plans",
+              "steps",
+              "templates"
+            ]
+          }
+        },
+        "field": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "label_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "labels_delete",
+    "description": "Delete label (/api/v2/{project_id}/labels/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "label_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tags_list",
+    "description": "List tags with counts (/api/v2/{project_id}/tags)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tags_get",
+    "description": "Get tests by tag title (/api/v2/{project_id}/tags/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tag_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tags_search",
+    "description": "Search by tag title (delegates to tags_get)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tag_id": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "milestones_list",
+    "description": "List milestones (/api/v2/{project_id}/milestones)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "type": {
+          "type": "string",
+          "description": "Filter by milestone type (title), e.g. Sprint or Release."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "created",
+            "active",
+            "closed"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "milestones_get",
+    "description": "Get milestone by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "milestone_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "milestone_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "issues_list",
+    "description": "List linked issues (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "test_id": {
+          "type": "string"
+        },
+        "suite_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "testrun_id": {
+          "type": "integer"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "issues_create",
+    "description": "Link issue to resource (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "suite_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "testrun_id": {
+          "type": "integer"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "issues_delete",
+    "description": "Unlink issue (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "issues_search",
+    "description": "Search issues (delegates to issues_list filters)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "test_id": {
+          "type": "string"
+        },
+        "suite_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "testrun_id": {
+          "type": "integer"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_attachments_list",
+    "description": "List attachments for a test (/api/v2/{project_id}/attachments?test_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_attachments_upload",
+    "description": "Upload one attachment to a test (/api/v2/{project_id}/attachments?test_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
+        }
+      },
+      "required": [
+        "test_id",
+        "file_path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests_attachments_delete",
+    "description": "Delete attachment from a test (/api/v2/{project_id}/attachments/{id}?test_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string"
+        },
+        "attachment_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id",
+        "attachment_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_attachments_list",
+    "description": "List attachments for a suite (/api/v2/{project_id}/attachments?suite_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_attachments_upload",
+    "description": "Upload one attachment to a suite (/api/v2/{project_id}/attachments?suite_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
+        }
+      },
+      "required": [
+        "suite_id",
+        "file_path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites_attachments_delete",
+    "description": "Delete attachment from a suite (/api/v2/{project_id}/attachments/{id}?suite_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suite_id": {
+          "type": "string"
+        },
+        "attachment_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite_id",
+        "attachment_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_attachments_list",
+    "description": "List attachments for a testrun (/api/v2/{project_id}/attachments?testrun_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "testrun_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_attachments_upload",
+    "description": "Upload one attachment to a testrun (/api/v2/{project_id}/attachments?testrun_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
+        }
+      },
+      "required": [
+        "testrun_id",
+        "file_path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "testruns_attachments_delete",
+    "description": "Delete attachment from a testrun (/api/v2/{project_id}/attachments/{id}?testrun_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testrun_id": {
+          "type": "integer"
+        },
+        "attachment_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "testrun_id",
+        "attachment_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_list",
+    "description": "List plans (/api/v2/{project_id}/plans)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "search_text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_get",
+    "description": "Get plan by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_create",
+    "description": "Create plan (/api/v2/{project_id}/plans). TQL (Testomat.io Query Language) is a string expression passed in `tql` to select tests included in a plan. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Plan TQL uses documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Use `tql` when you want the API to resolve matching tests automatically instead of sending explicit `test_ids`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "as_manual": {
+          "type": "boolean"
+        },
+        "test_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of test IDs (8-char) to include in the plan. If omitted, all tests matching the plan kind are included."
+        },
+        "suite_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of suite IDs (8-char) to include in the plan. If omitted, all suites are considered."
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for selecting tests included in the plan. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_update",
+    "description": "Update plan (/api/v2/{project_id}/plans/{id}). TQL (Testomat.io Query Language) is a string expression passed in `tql` to select tests included in a plan. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Plan TQL uses documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Use `tql` when you want the API to resolve matching tests automatically instead of sending explicit `test_ids`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "as_manual": {
+          "type": "boolean"
+        },
+        "test_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of test IDs (8-char) to include in the plan. If omitted, all tests matching the plan kind are included."
+        },
+        "suite_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of suite IDs (8-char) to include in the plan. If omitted, all suites are considered."
+        },
+        "tql": {
+          "type": "string",
+          "description": "TQL filter for selecting tests included in the plan. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
+        },
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_delete",
+    "description": "Delete plan",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_search",
+    "description": "Search plans (delegates to plans list; docs has no dedicated search parameter)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search_text": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "automated",
+            "mixed"
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_issues_list",
+    "description": "List linked issues for a plan (/api/v2/{project_id}/issues?plan_id=...)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_issues_link",
+    "description": "Link issue to a plan (/api/v2/{project_id}/issues)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan_id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jira_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "plans_issues_unlink",
+    "description": "Unlink issue from a plan (/api/v2/{project_id}/issues/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_list",
+    "description": "List requirements (/api/v2/{project_id}/requirements)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "jira",
+            "confluence",
+            "file",
+            "text"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "global",
+            "attached",
+            "detached",
+            "without_suites"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_get",
+    "description": "Get requirement by ID",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requirement_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_create",
+    "description": "Create requirement (/api/v2/{project_id}/requirements)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "jira",
+            "confluence",
+            "file",
+            "text"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Required for text requirements. Must be at least 500 characters."
+        },
+        "details": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "global": {
+          "type": "boolean"
+        },
+        "confluence_url": {
+          "type": "string",
+          "description": "Required for confluence requirements."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Local file paths to upload for file requirements."
+        }
+      },
+      "required": [
+        "title",
+        "source_type"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_update",
+    "description": "Update requirement (/api/v2/{project_id}/requirements/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requirement_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "Only applied for text requirements."
+        },
+        "details": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "global": {
+          "type": "boolean"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Local file paths to upload for file requirements."
+        }
+      },
+      "required": [
+        "requirement_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_delete",
+    "description": "Delete requirement (/api/v2/{project_id}/requirements/{id})",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requirement_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "requirements_search",
+    "description": "Search requirements (delegates to requirements list with filters)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "jira",
+            "confluence",
+            "file",
+            "text"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "global",
+            "attached",
+            "detached",
+            "without_suites"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

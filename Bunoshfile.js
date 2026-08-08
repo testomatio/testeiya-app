@@ -724,3 +724,20 @@ function chunk(items, size) {
   for (let i = 0; i < items.length; i += size) batches.push(items.slice(i, i + size));
   return batches;
 }
+
+/**
+ * Generate mcp-tools.json from @testomatio/mcp's own TOOL_DEFINITIONS: the tool
+ * metadata the CLI seeds into the MCP adapter's cache, so a cold CI runner can
+ * register direct tools on its first run without a discovery round-trip.
+ */
+export async function mcpSeed() {
+  const { TOOL_DEFINITIONS } = await import("@testomatio/mcp/src/mcp/tool-definitions.js");
+  const tools = TOOL_DEFINITIONS.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+  }));
+  const target = join(REPO_ROOT, "mcp-tools.json");
+  writeFileSync(target, JSON.stringify(tools, null, 2) + "\n");
+  say(`Wrote ${tools.length} Testomat.io tool definitions to ${target}`);
+}
