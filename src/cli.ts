@@ -29,6 +29,9 @@ async function main(argv: string[]): Promise<void> {
   }
 
   loadEnvFiles();
+  // --project is a spelling of the env var the MCP server needs, so the rest of
+  // the CLI only ever reads the environment.
+  if (args.project) process.env.TESTOMATIO_PROJECT_ID = args.project;
 
   // No task and nothing piped in: there is no interactive mode, so this is a
   // usage error rather than a prompt.

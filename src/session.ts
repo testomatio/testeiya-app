@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "../prompt/index.js";
 import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
-import { hasTestomatio, tmsAccess } from "./mcp.js";
+import { hasMcp, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
 import { createSetResultTool, type RunResult } from "./result.js";
 
@@ -34,7 +34,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
   const settingsManager = SettingsManager.inMemory();
 
   const extensionPaths: string[] = [];
-  if (hasTestomatio()) extensionPaths.push(MCP_EXTENSION);
+  if (hasMcp()) extensionPaths.push(MCP_EXTENSION);
 
   const loader = new DefaultResourceLoader({
     cwd: options.cwd,
@@ -48,6 +48,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         mode: "print",
         tms: tmsAccess(),
         tokens: options.tokens,
+        connection: options.connection,
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
       }),
@@ -70,6 +71,21 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     settingsManager,
     sessionManager: SessionManager.inMemory(options.cwd),
     customTools: [createSetResultTool(options.result)],
+    // Extensions start their runtime on this event. Without it the MCP adapter
+    // registers its tools but never connects, and every call answers
+    // "MCP not initialized".
+    sessionStartEvent: { type: "session_start", reason: "startup" },
+  });
+
+  // Starts the extension runtime and fires session_start. createAgentSession
+  // does not do this — pi's own modes do — and without it an extension is
+  // constructed but never initialized: the MCP adapter registers its tools and
+  // then answers "MCP not initialized" for every call.
+  await session.bindExtensions({
+    mode: "print",
+    onError: (err) => {
+      process.stderr.write(`  extension error (${err.extensionPath}): ${err.error}\n`);
+    },
   });
 
   const skills = loader.getSkills().skills.length;
@@ -82,6 +98,7 @@ export interface SessionOptions {
   model?: string;
   outputFile?: string;
   tokens?: Record<string, string>;
+  connection?: { tokenAvailable?: boolean };
   backendUrl?: string;
 }
 

@@ -10,6 +10,7 @@ Options:
   -o, --output <file.md>   file the agent must write its report to
   -p, --print <task>       same as passing the task positionally
       --model <id>         provider/model to use (e.g. openrouter/anthropic/claude-sonnet-4.5)
+      --project <id>       Testomat.io project id (same as TESTOMATIO_PROJECT_ID)
   -h, --help               show this help
   -v, --version            show version
 
@@ -18,8 +19,11 @@ Without --output the agent's final answer is printed to stdout instead.
 
 The model is taken from --model, then TESTEIYA_MODEL, then ~/.testeiya/config.json,
 then a built-in default. The provider API key comes from the environment,
-~/.testeiya/.env, or ~/.testeiya/auth.json. Set TESTOMATIO to a project API key
-to work with that Testomat.io project.
+~/.testeiya/.env, or ~/.testeiya/auth.json.
+
+Set TESTOMATIO to a project API key to work with that Testomat.io project. Add
+the project id (--project or TESTOMATIO_PROJECT_ID) and the agent also gets the
+Testomat.io tools; with the token alone it uses check-tests and the REST API.
 
 A task starting with "-" must follow "--":  testeiya -- "-weird task"
 
@@ -34,6 +38,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
         output: { type: "string", short: "o" },
         print: { type: "string", short: "p" },
         model: { type: "string" },
+        project: { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
@@ -56,6 +61,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (prompt) args.prompt = prompt;
   if (values.output) args.output = values.output;
   if (values.model) args.model = values.model;
+  if (values.project) args.project = values.project;
   return args;
 }
 
@@ -63,6 +69,7 @@ export interface CliArgs {
   prompt?: string;
   output?: string;
   model?: string;
+  project?: string;
   help?: boolean;
   version?: boolean;
   /** Set when argv was malformed; the caller prints USAGE and exits 2. */
