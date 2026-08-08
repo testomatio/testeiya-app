@@ -2,3 +2,20 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+
+# Third-party skills are fetched by `bunosh skills:update` from the repos listed
+# in skills/skills.yaml, pinned in skills/skills.lock.json. They are not
+# redistributed here — patch them upstream, in the repo that owns them.
+#
+# These rules live at the repo root on purpose: an ignore file INSIDE skills/
+# would also hide the tree from the agent, whose skill discovery honours
+# .gitignore in every directory it walks.
+skills/*
+!skills/skills.yaml
+!skills/skills.lock.json
+!skills/testeiya/
+
+# Generated Testomat.io documentation cache (`bunosh docs:update`). SKILL.md and
+# docs.lock.json stay tracked: one is authored, the other pins the commit.
+skills/testeiya/testomatio-docs/docs/
+skills/testeiya/testomatio-docs/INDEX.md
