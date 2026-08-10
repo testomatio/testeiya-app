@@ -3,13 +3,13 @@ import { parseArgs } from "node:util";
 export const USAGE = `testeiya — AI testing agent
 
 Usage:
-  testeiya "<task>" [--output <file>]   run one task and exit
+  testeiya "<task>" --model <provider>/<id> [--output <file>]
   cat task.md | testeiya [--output <file>]
 
 Options:
   -o, --output <file.md>   file the agent must write its report to
   -p, --print <task>       same as passing the task positionally
-      --model <id>         provider/model to use (e.g. openrouter/anthropic/claude-sonnet-4.5)
+      --model <id>         provider/model to use, e.g. openrouter/anthropic/claude-sonnet-5
       --project <id>       Testomat.io project id (same as TESTOMATIO_PROJECT_ID)
   -h, --help               show this help
   -v, --version            show version
@@ -17,9 +17,9 @@ Options:
 Runs show progress and errors on stderr; the result is the report file.
 Without --output the agent's final answer is printed to stdout instead.
 
-The model is taken from --model, then TESTEIYA_MODEL, then ~/.testeiya/config.json,
-then a built-in default. The provider API key comes from the environment,
-~/.testeiya/.env, or ~/.testeiya/auth.json.
+There is no default model: pass --model or set TESTEIYA_MODEL, or the run exits 2.
+The provider API key comes from the environment, ~/.testeiya/.env, or
+~/.testeiya/auth.json.
 
 Set TESTOMATIO to a project API key to work with that Testomat.io project. Add
 the project id (--project or TESTOMATIO_PROJECT_ID) and the agent also gets the

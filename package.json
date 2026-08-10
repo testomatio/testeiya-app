@@ -15,7 +15,6 @@
   "files": [
     "dist",
     "prompt",
-    "brand",
     "skills",
     "mcp-tools.json",
     "README.md",
@@ -28,6 +27,7 @@
     "node": ">=22.19.0"
   },
   "scripts": {
+    "start": "npm run build && node dist/src/cli.js",
     "build": "tsc -p tsconfig.json && npm run build:vendor",
     "build:vendor": "esbuild scripts/vendor-entry.ts --bundle --format=esm --platform=node --packages=external --outfile=dist/vendor/mcp.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

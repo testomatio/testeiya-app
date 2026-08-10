@@ -10,7 +10,6 @@ This repository holds the parts of Testeiya that shape how the agent thinks:
 |---|---|
 | `prompt/` | The system-prompt fragments — the agent's role, rules, tool guidance, Testomat.io operating rules, and the report contract |
 | `skills/` | The skills the agent can invoke: `skills/testeiya/` is authored here, every other folder is fetched from its own repository |
-| `brand/` | The wordmark both CLIs print |
 | `src/` | The `testeiya` command-line agent (Node) |
 
 The desktop and web harness — servers, session management, sync, UI — is not open source.
@@ -18,16 +17,22 @@ The desktop and web harness — servers, session management, sync, UI — is not
 ## Install and use
 
 ```bash
-npx testeiya "Review the manual tests in this folder and list the gaps" --output report.md
+npx testeiya "Review the manual tests in this folder and list the gaps" \
+  --model openrouter/anthropic/claude-sonnet-5 --output report.md
 ```
 
-The agent runs one task and exits. Progress goes to stderr, the report to `--output` (or stdout when you omit it). Exit codes: `0` pass, `1` failed run or negative verdict, `2` bad usage, `130` interrupted — so it drops into CI as-is.
+The agent runs one task and exits — there is no interactive mode. Progress goes to stderr, the report to `--output` (or stdout when you omit it). Exit codes: `0` pass, `1` failed run or negative verdict, `2` bad usage, `130` interrupted — so it drops into CI as-is.
 
-Requires Node 22.19 or newer and an LLM provider key. The key comes from the environment (`OPENROUTER_API_KEY` and friends), `~/.testeiya/.env`, or `~/.testeiya/auth.json` — the same file the desktop app's Settings dialog writes, so configuring it once covers both.
+Requires Node 22.19 or newer, a model, and an LLM provider key.
+
+There is no default model. Name one with `--model <provider>/<id>` or `TESTEIYA_MODEL`; a run that names none exits `2` rather than spending your money on a model nobody chose.
+
+The key comes from the environment (`OPENROUTER_API_KEY` and friends), `~/.testeiya/.env`, or `~/.testeiya/auth.json` — the same file the desktop app's Settings dialog writes, so configuring it once covers both.
 
 ```bash
 testeiya --help                      # every flag
-testeiya "<task>" --model openrouter/anthropic/claude-sonnet-4.5
+export TESTEIYA_MODEL=openrouter/anthropic/claude-sonnet-5
+testeiya "<task>"
 cat task.md | testeiya --output report.md
 ```
 

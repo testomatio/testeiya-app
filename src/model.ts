@@ -1,15 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { TESTEIYA_HOME } from "./env.js";
 
-/**
- * Last resort, so `npx testeiya` on a clean machine with only
- * OPENROUTER_API_KEY set still runs.
- */
-export const DEFAULT_MODEL = { provider: "openrouter", id: "anthropic/claude-sonnet-4.5" };
-
-/** Provider key env vars, in the order a bare run should try them. */
+/** Provider key env vars the CLI picks up from the environment. */
 export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
   { provider: "openrouter", env: "OPENROUTER_API_KEY" },
   { provider: "anthropic", env: "ANTHROPIC_API_KEY" },
@@ -21,32 +12,26 @@ export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
 export class UsageError extends Error {}
 
 /**
- * --model, then TESTEIYA_MODEL, then ~/.testeiya/config.json (written by the
- * desktop app), then the pinned default. A CI run must never fall through to a
- * prompt, so anything unresolvable throws instead.
+ * --model, then TESTEIYA_MODEL. There is no default: the model a run spends
+ * money on is the caller's choice, never a pin that goes stale here. The
+ * desktop app's `~/.testeiya/config.json` is not consulted either — a CI run
+ * must not depend on a choice made in someone's GUI. Anything unresolvable
+ * throws, so a run never falls through to a prompt.
  */
 export function resolveModel(runtime: ModelRuntime, explicit?: string) {
-  for (const candidate of [explicit, process.env.TESTEIYA_MODEL, configuredModel()]) {
-    if (!candidate) continue;
-    const parsed = splitModelId(candidate);
-    if (!parsed) {
-      throw new UsageError(`a model must be <provider>/<model-id>, got "${candidate}"`);
-    }
-    const model = runtime.getModel(parsed.provider, parsed.id);
-    if (!model) {
-      throw new UsageError(`unknown model "${parsed.id}" for provider "${parsed.provider}"`);
-    }
-    return requireAuth(runtime, model);
+  const candidate = explicit || process.env.TESTEIYA_MODEL;
+  if (!candidate) {
+    throw new UsageError("no model — pass --model <provider>/<id> or set TESTEIYA_MODEL");
   }
-
-  const fallback = runtime.getModel(DEFAULT_MODEL.provider, DEFAULT_MODEL.id);
-  if (!fallback) {
-    throw new UsageError(
-      `the default model ${DEFAULT_MODEL.provider}/${DEFAULT_MODEL.id} is no longer served — ` +
-        "pass --model <provider>/<id> or set TESTEIYA_MODEL"
-    );
+  const parsed = splitModelId(candidate);
+  if (!parsed) {
+    throw new UsageError(`a model must be <provider>/<model-id>, got "${candidate}"`);
   }
-  return requireAuth(runtime, fallback);
+  const model = runtime.getModel(parsed.provider, parsed.id);
+  if (!model) {
+    throw new UsageError(`unknown model "${parsed.id}" for provider "${parsed.provider}"`);
+  }
+  return requireAuth(runtime, model);
 }
 
 /** Hand the runtime whichever provider keys the environment resolved. */
@@ -69,12 +54,6 @@ function requireAuth<T>(runtime: ModelRuntime, model: T & { provider: string; id
   throw new UsageError(`no API key for ${model.provider} (model ${model.id}) — ${how}`);
 }
 
-function configuredModel(): string | undefined {
-  const config = readJson(join(TESTEIYA_HOME, "config.json"));
-  if (!config?.provider || !config?.model) return undefined;
-  return `${config.provider}/${config.model}`;
-}
-
 // Splits on the FIRST slash — OpenRouter model ids contain slashes themselves.
 function splitModelId(value: string): { provider: string; id: string } | null {
   const slash = value.indexOf("/");
@@ -83,12 +62,4 @@ function splitModelId(value: string): { provider: string; id: string } | null {
   const id = value.slice(slash + 1);
   if (!id) return null;
   return { provider, id };
-}
-
-function readJson(path: string): Record<string, string> | null {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return null;
-  }
 }

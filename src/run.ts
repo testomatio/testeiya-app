@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-import { banner } from "./banner.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
 import { createTesteiyaSession } from "./session.js";
@@ -39,7 +38,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     void session.abort().finally(() => process.exit(130));
   });
 
-  note(banner(model, cwd));
+  note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
   note(c.dim(`  ${skills} skills`));
   if (outputPath) note(c.dim(`  → ${outputPath}`));
   note("");

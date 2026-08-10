@@ -14,6 +14,6 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["src/**/*", "prompt/**/*", "brand/**/*"],
+  "include": ["src/**/*", "prompt/**/*"],
   "exclude": ["node_modules", "dist"]
 }

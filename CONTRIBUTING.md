@@ -10,7 +10,6 @@ Here, and open to pull requests:
 
 - `prompt/` — the system-prompt fragments
 - `skills/testeiya/` — the skills authored by this project
-- `brand/` — the wordmark
 - `src/` — the Node CLI
 
 Not here, and not accepted as patches: sessions, servers, transports, workspace classification, sync, authentication, telemetry, and the desktop and web UI. Those live in a private harness repository that consumes this one.
@@ -70,7 +69,7 @@ node dist/src/cli.js --help
 
 Requires Node 22.19 or newer. The CLI runs on [pi](https://pi.dev) and must stay Node-only: no Bun APIs (`Bun.file`, `import.meta.dir`), no native dependencies of our own.
 
-`npm run build` does two things: `tsc` compiles `src/`, `prompt/` and `brand/` into `dist/`, and esbuild bundles `pi-mcp-adapter` into `dist/vendor/mcp.js`. The bundle exists because the adapter ships raw TypeScript and Node refuses to strip types from files under `node_modules` — an installed package cannot import it otherwise.
+`npm run build` does two things: `tsc` compiles `src/` and `prompt/` into `dist/`, and esbuild bundles `pi-mcp-adapter` into `dist/vendor/mcp.js`. The bundle exists because the adapter ships raw TypeScript and Node refuses to strip types from files under `node_modules` — an installed package cannot import it otherwise.
 
 Two things about the agent's session that are easy to get wrong if you touch `src/session.ts`:
 
