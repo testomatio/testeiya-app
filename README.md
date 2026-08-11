@@ -48,15 +48,11 @@ The id can come from `--project` or `TESTOMATIO_PROJECT_ID`. The MCP server need
 
 A skill is a folder with a `SKILL.md`. The agent loads them all and invokes the ones a task calls for.
 
-`skills/testeiya/` is authored in this repository. Everything else is vendored from its own upstream repository, listed in `skills/skills.yaml` and pinned in `skills/skills.lock.json`:
+`skills/testeiya/` is authored in this repository, and it is the part to send pull requests against. Everything else is vendored from its own upstream repository, declared in `skills/skills.yaml` and pinned to a commit in `skills/skills.lock.json`.
 
-```bash
-bunosh skills:update          # fetch them all
-bunosh skills:update codeceptjs   # or just one vendor
-bunosh skills:list            # show the tree
-```
+Vendored folders are deliberately **not** committed here — they belong to their authors, under their own licences. A clone of this repository has `skills/testeiya/` and the manifest; the vendored tree is fetched by the upstream release tooling, which is where the desktop app gets its full set.
 
-Vendored folders are deliberately **not** committed here — they belong to their authors, under their own licences. A fresh clone has only `skills/testeiya/` until you run the update.
+To propose a new source, add its line to `skills/skills.yaml` — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing
 

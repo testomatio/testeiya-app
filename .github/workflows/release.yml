@@ -1,8 +1,8 @@
 name: Release
 
-# Publishes the `testeiya` CLI to npm. The vendored skills and the Testomat.io
-# documentation are dev-time caches, so they are refreshed here rather than
-# committed: whatever ships is current as of the release.
+# Publishes the `testeiya` CLI to npm, exactly as the repository stands. The
+# vendored skill sources are refreshed upstream, before the subtree that
+# produces this repository is published — nothing is fetched here.
 
 on:
   release:
@@ -31,19 +31,6 @@ jobs:
         run: npm install -g npm@latest
 
       - run: npm ci
-
-      - name: Fetch the vendored skills
-        run: npx bunosh skills:update
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Vendor the Testomat.io documentation
-        run: npx bunosh docs:update --force
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Regenerate the MCP tool seed
-        run: npx bunosh mcp:seed
 
       - name: Validate skill frontmatter
         run: node scripts/validate-skills.mjs

@@ -29,7 +29,7 @@ Every file in `prompt/` is a `dedent` template that ends up in the agent's syste
 
 A skill is a folder containing `SKILL.md`, optionally with supporting files beside it.
 
-**Only `skills/testeiya/` is in this repository.** The other folders — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright-cli/`, `skills/playwright-best-practices-skill/` — are fetched from their own upstream repositories by `bunosh skills:update`, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update.
+**Only `skills/testeiya/` is in this repository.** The other folders — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright-cli/`, `skills/playwright-best-practices-skill/` — are fetched from their own upstream repositories by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update.
 
 Frontmatter rules, enforced by CI:
 
@@ -45,7 +45,7 @@ description: Use when … — one sentence saying when the agent should reach fo
 
 Style that works: short sentences, bullets over paragraphs, a list of use cases, no duplicated parameter tables. Write for an agent skimming under load, not a human reading start to finish.
 
-Scaffold a new one with `bunosh skills:create <name>`.
+A skill is a folder with a `SKILL.md` — create one by hand under `skills/testeiya/<name>/`.
 
 ## Adding an external skill source
 
@@ -56,7 +56,7 @@ Add one line to `skills/skills.yaml` — a GitHub repository, optionally pinned:
 - owner/repo/tree/<ref>/<subdir>
 ```
 
-Then run `bunosh skills:update <vendor>`, which resolves the commit, downloads it, and records it in `skills/skills.lock.json`. Commit the lock file, never the fetched folder.
+That line is the whole change — send it as the pull request. The fetch runs in the release tooling, which resolves the commit, downloads it, and records it in `skills/skills.lock.json`; the fetched folder is never committed here.
 
 ## Working on the CLI
 

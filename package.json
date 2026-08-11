@@ -53,9 +53,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
-    "bunosh": "^0.6.0",
     "esbuild": "^0.28.1",
-    "typescript": "^5.9.3",
-    "yaml": "^2.9.0"
+    "typescript": "^5.9.3"
   }
 }
