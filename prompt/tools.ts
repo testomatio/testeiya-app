@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
+
 import dedent from 'dedent';
 
 /**
@@ -8,6 +11,11 @@ import dedent from 'dedent';
  */
 export function tools(options?: { extra?: string[] }): string {
   const extra = (options?.extra ?? []).join('');
+  let github = '    - GitHub: issues and projects through MCP.';
+  if (hasGh()) {
+    github =
+      '    - GitHub: issues and projects through MCP; pull requests, repositories and checkouts through `gh` in `bash`.';
+  }
   return dedent`
 <available-tools>
   You have these tools available:
@@ -19,6 +27,7 @@ ${extra}  * **Internal Skills:** For QA-related tasks, check available skills fi
   * **External Integrations:** Use MCP tools when they provide superior data or specialized integrations.
     - Primary MCP (Testomat.io): Use Testomat.io MCP tools to extend functionality.
     - Secondary MCP (Jira, GitHub, etc.): Invoke only when user explicitly asks or when remote context exploration is required.
+${github}
 
   <tool-governance>
     * **Prioritize Specificity:** Use \`read\` instead of \`cat\`, and \`edit\` instead of \`sed\`. Dedicated tools provide better error tracking and safety.
@@ -28,4 +37,13 @@ ${extra}  * **Internal Skills:** For QA-related tasks, check available skills fi
   </tool-governance>
 </available-tools>
 `;
+}
+
+/** Is the `gh` CLI on PATH? Never tell the agent to use a binary this machine lacks. */
+function hasGh(): boolean {
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    if (existsSync(join(dir, 'gh')) || existsSync(join(dir, 'gh.exe'))) return true;
+  }
+  return false;
 }

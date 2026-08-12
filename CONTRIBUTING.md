@@ -1,6 +1,6 @@
 # Contributing to Testeiya
 
-Thanks for helping. This repository holds the material that decides how the agent behaves, so a small wording change here can change every run of the CLI and the desktop app. That is why it is public: prompts and skills are reviewable in a way that server plumbing is not.
+Thanks for helping. This repository holds the material that decides how the agent behaves, so a small wording change here can change every run of the CLI and the desktop app. That is why it is public: prompts are reviewable in a way that server plumbing is not.
 
 ## What lives here
 
@@ -9,10 +9,10 @@ The rule is: **shared is what the model reads, private is what runs the model.**
 Here, and open to pull requests:
 
 - `prompt/` — the system-prompt fragments
-- `skills/testeiya/` — the skills authored by this project
+- `skills/skills.yaml` — the manifest of skill repositories to vendor
 - `src/` — the Node CLI
 
-Not here, and not accepted as patches: sessions, servers, transports, workspace classification, sync, authentication, telemetry, and the desktop and web UI. Those live in a private harness repository that consumes this one.
+Not here, and not accepted as patches: sessions, servers, transports, workspace classification, sync, authentication, telemetry, the desktop and web UI, and the first-party skills written against those tools. Those live in a private harness repository that consumes this one.
 
 ## Prompt changes
 
@@ -29,9 +29,9 @@ Every file in `prompt/` is a `dedent` template that ends up in the agent's syste
 
 A skill is a folder containing `SKILL.md`, optionally with supporting files beside it.
 
-**Only `skills/testeiya/` is in this repository.** The other folders — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright-cli/`, `skills/playwright-best-practices-skill/` — are fetched from their own upstream repositories by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update.
+**No skill is authored in this repository.** Every folder under `skills/` — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright-cli/`, `skills/playwright-best-practices-skill/` — is fetched from its own upstream repository by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update. Skills written against the desktop and web app's own tools live in the private harness repository, for the same reason its prompt fragments do.
 
-Frontmatter rules, enforced by CI:
+The frontmatter rules below still describe what the loader expects of any skill it reads:
 
 ```markdown
 ---
@@ -44,8 +44,6 @@ description: Use when … — one sentence saying when the agent should reach fo
 - `description` is required and must be under 1024 characters. Write it as a trigger: when should the agent pick this skill? That sentence is all the agent sees when deciding.
 
 Style that works: short sentences, bullets over paragraphs, a list of use cases, no duplicated parameter tables. Write for an agent skimming under load, not a human reading start to finish.
-
-A skill is a folder with a `SKILL.md` — create one by hand under `skills/testeiya/<name>/`.
 
 ## Adding an external skill source
 
@@ -80,8 +78,7 @@ Two things about the agent's session that are easy to get wrong if you touch `sr
 
 ```bash
 npm run typecheck
-node scripts/validate-skills.mjs
 npm run build
 ```
 
-CI runs the same three. Keep the change scoped — a prompt tweak and a CLI refactor in one pull request are two reviews wedged into one.
+CI runs the same two. Keep the change scoped — a prompt tweak and a CLI refactor in one pull request are two reviews wedged into one.

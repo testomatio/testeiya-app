@@ -7,7 +7,7 @@ on:
 
 jobs:
   validate:
-    name: Typecheck, validate skills, build
+    name: Typecheck, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +23,6 @@ jobs:
       # model or to Testomat.io, so a pull request costs nothing to validate.
       - name: Typecheck
         run: npm run typecheck
-
-      - name: Validate skill frontmatter
-        run: node scripts/validate-skills.mjs
 
       - name: Build
         run: npm run build

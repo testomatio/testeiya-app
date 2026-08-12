@@ -5,8 +5,8 @@
 #
 # Each source owns one vendor folder next to this file — the repo name, or the
 # owner when the repo is just "skills" (testomatio/skills -> testomatio/).
-# Updates replace only that folder; any folder this file does not own
-# (e.g. testeiya/) holds first-party skills and is never touched.
+# Updates replace only that folder; a folder this file does not own is treated
+# as internal and never touched. First-party skills are not kept here.
 #
 # Vendored folders are gitignored: they belong to their authors, under their own
 # licences. Send patches for them upstream, to the repo listed below.

@@ -9,7 +9,7 @@ This repository holds the parts of Testeiya that shape how the agent thinks:
 | Folder | What it is |
 |---|---|
 | `prompt/` | The system-prompt fragments — the agent's role, rules, tool guidance, Testomat.io operating rules, and the report contract |
-| `skills/` | The skills the agent can invoke: `skills/testeiya/` is authored here, every other folder is fetched from its own repository |
+| `skills/` | The manifest of skills the agent can invoke — every folder is fetched from its own upstream repository |
 | `src/` | The `testeiya` command-line agent (Node) |
 
 The desktop and web harness — servers, session management, sync, UI — is not open source.
@@ -48,15 +48,19 @@ The id can come from `--project` or `TESTOMATIO_PROJECT_ID`. The MCP server need
 
 A skill is a folder with a `SKILL.md`. The agent loads them all and invokes the ones a task calls for.
 
-`skills/testeiya/` is authored in this repository, and it is the part to send pull requests against. Everything else is vendored from its own upstream repository, declared in `skills/skills.yaml` and pinned to a commit in `skills/skills.lock.json`.
+Every skill here is vendored from its own upstream repository, declared in `skills/skills.yaml` and pinned to a commit in `skills/skills.lock.json`. The vendored folders are deliberately **not** committed — they belong to their authors, under their own licences. A clone of this repository has the manifest and nothing else; the tree is fetched by the upstream release tooling, which is where the desktop app gets its full set.
 
-Vendored folders are deliberately **not** committed here — they belong to their authors, under their own licences. A clone of this repository has `skills/testeiya/` and the manifest; the vendored tree is fetched by the upstream release tooling, which is where the desktop app gets its full set.
+The published `testeiya` package therefore ships no skills of its own: `skillsOverride` in `src/session.ts` keeps only what is found under the bundled tree, so a fresh `npx testeiya` run has none until that tree is filled. To add your own, point `additionalSkillPaths` at your folder — [EXTENDING.md](EXTENDING.md) covers both hooks. The first-party skills the desktop app bundles are written against tools only that harness has, so they live with it, in the private repository.
 
 To propose a new source, add its line to `skills/skills.yaml` — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Building your own agent
+
+The CLI is a thin composition over [pi](https://pi.dev): under 850 lines wiring the SDK to the prompt and skills here. A fork can add pi extensions and custom tools, or swap the one-shot run loop for pi's full interactive TUI — [EXTENDING.md](EXTENDING.md) walks through both.
+
 ## Contributing
 
-Prompt wording and skills are exactly what an outside contributor can improve, and a change to either changes how the agent behaves for everyone. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers what belongs here, what belongs upstream, and the frontmatter rules CI enforces.
+Prompt wording is exactly what an outside contributor can improve, and a change to it changes how the agent behaves for everyone. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers what belongs here and what belongs upstream, in the repository that owns a given skill.
 
 ## Issues
 
