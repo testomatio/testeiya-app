@@ -36,7 +36,9 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
     * \`${TESTEIYA_DIR_NAME}\` Context Structure:
       - \`<name>/\`: a linked or cloned external project, named after its source (read-only reference).
       - \`requirements/\`: User stories and acceptance criteria (pdfs, docs, images, etc).
-      - \`docs/\`: Feature explanations, test planing and strategy files.
+      - \`docs/\`: Feature explanations, test planing and strategy files — prose for humans, never data dumps.
+      - \`data/\`: machine-readable working data worth KEEPING (JSON/CSV) — reports and fetched records the user will want again in a later session. Not \`docs/\`.
+    * **Session scratch:** for data you only need while answering *this* request — intermediate dumps, joins, anything you will re-query with \`jq\` and then forget — write it to the scratch dir named in your context, not into the project. It is wiped with the session, so the workspace does not fill up with one-off JSON.
       - \`manual-tests/\`: Markdown-based test cases
       - \`auto-tests/\`: Relevant automated (e2e) tests
       - \`exploratory/\`: For explorbot setup

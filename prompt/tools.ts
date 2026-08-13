@@ -13,8 +13,8 @@ export function tools(options?: { extra?: string[] }): string {
   const extra = (options?.extra ?? []).join('');
   let github = '    - GitHub: issues and projects through MCP.';
   if (hasGh()) {
-    github =
-      '    - GitHub: issues and projects through MCP; pull requests, repositories and checkouts through `gh` in `bash`.';
+    github +=
+      '\n    - Pull requests and repositories: `gh` in `bash`. When a PR question needs issue detail, query the issue through MCP — never infer it from a PR title.';
   }
   return dedent`
 <available-tools>
