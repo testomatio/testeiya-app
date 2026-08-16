@@ -11,14 +11,24 @@
 # Vendored folders are gitignored: they belong to their authors, under their own
 # licences. Send patches for them upstream, to the repo listed below.
 #
-# Categories are decided by the repo, never by this file:
+# The folder is the category, and the repo decides it:
 #   - repo with a Claude-plugin marketplace (.claude-plugin/marketplace.json)
 #     -> one category subfolder per plugin  (testomatio/ -> test-management / test-automation / explorbot)
 #   - repo without one -> skills sit right under the vendor folder (the vendor is the category)
+#
+# Name the folder here when repos from different owners belong under one
+# category — the sources then share it, each skill in its own subfolder:
+#
+#   - source: owner/repo
+#     folder: playwright
 #
 # Edit the list, then run:  bunosh skills:update [vendor]      See the result:  bunosh skills:list
 
 - testomatio/skills
 - codeceptjs/skills
-- currents-dev/playwright-best-practices-skill
-- microsoft/playwright-cli/tree/main/skills/playwright-cli
+
+# One Playwright category, two upstreams.
+- source: currents-dev/playwright-best-practices-skill
+  folder: playwright
+- source: microsoft/playwright-cli/tree/main/skills/playwright-cli
+  folder: playwright

@@ -29,7 +29,7 @@ Every file in `prompt/` is a `dedent` template that ends up in the agent's syste
 
 A skill is a folder containing `SKILL.md`, optionally with supporting files beside it.
 
-**No skill is authored in this repository.** Every folder under `skills/` — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright-cli/`, `skills/playwright-best-practices-skill/` — is fetched from its own upstream repository by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update. Skills written against the desktop and web app's own tools live in the private harness repository, for the same reason its prompt fragments do.
+**No skill is authored in this repository.** Every folder under `skills/` — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright/` — is fetched from its own upstream repository by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update. Skills written against the desktop and web app's own tools live in the private harness repository, for the same reason its prompt fragments do.
 
 The frontmatter rules below still describe what the loader expects of any skill it reads:
 

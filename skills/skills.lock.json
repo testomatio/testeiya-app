@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "2378e9feaddd7810ce23d3844ea323b7809699d2",
+      "sha": "fa1cf38572773bae6c6ffe417392587b5d8087e2",
       "folder": "testomatio",
       "skills": [
         "testomatio-mcp",
@@ -58,7 +58,7 @@
       "source": "currents-dev/playwright-best-practices-skill",
       "ref": null,
       "sha": "283d5cbc5d11aac1abda058b16ad22c317d54dc0",
-      "folder": "playwright-best-practices-skill",
+      "folder": "playwright",
       "skills": [
         "playwright-best-practices"
       ]
@@ -66,8 +66,8 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "e2d8f311f38a4828fc44a1026481481442ed962b",
-      "folder": "playwright-cli",
+      "sha": "4f9d85a9472fc6d0c9a91ac62f3f3ecc24c16de2",
+      "folder": "playwright",
       "skills": [
         "playwright-cli"
       ]
