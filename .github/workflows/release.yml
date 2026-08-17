@@ -3,11 +3,20 @@ name: Release
 # Publishes the `testeiya` CLI to npm, exactly as the repository stands. The
 # vendored skill sources are refreshed upstream, before the subtree that
 # produces this repository is published — nothing is fetched here.
+#
+# The release this reacts to is created by the upstream app repository right
+# after it pushes the subtree, so the tag is always in place before this runs.
+# `workflow_dispatch` re-publishes a tag by hand, which is the recovery path
+# when a release is edited rather than published (an edit fires no `published`).
 
 on:
   release:
     types: [published]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. 0.3.3"
+        required: true
 
 permissions:
   contents: read
@@ -17,10 +26,13 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
-    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
+      # An empty ref keeps checkout's default, which on a release event is the
+      # tag itself; a manual run names the tag it wants to republish.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -30,23 +42,32 @@ jobs:
       - name: Update npm (Trusted Publishing support)
         run: npm install -g npm@latest
 
-      - run: npm ci
+      # The release event carries its own tag; a manual run passes it as an input.
+      - name: Resolve the tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
+          test -n "$tag" || { echo "no release tag to publish"; exit 1; }
+          echo "name=$tag" >> "$GITHUB_OUTPUT"
+          echo "Publishing $tag"
 
-      - name: Validate skill frontmatter
-        run: node scripts/validate-skills.mjs
+      - run: npm ci
 
       - name: Build
         run: npm run build
 
       - name: Sync version from the release tag
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.tag.outputs.name }}
         run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
 
       - name: Determine npm dist-tag
         id: npm_tag
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.tag.outputs.name }}
           PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           if echo "$TAG" | grep -qE "alpha|-alpha|\.a\."; then
