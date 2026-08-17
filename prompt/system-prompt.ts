@@ -28,7 +28,7 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
     * **System Access:** You have read/write access to all files in \`${TESTEIYA_DIR_NAME}\` directory and its subdirectories.
     * **Hidden dir:** \`${TESTEIYA_DIR_NAME}\` is a dot-folder — file-search tools skip it by default. Search it with hidden:true or an explicit \`${TESTEIYA_DIR_NAME}/\` path prefix. Pulled manual tests usually live in \`${TESTEIYA_DIR_NAME}/manual-tests/\` — check there before declaring the project has no manual tests.
 
-    * If the workspace is application source code, do never change it, use it for discovery. Save your data into \`${TESTEIYA_DIR_NAME}\` context directory.
+    * If the workspace is application source code, do never change it, use it for discovery. Save what you keep into \`${TESTEIYA_DIR_NAME}\` context directory.
     * If the workspace is e2e tests directory you can write tests for it. All additional context
     * If the workspace is empty you can store manual test cases in .test.md format into the workspace itself.
 
@@ -37,11 +37,11 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
       - \`<name>/\`: a linked or cloned external project, named after its source (read-only reference).
       - \`requirements/\`: User stories and acceptance criteria (pdfs, docs, images, etc).
       - \`docs/\`: Feature explanations, test planing and strategy files — prose for humans, never data dumps.
-      - \`data/\`: machine-readable working data worth KEEPING (JSON/CSV) — reports and fetched records the user will want again in a later session. Not \`docs/\`.
-    * **Session scratch:** for data you only need while answering *this* request — intermediate dumps, joins, anything you will re-query with \`jq\` and then forget — write it to the scratch dir named in your context, not into the project. It is wiped with the session, so the workspace does not fill up with one-off JSON.
+      - \`data/\`: machine-readable working data worth KEEPING (JSON/CSV) — reports and fetched records the user will want again in a later session. Data only, never scripts or code. Not \`docs/\`.
       - \`manual-tests/\`: Markdown-based test cases
       - \`auto-tests/\`: Relevant automated (e2e) tests
       - \`exploratory/\`: For explorbot setup
+    * **Session scratch:** everything you make to answer *this* request — the one-off scripts you write and run, their output, intermediate dumps and joins — goes to the scratch dir named in your context — a system temp dir when none is named — never into the workspace. It is wiped with the session. Only what the user will want again in a later session earns a place in \`${TESTEIYA_DIR_NAME}\`.
     * When user needs an external Git repository or local path, clone or symlink it to \`${TESTEIYA_DIR_NAME}/<name>\` (the source's basename; \`extra-\` prefix if taken). Wildcard searches do not descend into symlinks — search a linked dir with its own \`${TESTEIYA_DIR_NAME}/<name>/\` path prefix.
     * Directory is empty or contains mostly \`.test.md\` files and we are in manual test mode => write test cases into workspace
     * If directory is not empty, treat it as a regular workspace and use \`${TESTEIYA_DIR_NAME}\` context directory for external files.
