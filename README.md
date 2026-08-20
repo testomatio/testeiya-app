@@ -17,29 +17,60 @@ The desktop and web harness — servers, session management, sync, UI — is not
 ## Install and use
 
 ```bash
-npx testeiya "Review the manual tests in this folder and list the gaps" \
+npx testeiya task "Review the manual tests in this folder and list the gaps" \
   --model openrouter/anthropic/claude-sonnet-5 --output report.md
 ```
 
-The agent runs one task and exits — there is no interactive mode. Progress goes to stderr, the report to `--output` (or stdout when you omit it). Exit codes: `0` pass, `1` failed run or negative verdict, `2` bad usage, `130` interrupted — so it drops into CI as-is.
+The agent runs one task and exits — there is no interactive mode. Progress goes to stderr. Exit codes: `0` pass, `1` failed run or negative verdict, `2` bad usage, `130` interrupted — so it drops into CI as-is.
 
 Requires Node 22.19 or newer, a model, and an LLM provider key.
 
-There is no default model. Name one with `--model <provider>/<id>` or `TESTEIYA_MODEL`; a run that names none exits `2` rather than spending your money on a model nobody chose.
+Name a model with `--model <provider>/<id>` or `TESTEIYA_MODEL`. CI usually has neither set, so a run that resolves no model exits `2` instead of picking one for you. `testeiya models` lists what your key can reach.
 
 The key comes from the environment (`OPENROUTER_API_KEY` and friends), `~/.testeiya/.env`, or `~/.testeiya/auth.json` — the same file the desktop app's Settings dialog writes, so configuring it once covers both.
 
 ```bash
-testeiya --help                      # every flag
+testeiya --help                              # every flag
+testeiya doctor                              # what a run would resolve
+testeiya models sonnet                       # models your key can reach
 export TESTEIYA_MODEL=openrouter/anthropic/claude-sonnet-5
-testeiya "<task>"
-cat task.md | testeiya --output report.md
+testeiya task "<task>"
+cat task.md | testeiya task --output report.md
+```
+
+### Where the report goes
+
+`--output` is a destination and repeats. Without one the report is printed to stdout.
+
+```bash
+testeiya task "<task>" --output report.md --output run.json --output gh:pr-comment
+```
+
+| Destination | What happens |
+|---|---|
+| `report.md` | the agent writes the report there |
+| `run.json` | the run envelope: verdict, reason, report, tokens, session id |
+| `gh:pr-comment` | posted on this branch's pull request |
+| `gh:pr#123` | posted on that pull request |
+
+Posting uses the [GitHub CLI](https://cli.github.com), and every destination is checked before the run starts, so a missing `gh` costs no tokens. `--json` prints the envelope to stdout.
+
+### Sessions
+
+Runs are saved, so a follow-up can pick up where the last one stopped. A resumed run reuses its session's model.
+
+```bash
+testeiya task "Review the checkout suite" --output report.md
+testeiya task "Now write the missing cases" -c    # continue the last one
+testeiya sessions                                 # what is saved here
+testeiya task "<task>" --resume <id>
+testeiya task "<task>" --no-session               # save nothing
 ```
 
 Set `TESTOMATIO` to a project API key and the agent can read and write that project's tests, suites, runs and plans through `check-tests` and the REST API. Add the project id as well and it also gets the Testomat.io tools:
 
 ```bash
-TESTOMATIO=tstmt_xxx testeiya --project my-project "Which suites have no tests?"
+TESTOMATIO=tstmt_xxx testeiya task --project my-project "Which suites have no tests?"
 ```
 
 The id can come from `--project` or `TESTOMATIO_PROJECT_ID`. The MCP server needs it: a token alone does not tell it which project to talk to.

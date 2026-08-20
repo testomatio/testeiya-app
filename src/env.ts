@@ -14,6 +14,10 @@ export const TESTEIYA_HOME = join(homedir(), ".testeiya");
  */
 export const PI_STATE_DIR = join(TESTEIYA_HOME, "pi");
 
+// pi reads this at import time to place sessions and its MCP cache, and a
+// SessionManager is built before any session exists to read it from.
+process.env.PI_CODING_AGENT_DIR = PI_STATE_DIR;
+
 /**
  * Fill gaps in process.env from `~/.testeiya/.env`, then from any `.env` found
  * walking up from the working directory — so running in a repo picks up that
@@ -22,17 +26,21 @@ export const PI_STATE_DIR = join(TESTEIYA_HOME, "pi");
  * The walk starts at cwd, never at this file: an installed package sits under
  * some node_modules whose ancestors are none of the agent's business, and
  * silently adopting a key from there is a surprise, not a convenience.
+ *
+ * Returns the file each variable came from, which is what `doctor` reports.
  */
-export function loadEnvFiles(): void {
-  loadFile(join(TESTEIYA_HOME, ".env"));
+export function loadEnvFiles(): Map<string, string> {
+  const sources = new Map<string, string>();
+  loadFile(join(TESTEIYA_HOME, ".env"), sources);
 
   let dir = process.cwd();
   for (let i = 0; i < 8; i++) {
-    loadFile(join(dir, ".env"));
+    loadFile(join(dir, ".env"), sources);
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
+  return sources;
 }
 
 export function parseEnv(content: string): Record<string, string> {
@@ -55,7 +63,7 @@ export function parseEnv(content: string): Record<string, string> {
   return out;
 }
 
-function loadFile(path: string): void {
+function loadFile(path: string, sources: Map<string, string>): void {
   if (!existsSync(path)) return;
   let vars: Record<string, string>;
   try {
@@ -64,6 +72,8 @@ function loadFile(path: string): void {
     return;
   }
   for (const [key, value] of Object.entries(vars)) {
-    if (process.env[key] === undefined) process.env[key] = value;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = value;
+    sources.set(key, path);
   }
 }

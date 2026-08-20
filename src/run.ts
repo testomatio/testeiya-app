@@ -1,17 +1,18 @@
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { chalkStderr as c } from "chalk";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
+import { deliver, markdownPath, type Destination, type RunEnvelope } from "./output.js";
 import { createTesteiyaSession } from "./session.js";
 import type { RunResult } from "./result.js";
 
 export async function runPrint(options: PrintOptions): Promise<number> {
   const started = Date.now();
   const result: RunResult = {};
-  const outputPath = options.outputFile;
+  const outputPath = markdownPath(options.destinations);
   const stampBefore = fileStamp(outputPath);
   const cwd = process.cwd();
 
@@ -20,6 +21,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     created = await createTesteiyaSession({
       cwd,
       result,
+      sessionManager: options.sessionManager,
       model: options.model,
       outputFile: outputPath,
       ...connectionOptions(),
@@ -40,7 +42,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
 
   note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
   note(c.dim(`  ${skills} skills`));
-  if (outputPath) note(c.dim(`  → ${outputPath}`));
+  for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
   note("");
 
   const run = watchRun(session);
@@ -51,8 +53,26 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   note("");
   summarize(run, result, started, outputPath, report);
 
-  const code = exitCode(run.error, result.status, Boolean(outputPath), report);
-  if (report && !outputPath) process.stdout.write(report);
+  let code = exitCode(run.error, result.status, Boolean(outputPath), report);
+  const envelope: RunEnvelope = {
+    status: result.status ?? (code === 0 ? "pass" : "fail"),
+    reason: result.reason ?? run.error,
+    report,
+    reportPath: outputPath ?? null,
+    model,
+    steps: run.steps,
+    tokens: { input: run.input, output: run.output },
+    durationMs: Date.now() - started,
+    sessionId: options.sessionId ?? null,
+  };
+
+  const failure = await deliver(options.destinations, envelope);
+  if (failure) {
+    note(`  ${c.red("✗")} ${c.red(failure)}`);
+    // The report is worth more than the destination: never lose it.
+    if (report) process.stdout.write(report);
+    code = 1;
+  }
 
   await session.dispose();
   return code;
@@ -68,6 +88,16 @@ export function exitCode(
   if (status === "fail") return 1;
   if (wantsReport && !report) return 1;
   return 0;
+}
+
+function describe(destinations: Destination[]): string[] {
+  const lines: string[] = [];
+  for (const destination of destinations) {
+    if (destination.kind === "markdown") lines.push(destination.path);
+    if (destination.kind === "json") lines.push(destination.path ?? "stdout (json)");
+    if (destination.kind === "gh") lines.push(`pull request #${destination.pr}`);
+  }
+  return lines;
 }
 
 // A project token in the environment is the CLI's whole notion of a connection:
@@ -223,7 +253,9 @@ function tokens(count: number): string {
 
 export interface PrintOptions {
   prompt: string;
-  outputFile?: string;
+  destinations: Destination[];
+  sessionManager: SessionManager;
+  sessionId?: string | null;
   model?: string;
 }
 

@@ -1,4 +1,5 @@
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { SavedModel } from "./sessions.js";
 
 /** Provider key env vars the CLI picks up from the environment. */
 export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
@@ -12,20 +13,24 @@ export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
 export class UsageError extends Error {}
 
 /**
- * --model, then TESTEIYA_MODEL. There is no default: the model a run spends
- * money on is the caller's choice, never a pin that goes stale here. The
- * desktop app's `~/.testeiya/config.json` is not consulted either — a CI run
- * must not depend on a choice made in someone's GUI. Anything unresolvable
- * throws, so a run never falls through to a prompt.
+ * --model, then TESTEIYA_MODEL, then the model a resumed session was running.
+ * CI often has no model configured, so TESTEIYA_MODEL is the channel there. The
+ * desktop app's `~/.testeiya/config.json` is not consulted — a CI run must not
+ * depend on a choice made in someone's GUI. Anything unresolvable throws, so a
+ * run never falls through to a prompt.
  */
-export function resolveModel(runtime: ModelRuntime, explicit?: string) {
+export function resolveModel(runtime: ModelRuntime, explicit?: string, saved?: SavedModel | null) {
   const candidate = explicit || process.env.TESTEIYA_MODEL;
-  if (!candidate) {
-    throw new UsageError("no model — pass --model <provider>/<id> or set TESTEIYA_MODEL");
+  let parsed = null;
+  if (candidate) {
+    parsed = splitModelId(candidate);
+    if (!parsed) {
+      throw new UsageError(`a model must be <provider>/<model-id>, got "${candidate}"`);
+    }
   }
-  const parsed = splitModelId(candidate);
+  if (!parsed && saved) parsed = { provider: saved.provider, id: saved.modelId };
   if (!parsed) {
-    throw new UsageError(`a model must be <provider>/<model-id>, got "${candidate}"`);
+    throw new UsageError("no model — pass --model <provider>/<id> or set TESTEIYA_MODEL");
   }
   const model = runtime.getModel(parsed.provider, parsed.id);
   if (!model) {
