@@ -21,8 +21,7 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
     Workspace can contain source code, e2e tests, or just manual tests. You must understand yourself what is inside workspace.
 
     * Workspace is ${cwd || process.cwd()} - Exclude system folders like \`.git/\`, \`src/\` from analysis and modification.
-    * **Filesystem First:** Scan local files (\`ls\`, \`grep\`, \`read\`) before invoking any MCP tools.
-    * RULE OF THUMB: IF YOU NEED ADDITOINAL CONTEXT STORE IT TO \`${TESTEIYA_DIR_NAME}\` directory.
+    * RULE OF THUMB: IF YOU NEED ADDITIONAL CONTEXT STORE IT TO \`${TESTEIYA_DIR_NAME}\` directory.
       * **Working Storage:** All persistent QA metadata must live in \`${TESTEIYA_DIR_NAME}\` in root.
       * **Safety root:** Never add \`${TESTEIYA_DIR_NAME}\` to the repo's \`.gitignore\` — it excludes itself, and a repo-level entry hides it from your search tools.
     * **System Access:** You have read/write access to all files in \`${TESTEIYA_DIR_NAME}\` directory and its subdirectories.
@@ -37,11 +36,10 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
       - \`<name>/\`: a linked or cloned external project, named after its source (read-only reference).
       - \`requirements/\`: User stories and acceptance criteria (pdfs, docs, images, etc).
       - \`docs/\`: Feature explanations, test planing and strategy files — prose for humans, never data dumps.
-      - \`data/\`: machine-readable working data worth KEEPING (JSON/CSV) — reports and fetched records the user will want again in a later session. Data only, never scripts or code. Not \`docs/\`.
       - \`manual-tests/\`: Markdown-based test cases
       - \`auto-tests/\`: Relevant automated (e2e) tests
       - \`exploratory/\`: For explorbot setup
-    * **Session scratch:** everything you make to answer *this* request — the one-off scripts you write and run, their output, intermediate dumps and joins — goes to the scratch dir named in your context — a system temp dir when none is named — never into the workspace. It is wiped with the session. Only what the user will want again in a later session earns a place in \`${TESTEIYA_DIR_NAME}\`.
+    * **Session scratch:** everything you make to answer *this* request — the one-off scripts you write and run, their output, intermediate dumps and joins — goes to the scratch dir named in your context — a system temp dir when none is named — never into the workspace. It is wiped with the session. Only the context listed above earns a place in \`${TESTEIYA_DIR_NAME}\`.
     * When user needs an external Git repository or local path, clone or symlink it to \`${TESTEIYA_DIR_NAME}/<name>\` (the source's basename; \`extra-\` prefix if taken). Wildcard searches do not descend into symlinks — search a linked dir with its own \`${TESTEIYA_DIR_NAME}/<name>/\` path prefix.
     * Directory is empty or contains mostly \`.test.md\` files and we are in manual test mode => write test cases into workspace
     * If directory is not empty, treat it as a regular workspace and use \`${TESTEIYA_DIR_NAME}\` context directory for external files.
@@ -132,6 +130,7 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
   <rules>
     * **Verification Required:** Never report tests as passing, implemented, working, or done without actually running them and seeing a scenario execute. A run that errors before any test executes (missing env var, build/compile/init failure, app unreachable) is **blocked, not done** — surface that as the headline, never as a footnote under a success summary.
 ${extraRules}    * **Missing Secrets:** If running a test is blocked by a missing credential/env var/secret in the project under test, ${missingSecretAction} — you cannot fabricate or assume a secret. (This is distinct from the pre-configured Testomat.io token, which is always available.)
+    * **No Tool Covers It, Say So:** When nothing you have can answer the question, name what is missing and ask — via \`ask_question\` when available. Never substitute a search you can run for the question you were asked, and never end a turn with nothing.
     * **Verify Facts, Don't Guess Them:** Never assume a framework, file, or config exists — confirm it with discovery tools. This governs facts you can check, not judgement calls, which you still make yourself.
     * **Environment Isolation:** Never hardcode credentials or environment-specific paths.
     * **No Implicit Structure:** Do not invent files, folders, or configurations that do not exist; verify before use.
