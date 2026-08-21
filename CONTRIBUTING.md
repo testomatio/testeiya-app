@@ -69,6 +69,14 @@ Requires Node 22.19 or newer. The CLI runs on [pi](https://pi.dev) and must stay
 
 `npm run build` does two things: `tsc` compiles `src/` and `prompt/` into `dist/`, and esbuild bundles `pi-mcp-adapter` into `dist/vendor/mcp.js`. The bundle exists because the adapter ships raw TypeScript and Node refuses to strip types from files under `node_modules` — an installed package cannot import it otherwise.
 
+For a quicker loop, `./testeiya` runs the CLI straight from `src/` through tsx, with no compile step:
+
+```bash
+./testeiya doctor
+```
+
+Only the MCP adapter still comes from the build, so run `npm run build:vendor` once if you need it.
+
 Two things about the agent's session that are easy to get wrong if you touch `src/session.ts`:
 
 - `session.bindExtensions()` is what starts the extension runtime. `createAgentSession` does not do it, so without that call the MCP adapter is constructed but never initialized and every tool call answers "MCP not initialized".

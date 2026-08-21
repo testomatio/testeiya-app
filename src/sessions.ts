@@ -12,9 +12,13 @@ export async function openSessionManager(
 
   if (args.resume) {
     const sessions = await SessionManager.list(cwd);
-    const found = sessions.find((s) => s.id === args.resume || s.id.startsWith(args.resume ?? ""));
-    if (!found) return `no session "${args.resume}" in this folder`;
-    return SessionManager.open(found.path);
+    const matched = sessions.filter((s) => s.id.startsWith(args.resume ?? ""));
+    if (matched.length === 0) return `no session "${args.resume}" in this folder`;
+    if (matched.length > 1) {
+      const ids = matched.map((s) => shortId(s.id)).join(", ");
+      return `"${args.resume}" matches ${matched.length} sessions: ${ids}`;
+    }
+    return SessionManager.open(matched[0]!.path);
   }
 
   if (args.continueLast) return SessionManager.continueRecent(cwd);
@@ -52,10 +56,15 @@ export async function runSessions(cwd: string, json?: boolean): Promise<number> 
   for (const session of sessions) {
     const label = session.name ?? session.firstMessage.slice(0, 60);
     const when = session.modified.toISOString().slice(0, 16).replace("T", " ");
-    process.stdout.write(`  ${session.id.slice(0, 8)}  ${when}  ${session.messageCount} msg  ${label}\n`);
+    process.stdout.write(`  ${shortId(session.id)}  ${when}  ${session.messageCount} msg  ${label}\n`);
   }
   process.stdout.write("\n  Continue one with:  testeiya task \"...\" --resume <id>\n\n");
   return 0;
+}
+
+/** Long enough to clear the UUIDv7 timestamp prefix, which repeats per minute. */
+export function shortId(id: string): string {
+  return id.slice(0, 13);
 }
 
 export interface SessionArgs {

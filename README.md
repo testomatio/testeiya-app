@@ -41,7 +41,8 @@ Run `testeiya doctor` first. It reports which key file won, which skills loaded,
 
 | Command | What it does |
 |---|---|
-| `testeiya task "<task>"` | Run one task and exit |
+| `testeiya task "<task>"` | Run one task and write a report |
+| `testeiya ask "<question>"` | Answer a question, no report |
 | `testeiya doctor` | Check what a run would resolve |
 | `testeiya models [pattern]` | List the models your key can reach |
 | `testeiya sessions` | List saved sessions for this folder |
@@ -61,7 +62,7 @@ A task can also come from stdin:
 cat task.md | testeiya task --output report.md
 ```
 
-Every command takes `--json` for machine-readable output. `testeiya --help` lists every flag.
+Every command takes `--json` for machine-readable output. `testeiya --help` lists the options and the environment variables, and `testeiya help` is the full guide.
 
 ## Where the report goes
 

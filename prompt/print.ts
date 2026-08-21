@@ -21,3 +21,12 @@ export function reportOutput(path: string): string {
 </final-report>
 `;
 }
+
+export const briefAnswer = dedent`
+<answer>
+  * You were asked a question, not given a task. Answer it.
+  * Lead with the answer in one line, then the evidence you checked.
+  * A few sentences. No report file, no headings, no plan.
+  * Say plainly when what you found does not settle the question.
+</answer>
+`;

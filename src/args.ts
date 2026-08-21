@@ -1,53 +1,104 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
 
-export const USAGE = `testeiya — AI testing agent
+export const WELCOME = `
+  Testeiya, an AI testing agent.
+
+  testeiya task "analyze this pr and find inconsistencies"
+  testeiya ask "is this feature ready"
+
+  testeiya doctor    check your setup
+  testeiya --help    options and environment
+  testeiya help      the full guide
+`;
+
+export const USAGE = `testeiya, an AI testing agent
 
 Usage:
-  testeiya task "<task>" [options]
-  testeiya models [pattern]
-  testeiya doctor
-  testeiya sessions
+  testeiya task "<task>"      run one task and write a report
+  testeiya ask "<question>"   answer a question
+  testeiya doctor             check what a run would resolve
+  testeiya models [pattern]   list the models your key can reach
+  testeiya sessions           list saved sessions for this folder
 
-Task options:
-  -o, --output <dest>      where the report goes; repeatable
-                             report.md       the agent writes the report there
-                             report.json     the run envelope
-                             gh:pr-comment   post to this branch's pull request
-                             gh:pr#123       post to that pull request
-      --model <id>         provider/model, e.g. openrouter/anthropic/claude-sonnet-5
-      --project <id>       Testomat.io project id (same as TESTOMATIO_PROJECT_ID)
-  -c, --continue           continue the last session in this folder
-      --resume <id>        continue that session
-      --name <label>       name the session
-      --no-session         do not save the session
+Options:
+  -o, --output <dest>   report destination, repeatable: file.md, file.json, gh:pr-comment
+      --model <id>      provider/model to run
+      --project <id>    Testomat.io project id
+  -c, --continue        continue the last session in this folder
+      --resume <id>     continue that session
+      --name <label>    name the session
+      --no-session      do not save the session
+      --json            machine-readable output
+      --probe           doctor only: test the key with one request
+  -h, --help            show this
+  -v, --version         show version
 
-Other options:
-      --json               machine-readable output, on every command
-      --probe              doctor only: spend one tiny request to test the key
-  -h, --help               show this help
-  -v, --version            show version
+Environment:
+  TESTEIYA_MODEL          model to run, e.g. openrouter/anthropic/claude-sonnet-5
+  OPENROUTER_API_KEY      provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+  TESTOMATIO              Testomat.io project API key
+  TESTOMATIO_PROJECT_ID   Testomat.io project id, same as --project
+  TESTOMATIO_URL          Testomat.io base url, for self-hosted
 
-Progress and errors go to stderr. Without --output the report goes to stdout.
+Run "testeiya help" for the full guide.`;
 
-Pass a model with --model or TESTEIYA_MODEL; a resumed run reuses its session's
-model. The provider key comes from the environment, ~/.testeiya/.env, or
-~/.testeiya/auth.json.
+export const HELP = `${USAGE}
 
-Set TESTOMATIO to a project API key to work with that Testomat.io project. Add
-the project id (--project or TESTOMATIO_PROJECT_ID) and the agent also gets the
-Testomat.io tools; with the token alone it uses check-tests and the REST API.
+Running a task
 
-A task starting with "-" must follow "--":  testeiya task -- "-weird task"
+  The agent runs one task and exits. There is no interactive mode. Progress and
+  errors go to stderr, so a run drops into CI as-is.
 
-Exit codes: 0 pass · 1 failed run or verdict · 2 bad usage · 130 interrupted.`;
+  A task can also come from stdin:  cat task.md | testeiya task
+  A task starting with "-" must follow "--":  testeiya task -- "-weird task"
 
-export const COMMANDS = ["task", "models", "doctor", "sessions"] as const;
+  Exit codes: 0 pass, 1 failed run or negative verdict, 2 bad usage, 130 interrupted.
+
+Where the report goes
+
+  --output names a destination and can repeat. Without one the report goes to
+  stdout. --json prints the run envelope to stdout instead.
+
+  report.md       the agent writes the report there
+  run.json        the run envelope: verdict, reason, report, tokens, session id
+  gh:pr-comment   posted on this branch's pull request, through the GitHub CLI
+  gh:pr#123       posted on that pull request
+
+  Every destination is checked before the run starts, so a missing gh costs no
+  tokens.
+
+Models and keys
+
+  There is no default model. Pass --model or set TESTEIYA_MODEL. A resumed run
+  reuses its session's model. "testeiya models" lists what your key can reach.
+
+  The provider key comes from the environment, from ~/.testeiya/.env, or from
+  ~/.testeiya/auth.json, which is the file the desktop app's Settings dialog
+  writes.
+
+Sessions
+
+  Runs are saved under ~/.testeiya, so a follow-up picks up where the last one
+  stopped. -c continues the last session in this folder, --resume <id> picks
+  another, --name labels one, and --no-session saves nothing.
+
+Testomat.io
+
+  Set TESTOMATIO to a project API key and the agent reads and writes that
+  project's tests, suites, runs and plans through check-tests and the REST API.
+  Add the project id, with --project or TESTOMATIO_PROJECT_ID, and it also gets
+  the Testomat.io tools. The MCP server needs the id: a token alone does not say
+  which project to talk to.`;
+
+export const COMMANDS = ["task", "ask", "models", "doctor", "sessions", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
-  if (!first || first === "-h" || first === "--help") return { command: "help" };
+  if (!first) return { command: "welcome" };
+  if (first === "-h" || first === "--help") return { command: "usage" };
   if (first === "-v" || first === "--version") return { command: "version" };
   if (!isCommand(first)) return { error: unknownCommand(first) };
+  if (first === "help") return { command: "help" };
 
   const options = OPTIONS[first];
   let parsed;
@@ -59,11 +110,11 @@ export function parseCliArgs(argv: string[]): CliArgs {
   }
 
   const values = parsed.values as Record<string, unknown>;
-  if (values.help) return { command: "help" };
+  if (values.help) return { command: "usage" };
 
   const args: CliArgs = { command: first };
   const text = parsed.positionals.join(" ").trim();
-  if (first === "task" && text) args.prompt = text;
+  if ((first === "task" || first === "ask") && text) args.prompt = text;
   if (first === "models" && text) args.pattern = text;
   if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
@@ -77,24 +128,28 @@ export function parseCliArgs(argv: string[]): CliArgs {
   return args;
 }
 
-const HELP = { type: "boolean", short: "h" } as const;
+const HELP_FLAG = { type: "boolean", short: "h" } as const;
 const JSON_FLAG = { type: "boolean" } as const;
 
+const RUN_OPTIONS: ParseArgsConfig["options"] = {
+  output: { type: "string", short: "o", multiple: true },
+  json: JSON_FLAG,
+  model: { type: "string" },
+  project: { type: "string" },
+  continue: { type: "boolean", short: "c" },
+  resume: { type: "string" },
+  name: { type: "string" },
+  "no-session": { type: "boolean" },
+  help: HELP_FLAG,
+};
+
 const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
-  task: {
-    output: { type: "string", short: "o", multiple: true },
-    json: JSON_FLAG,
-    model: { type: "string" },
-    project: { type: "string" },
-    continue: { type: "boolean", short: "c" },
-    resume: { type: "string" },
-    name: { type: "string" },
-    "no-session": { type: "boolean" },
-    help: HELP,
-  },
-  models: { json: JSON_FLAG, help: HELP },
-  doctor: { json: JSON_FLAG, probe: { type: "boolean" }, model: { type: "string" }, help: HELP },
-  sessions: { json: JSON_FLAG, help: HELP },
+  task: RUN_OPTIONS,
+  ask: RUN_OPTIONS,
+  models: { json: JSON_FLAG, help: HELP_FLAG },
+  doctor: { json: JSON_FLAG, probe: { type: "boolean" }, model: { type: "string" }, help: HELP_FLAG },
+  sessions: { json: JSON_FLAG, help: HELP_FLAG },
+  help: {},
 };
 
 function isCommand(value: string): value is Command {
@@ -111,7 +166,7 @@ function unknownCommand(value: string): string {
 export type Command = (typeof COMMANDS)[number];
 
 export interface CliArgs {
-  command?: Command | "help" | "version";
+  command?: Command | "welcome" | "usage" | "version";
   prompt?: string;
   pattern?: string;
   outputs?: string[];

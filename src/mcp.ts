@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { TmsAccess } from "../prompt/testomatio.js";
-import { PI_STATE_DIR } from "./env.js";
+import { PACKAGE_ROOT, PI_STATE_DIR } from "./env.js";
 
 const require_ = createRequire(import.meta.url);
 
@@ -91,7 +91,7 @@ export function metadataCachePath(): string {
  * bundle only exists after a build.
  */
 export function vendorBundle(): string {
-  return pathToFileURL(join(import.meta.dirname, "..", "vendor", "mcp.js")).href;
+  return pathToFileURL(join(PACKAGE_ROOT, "dist", "vendor", "mcp.js")).href;
 }
 
 /**
@@ -131,7 +131,7 @@ export async function seedMetadataCache(config: McpConfig): Promise<void> {
 }
 
 function readSeedTools(): SeedTool[] {
-  const path = join(import.meta.dirname, "..", "..", "mcp-tools.json");
+  const path = join(PACKAGE_ROOT, "mcp-tools.json");
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {

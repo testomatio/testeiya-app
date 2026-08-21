@@ -9,6 +9,12 @@ import { dirname, join } from "node:path";
 export const TESTEIYA_HOME = join(homedir(), ".testeiya");
 
 /**
+ * This package's root, found by walking up to package.json — `dist/src` when
+ * built, `src` when run from source. Bundled files resolve from here.
+ */
+export const PACKAGE_ROOT = packageRoot();
+
+/**
  * Where pi keeps its own state for this CLI. Deliberately not `~/.pi` — running
  * `npx testeiya` must not write into a user's own pi installation.
  */
@@ -76,4 +82,14 @@ function loadFile(path: string, sources: Map<string, string>): void {
     process.env[key] = value;
     sources.set(key, path);
   }
+}
+
+function packageRoot(): string {
+  let dir = import.meta.dirname;
+  while (!existsSync(join(dir, "package.json"))) {
+    const parent = dirname(dir);
+    if (parent === dir) return import.meta.dirname;
+    dir = parent;
+  }
+  return dir;
 }

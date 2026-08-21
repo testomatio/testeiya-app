@@ -8,15 +8,15 @@ import {
   type SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "../prompt/index.js";
-import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
+import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { hasMcp, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
 import { createSetResultTool, type RunResult } from "./result.js";
 import { sessionModel } from "./sessions.js";
 
-// dist/src/session.js → the package root. `../skills` would resolve to
-// dist/skills, and the skills filter below would then silently drop everything.
-export const BUNDLED_SKILLS_DIR = join(import.meta.dirname, "..", "..", "skills");
+// From the package root, never this file's own directory: `../skills` would
+// resolve to dist/skills, and the filter below would silently drop everything.
+export const BUNDLED_SKILLS_DIR = join(PACKAGE_ROOT, "skills");
 
 const MCP_EXTENSION = join(import.meta.dirname, "mcp-extension.js");
 
@@ -73,6 +73,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         connection: options.connection,
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
+        brief: options.brief,
       }),
   });
   await loader.reload();
@@ -120,6 +121,7 @@ export interface SessionOptions {
   sessionManager: SessionManager;
   model?: string;
   outputFile?: string;
+  brief?: boolean;
   tokens?: Record<string, string>;
   connection?: { tokenAvailable?: boolean };
   backendUrl?: string;

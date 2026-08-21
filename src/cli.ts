@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseCliArgs, USAGE, type CliArgs } from "./args.js";
+import { HELP, parseCliArgs, USAGE, WELCOME, type CliArgs } from "./args.js";
 import { runDoctor } from "./doctor.js";
-import { loadEnvFiles } from "./env.js";
+import { loadEnvFiles, PACKAGE_ROOT } from "./env.js";
 import { UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { parseDestinations, preflight } from "./output.js";
@@ -23,8 +23,16 @@ async function main(argv: string[]): Promise<void> {
     process.stderr.write(`${args.error}\n\n${USAGE}\n`);
     process.exit(2);
   }
-  if (args.command === "help") {
+  if (args.command === "welcome") {
+    process.stdout.write(`${WELCOME}\n`);
+    return;
+  }
+  if (args.command === "usage") {
     process.stdout.write(`${USAGE}\n`);
+    return;
+  }
+  if (args.command === "help") {
+    process.stdout.write(`${HELP}\n`);
     return;
   }
   if (args.command === "version") {
@@ -54,7 +62,7 @@ async function main(argv: string[]): Promise<void> {
 async function task(args: CliArgs): Promise<number> {
   const prompt = args.prompt ?? (await readStdin());
   if (!prompt.trim()) {
-    process.stderr.write(`${USAGE}\n`);
+    process.stderr.write(`  ${args.command} needs something to work on\n\n${USAGE}\n`);
     process.exit(2);
   }
 
@@ -72,7 +80,8 @@ async function task(args: CliArgs): Promise<number> {
   let sessionId: string | null = null;
   if (!args.noSession) sessionId = sessionManager.getSessionId();
 
-  return runPrint({ prompt, destinations, sessionManager, sessionId, model: args.model });
+  const brief = args.command === "ask";
+  return runPrint({ prompt, destinations, sessionManager, sessionId, brief, model: args.model });
 }
 
 async function readStdin(): Promise<string> {
@@ -84,7 +93,7 @@ async function readStdin(): Promise<string> {
 
 function version(): string {
   const pkg = JSON.parse(
-    readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf8")
+    readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8")
   );
   return pkg.version;
 }

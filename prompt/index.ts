@@ -6,7 +6,7 @@ import {
   projectSettings,
   type TmsAccess,
 } from "./testomatio.js";
-import { nonInteractive, reportOutput } from "./print.js";
+import { briefAnswer, nonInteractive, reportOutput } from "./print.js";
 import {
   contextPromptSection,
   type ContextEntry,
@@ -62,7 +62,8 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
     parts.push(testomatioNotConnected());
   }
 
-  // The report contract goes last so it is the final instruction the model reads.
+  // The answer contract goes last so it is the final instruction the model reads.
+  if (options?.brief) parts.push(briefAnswer);
   if (options?.outputFile) parts.push(reportOutput(options.outputFile));
 
   return parts.join("\n\n");
@@ -85,6 +86,8 @@ export interface SystemPromptOptions {
   tms?: TmsAccess;
   /** Absolute path the agent must write its final report to (`--output`). */
   outputFile?: string;
+  /** Answer a question instead of doing a task and reporting (`testeiya ask`). */
+  brief?: boolean;
   projectInfo?: TestomatioProjectInfo | null;
   /** User-added context (linked folders, cloned repos, uploaded docs). */
   contextEntries?: ContextEntry[];

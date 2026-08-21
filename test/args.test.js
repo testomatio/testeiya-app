@@ -40,8 +40,16 @@ test("doctor and models keep their own options", () => {
   assert.match(parseCliArgs(["doctor", "--output", "x"]).error, /output/);
 });
 
-test("help and version", () => {
-  assert.equal(parseCliArgs([]).command, "help");
-  assert.equal(parseCliArgs(["--help"]).command, "help");
+test("three help surfaces", () => {
+  assert.equal(parseCliArgs([]).command, "welcome");
+  assert.equal(parseCliArgs(["--help"]).command, "usage");
+  assert.equal(parseCliArgs(["help"]).command, "help");
   assert.equal(parseCliArgs(["-v"]).command, "version");
+});
+
+test("ask takes the same options as task", () => {
+  const args = parseCliArgs(["ask", "is this feature ready", "-c"]);
+  assert.equal(args.command, "ask");
+  assert.equal(args.prompt, "is this feature ready");
+  assert.equal(args.continueLast, true);
 });

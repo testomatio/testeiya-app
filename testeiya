@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the CLI from source, no build step. The shipped entry is dist/src/cli.js.
+dir=$(dirname "$0")
+exec "$dir/node_modules/.bin/tsx" "$dir/src/cli.ts" "$@"

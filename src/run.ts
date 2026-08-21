@@ -6,6 +6,7 @@ import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-age
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
 import { deliver, markdownPath, type Destination, type RunEnvelope } from "./output.js";
+import { shortId } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
 import type { RunResult } from "./result.js";
 
@@ -24,6 +25,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
       sessionManager: options.sessionManager,
       model: options.model,
       outputFile: outputPath,
+      brief: options.brief,
       ...connectionOptions(),
     });
   } catch (err) {
@@ -40,18 +42,22 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     void session.abort().finally(() => process.exit(130));
   });
 
-  note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
-  note(c.dim(`  ${skills} skills`));
-  for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
-  note("");
+  // With nothing but stdout to write to, the answer is the output: one line of
+  // run info on stderr, no banner in front of it.
+  const verbose = options.destinations.some((destination) => destination.kind !== "stdout");
+  if (verbose) {
+    note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
+    note(c.dim(`  ${skills} skills`));
+    for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
+    note("");
+  }
 
   const run = watchRun(session);
   await promptOnce(session, options.prompt, run);
   const report = await collectReport(session, run, outputPath, stampBefore, result.status);
 
   run.unsubscribe();
-  note("");
-  summarize(run, result, started, outputPath, report);
+  if (verbose) note("");
 
   let code = exitCode(run.error, result.status, Boolean(outputPath), report);
   const envelope: RunEnvelope = {
@@ -66,9 +72,17 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     sessionId: options.sessionId ?? null,
   };
 
+  // Nobody is watching this run, so the status goes above the answer rather
+  // than after it: the last thing on screen should be the agent's output.
+  summarize({ run, result, envelope, started });
+  if (willPrint(options.destinations, report)) {
+    note(c.dim(`  ${"─".repeat(rule())}`));
+    note("");
+  }
+
   const failure = await deliver(options.destinations, envelope);
   if (failure) {
-    note(`  ${c.red("✗")} ${c.red(failure)}`);
+    note(`  ${c.red(`✗ ${failure}`)}`);
     // The report is worth more than the destination: never lose it.
     if (report) process.stdout.write(report);
     code = 1;
@@ -88,6 +102,42 @@ export function exitCode(
   if (status === "fail") return 1;
   if (wantsReport && !report) return 1;
   return 0;
+}
+
+// A tool name alone says the run is alive and nothing else. The command or the
+// path is what a watcher actually reads.
+function target(args: unknown): string {
+  if (!args || typeof args !== "object") return "";
+  const values = args as Record<string, unknown>;
+  const raw = text(values.command) || text(values.pattern) || text(values.path);
+  if (!raw) return "";
+  let line = raw.split("\n")[0]!.trim();
+  const cwd = `${process.cwd()}/`;
+  if (line.startsWith(cwd)) line = line.slice(cwd.length);
+  if (line.length <= 64) return line;
+  return `${line.slice(0, 63)}…`;
+}
+
+function text(value: unknown): string {
+  if (typeof value === "string") return value;
+  return "";
+}
+
+function pad(name: string): string {
+  return name.padEnd(6);
+}
+
+function rule(): number {
+  const width = process.stderr.columns ?? 60;
+  return Math.max(20, Math.min(width - 4, 68));
+}
+
+// Only rule off the status when something actually follows it on stdout.
+function willPrint(destinations: Destination[], report: string | null): boolean {
+  return destinations.some((destination) => {
+    if (destination.kind === "json" && !destination.path) return true;
+    return destination.kind === "stdout" && Boolean(report);
+  });
 }
 
 function describe(destinations: Destination[]): string[] {
@@ -116,10 +166,10 @@ function watchRun(session: AgentSession): RunState {
   run.unsubscribe = session.subscribe((event) => {
     if (event.type === "tool_execution_start") {
       run.steps++;
-      note(`  ${c.dim("▸")} ${c.cyan(event.toolName)}`);
+      note(`  ${c.dim("▸")} ${c.cyan(pad(event.toolName))}  ${c.dim(target(event.args))}`);
     }
     if (event.type === "tool_execution_end" && event.isError) {
-      note(`  ${c.red("✗")} ${c.red(event.toolName)}`);
+      note(`  ${c.red("✗")} ${c.red(pad(event.toolName))}`);
     }
     if (event.type === "turn_end" && event.message.role === "assistant") {
       run.input += event.message.usage.input;
@@ -179,27 +229,31 @@ async function nudgeForReport(
   return null;
 }
 
-function summarize(
-  run: RunState,
-  result: RunResult,
-  started: number,
-  outputPath: string | undefined,
-  report: string | null
-): void {
-  const stats = `${elapsed(started)} ${c.dim("·")} ${run.steps} steps ${c.dim("·")} ${tokens(run.input)} in / ${tokens(run.output)} out`;
-  if (run.error) {
+function summarize(s: Summary): void {
+  const parts = [elapsed(s.started), modelName(s.envelope.model)];
+  if (s.run.steps === 1) parts.push("1 step");
+  if (s.run.steps > 1) parts.push(`${s.run.steps} steps`);
+  parts.push(`tokens ${tokens(s.run.input)} in / ${tokens(s.run.output)} out`);
+  if (s.envelope.sessionId) parts.push(`--resume ${shortId(s.envelope.sessionId)}`);
+  const stats = parts.join(` ${c.dim("·")} `);
+
+  if (s.run.error) {
     note(`  ${c.red("✗ failed")} ${c.dim("·")} ${stats}`);
-    note(`  ${c.red(run.error)}`);
+    note(`  ${c.red(s.run.error)}`);
     return;
   }
-  if (result.status === "fail") {
+  if (s.result.status === "fail") {
     note(`  ${c.red("✗ fail")} ${c.dim("·")} ${stats}`);
-    if (result.reason) note(`  ${c.red(result.reason)}`);
+    if (s.result.reason) note(`  ${c.red(s.result.reason)}`);
     return;
   }
-  let target = "";
-  if (report && outputPath) target = ` ${c.dim("→")} ${outputPath}`;
-  note(`  ${c.green("✓ done")} ${c.dim("·")} ${stats}${target}`);
+  note(`  ${c.green("✓")} ${stats}`);
+}
+
+// The provider and its namespace are in the envelope; the line only needs the
+// name you would recognise.
+function modelName(id: string): string {
+  return id.slice(id.lastIndexOf("/") + 1);
 }
 
 async function readIfFresh(path: string, before: string | null): Promise<string | null> {
@@ -257,6 +311,14 @@ export interface PrintOptions {
   sessionManager: SessionManager;
   sessionId?: string | null;
   model?: string;
+  brief?: boolean;
+}
+
+interface Summary {
+  run: RunState;
+  result: RunResult;
+  envelope: RunEnvelope;
+  started: number;
 }
 
 interface RunState {
