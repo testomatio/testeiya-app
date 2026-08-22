@@ -17,7 +17,7 @@ This page is about doing that. It assumes pi **0.84.x**; the SDK is pre-1.0 and 
 | `src/mcp.ts` · `src/mcp-extension.ts` | The Testomat.io MCP server, delivered as a pi extension |
 | `src/result.ts` | The `set_result` custom tool, which becomes the process exit code |
 | `prompt/` | `buildSystemPrompt()` — role, rules, Testomat.io operating rules, report contract |
-| `skills/` | Where the vendored skill folders land — the manifest is committed, the folders are fetched |
+| `skills/` | Where the vendored skill folders land — the manifest is committed, the folders are fetched by `scripts/vendor-skills.js` |
 
 Only the first three are specific to a one-shot CLI. `prompt/`, `skills/`, the MCP extension and the model resolution are harness-agnostic, and a different front end keeps them unchanged.
 
@@ -215,7 +215,7 @@ And for a UI that owns its own event loop, skip the modes entirely: subscribe wi
 Whatever the front end, four things make the agent a *testing* agent rather than a generic one:
 
 1. `buildSystemPrompt()` from `prompt/` — pass your harness's own capabilities through `sections`, `toolBullets` and `rules` instead of forking a fragment. If your harness can ask the user a question or open a browser, that belongs in your options, not in `prompt/`.
-2. `additionalSkillPaths: [BUNDLED_SKILLS_DIR]` — the skills are most of the domain knowledge, so point this at whatever tree you vendor. It is empty in a fresh clone.
+2. `additionalSkillPaths: [BUNDLED_SKILLS_DIR]` — the skills are most of the domain knowledge, so point this at whatever tree you vendor. A fresh clone has none until `node scripts/vendor-skills.js` fills it.
 3. `tms` — `"mcp-direct"`, `"mcp-proxy"` or `"cli-only"`, matching how your harness actually reaches Testomat.io. Saying tools exist that do not wastes the model's turns discovering that.
 4. The MCP extension, if you have both a token and a project id. A token alone identifies no project to the server; `tmsAccess()` in `src/mcp.ts` encodes that rule.
 

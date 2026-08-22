@@ -3,9 +3,10 @@ dist/
 *.tsbuildinfo
 .DS_Store
 
-# Every skill folder here is fetched by `bunosh skills:update` from the repos
+# Every skill folder here is fetched by scripts/vendor-skills.js from the repos
 # listed in skills/skills.yaml, pinned in skills/skills.lock.json. They are not
-# redistributed here — patch them upstream, in the repo that owns them.
+# kept in git — patch them upstream, in the repo that owns them. The release
+# workflow fetches them again before publishing, so the npm package ships them.
 #
 # These rules live at the repo root on purpose: an ignore file INSIDE skills/
 # would also hide the tree from the agent, whose skill discovery honours

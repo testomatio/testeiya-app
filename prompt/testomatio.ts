@@ -35,7 +35,7 @@ const tmsViaDirectTools = dedent`
   | Runs, testruns, plans, labels, issues, analytics | MCP \`testomatio-*\` tools |
   | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
   | Creating/updating runs, linking issues | MCP create/update tools |
-  | Launching automated or mixed Run remotely on CI | Use npx @testomatio/reporter run --remote <profile>, raise error if no CI profiles configured
+  | Launching automated or mixed Run remotely on CI | Use npx -y @testomatio/reporter@latest run --remote <profile>, raise error if no CI profiles configured
   | Running automated Run | Use local test runner with testomatio reporter attached to report to current project
 
   ---
@@ -73,7 +73,7 @@ const tmsViaProxy = dedent`
   | Runs, testruns, plans, labels, issues, analytics | \`mcp({ search: … })\`, then \`mcp({ tool: … })\` |
   | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
   | Creating/updating runs, linking issues | the matching \`mcp\` create/update operation |
-  | Launching automated or mixed Run remotely on CI | Use npx @testomatio/reporter run --remote <profile>, raise error if no CI profiles configured |
+  | Launching automated or mixed Run remotely on CI | Use npx -y @testomatio/reporter@latest run --remote <profile>, raise error if no CI profiles configured |
   | Running automated Run | Use local test runner with testomatio reporter attached to report to current project |
 
   ---
@@ -106,7 +106,7 @@ const tmsViaCli = dedent`
   | Suite hierarchy / structure / which files exist | \`ls\` / \`find\` |
   | Runs, testruns, plans, labels, issues, analytics | \`curl\` against \`/api/v2\` |
   | Creating/updating tests or suites | edit the markdown file, then \`npx check-tests push\` |
-  | Launching automated or mixed Run remotely on CI | Use npx @testomatio/reporter run --remote <profile>, raise error if no CI profiles configured |
+  | Launching automated or mixed Run remotely on CI | Use npx -y @testomatio/reporter@latest run --remote <profile>, raise error if no CI profiles configured |
   | Running automated Run | Use local test runner with testomatio reporter attached to report to current project |
 
   ---

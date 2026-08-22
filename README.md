@@ -108,9 +108,11 @@ Add the project id and the agent also gets the Testomat.io tools. The id comes f
 
 A skill is a folder with a `SKILL.md`. The agent loads them all and invokes the ones a task calls for.
 
-Every skill here is vendored from its own upstream repository, declared in `skills/skills.yaml` and pinned to a commit in `skills/skills.lock.json`. The vendored folders are deliberately not committed. They belong to their authors, under their own licences. A clone of this repository has the manifest and nothing else. The upstream release tooling fetches the tree, and that is where the desktop app gets its full set.
+Every skill here is vendored from its own upstream repository, declared in `skills/skills.yaml` and pinned to a commit in `skills/skills.lock.json`. The vendored folders are deliberately not committed. They belong to their authors, under their own licences. A clone of this repository has the manifest and nothing else.
 
-The published `testeiya` package therefore ships no skills of its own. `skillsOverride` in `src/session.ts` keeps only what is found under the bundled tree, so a fresh `npx testeiya` run has none until that tree is filled. To add your own, point `additionalSkillPaths` at your folder. [EXTENDING.md](EXTENDING.md) covers both hooks.
+`node scripts/vendor-skills.js` fills the tree from the manifest. Every release runs it, so the published `testeiya` package ships the version of each skill that was current on release day. Run it yourself after cloning, or a fresh checkout has none.
+
+`skillsOverride` in `src/session.ts` keeps only what is found under that tree, so an arbitrary clone cannot hand the model its own skills. To add yours, point `additionalSkillPaths` at your folder. [EXTENDING.md](EXTENDING.md) covers both hooks.
 
 The first-party skills the desktop app bundles are written against tools only that harness has, so they live with it, in the private repository.
 

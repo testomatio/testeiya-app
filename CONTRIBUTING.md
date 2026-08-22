@@ -54,7 +54,7 @@ Add one line to `skills/skills.yaml` — a GitHub repository, optionally pinned:
 - owner/repo/tree/<ref>/<subdir>
 ```
 
-That line is the whole change — send it as the pull request. The fetch runs in the release tooling, which resolves the commit, downloads it, and records it in `skills/skills.lock.json`; the fetched folder is never committed here.
+That line is the whole change — send it as the pull request. `node scripts/vendor-skills.js` resolves the commit, downloads it, and records it in `skills/skills.lock.json`; run it to check your source lands where you expect. Every release runs it too, so the published package carries the result. The fetched folder is never committed here.
 
 ## Working on the CLI
 
