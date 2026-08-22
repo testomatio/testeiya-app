@@ -11,10 +11,14 @@ import dedent from 'dedent';
  */
 export function tools(options?: { extra?: string[] }): string {
   const extra = (options?.extra ?? []).join('');
-  let github = '    - GitHub: issues and projects through MCP.';
-  if (hasGh()) {
-    github +=
+  let routing = '    - GitHub: issues and projects through MCP.';
+  if (onPath('gh')) {
+    routing +=
       '\n    - Pull requests and repositories: `gh` in `bash`. When a PR question needs issue detail, query the issue through MCP — never infer it from a PR title.';
+  }
+  if (onPath('acli')) {
+    routing +=
+      '\n    - Jira in bulk (many issues at once), boards, sprints and filters: `acli` in `bash`, per the `atlassian` skill. Confluence and attachments have no `acli` command and stay on MCP.';
   }
   return dedent`
 <available-tools>
@@ -27,7 +31,7 @@ ${extra}  * **Internal Skills:** For QA-related tasks, check available skills fi
   * **External Integrations:** Use MCP tools when they provide superior data or specialized integrations.
     - Primary MCP (Testomat.io): Use Testomat.io MCP tools to extend functionality.
     - Secondary MCP (Jira, GitHub, etc.): Invoke only when user explicitly asks or when remote context exploration is required.
-${github}
+${routing}
 
   <tool-governance>
     * **Prioritize Specificity:** Use \`read\` instead of \`cat\`, and \`edit\` instead of \`sed\`. Dedicated tools provide better error tracking and safety.
@@ -39,11 +43,11 @@ ${github}
 `;
 }
 
-/** Is the `gh` CLI on PATH? Never tell the agent to use a binary this machine lacks. */
-function hasGh(): boolean {
+/** Is this CLI on PATH? Never tell the agent to use a binary this machine lacks. */
+function onPath(bin: string): boolean {
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     if (!dir) continue;
-    if (existsSync(join(dir, 'gh')) || existsSync(join(dir, 'gh.exe'))) return true;
+    if (existsSync(join(dir, bin)) || existsSync(join(dir, `${bin}.exe`))) return true;
   }
   return false;
 }
