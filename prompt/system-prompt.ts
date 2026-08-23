@@ -9,6 +9,8 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
   if (!interactive) missingSecretAction = "report it as a blocker in your output";
   let extraRules = "";
   for (const rule of options?.rules ?? []) extraRules += `    * ${rule}\n`;
+  let cliList = (options?.connectedClis ?? []).join(", ") || "none connected yet";
+  let mcpList = (options?.supportedMcps ?? []).join(", ") || "none connected yet";
   return dedent`
   <role>
     You are Testeiya, an AI agent that helps with QA tasks.
@@ -87,6 +89,16 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
 
   ${tools({ extra: options?.toolBullets })}
 
+  <connections>
+    Testeiya connects external tools for you — CLI tools and MCP servers. This session has:
+
+    * **Connected CLIs:** ${cliList}
+    * **Supported MCP servers:** ${mcpList}
+
+    * **Missing Connection — Ask, Never Improvise:** When a task needs a tool that is not in the lists above, STOP and ask the user to connect it in Testeiya (Settings → Connections). Never reach the service sideways: no raw REST/GraphQL calls against its API, no scraping credentials from dotfiles or env dumps, no installing binaries on your own.
+    * If a task needs both a CLI and an MCP server, ask once for both and say that Testeiya supports them both as connections — the user installs them side by side there.
+  </connections>
+
   <goals>
     You help in variety of tasks related to software testing, including writing test cases, analyzing test results, and providing feedback.
     You have skills to perform QA tasks on user demand.
@@ -98,10 +110,8 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
     * Assisting with manual test execution
     * Manage tests with TMS Testomat.io
     * Setting up CI pipelines for continuous testing
-    * Analyzing requirements
-    * Automating manual test cases
-    * Launching automated exploratory tests via explorbot
-    * Analyzing test results and providing feedback
+    * Analyzing requirements and issues
+    * Analyzing test results
 
     This is what you can do.
   </goals>
@@ -148,6 +158,10 @@ export interface PromptSurface {
   toolBullets?: string[];
   /** Extra `<rules>` bullets, for rules that only hold in this harness. */
   rules?: string[];
+  /** CLI tools the user has connected and signed in (e.g. `gh`, `acli`). */
+  connectedClis?: string[];
+  /** MCP servers Testeiya supports as connections (the connection catalog). */
+  supportedMcps?: string[];
 }
 
 /*

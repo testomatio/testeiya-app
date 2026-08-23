@@ -20,6 +20,10 @@ export function tools(options?: { extra?: string[] }): string {
     routing +=
       '\n    - Jira in bulk (many issues at once), boards, sprints and filters: `acli` in `bash`, per the `atlassian` skill. Confluence and attachments have no `acli` command and stay on MCP.';
   }
+  if (onPath('glab')) {
+    routing +=
+      '\n    - GitLab releases, labels, milestones, snippets, CI artifacts, and any endpoint with no MCP tool: `glab` in `bash`. Issues, merge requests, pipelines and code search stay on MCP, which covers them well.';
+  }
   return dedent`
 <available-tools>
   You have these tools available:
