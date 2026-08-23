@@ -8,6 +8,7 @@ import {
   type SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "../prompt/index.js";
+import { pathClis } from "../prompt/tools.js";
 import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { hasMcp, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
@@ -58,7 +59,11 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
   const settingsManager = SettingsManager.inMemory();
 
   const extensionPaths: string[] = [];
-  if (hasMcp()) extensionPaths.push(MCP_EXTENSION);
+  const connectedMcps: string[] = [];
+  if (hasMcp()) {
+    extensionPaths.push(MCP_EXTENSION);
+    connectedMcps.push("Testomat.io");
+  }
 
   const loader = createLoader({
     cwd: options.cwd,
@@ -74,6 +79,8 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
+        connectedClis: pathClis(),
+        connectedMcps,
       }),
   });
   await loader.reload();

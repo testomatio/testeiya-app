@@ -25,6 +25,25 @@ test("session flags", () => {
   assert.equal(args.noSession, undefined);
 });
 
+test("--session replaces the session flags it would fight with", () => {
+  const args = parseCliArgs(["task", "x", "--session", "pr-42"]);
+  assert.equal(args.session, "pr-42");
+  assert.match(parseCliArgs(["task", "x", "--session", "pr-42", "-c"]).error, /--session/);
+  assert.match(parseCliArgs(["task", "x", "--session", "pr-42", "--name", "n"]).error, /--session/);
+});
+
+test("--exit-zero is a run flag", () => {
+  assert.equal(parseCliArgs(["task", "x", "--exit-zero"]).exitZero, true);
+  assert.match(parseCliArgs(["skills", "--exit-zero"]).error, /exit-zero/);
+});
+
+test("skills takes a pattern", () => {
+  const args = parseCliArgs(["skills", "codecept"]);
+  assert.equal(args.command, "skills");
+  assert.equal(args.pattern, "codecept");
+  assert.equal(parseCliArgs(["skills", "--json"]).json, true);
+});
+
 test("a task starting with a dash needs --", () => {
   const args = parseCliArgs(["task", "--", "-weird task"]);
   assert.equal(args.prompt, "-weird task");

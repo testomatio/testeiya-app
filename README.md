@@ -54,6 +54,7 @@ testeiya models anthropic   # list what your key can reach
 ```bash
 testeiya task "<task>"     # run one task, deliver a report, exit
 testeiya ask "<question>"  # answer a question, no report
+testeiya skills            # list the skills bundled with this package
 testeiya sessions          # list saved sessions for this folder
 ```
 
@@ -65,6 +66,10 @@ The agent runs one task and exits. Progress goes to stderr, so a run drops into 
 | `1` | failed run, or a negative verdict — findings that need a human |
 | `2` | bad usage |
 | `130` | interrupted |
+
+Pass `--exit-zero` when a negative verdict must not fail the job. A broken run
+still exits `1`, bad usage still exits `2`, and the verdict is still in the
+report and in the run envelope for anything that wants to gate on it.
 
 A task can come from stdin too:
 
@@ -274,6 +279,16 @@ Posting uses the GitHub CLI and resolves the PR number from `GITHUB_EVENT_PATH`,
 `GITHUB_REF`, or `gh pr view` — so inside Actions it just works. Every
 destination is checked before the run starts, so a missing `gh` costs no tokens.
 
+`--footer "<text>"` adds a line under a posted comment, and nowhere else. It is
+what turns a report into a conversation: tell the reader how to answer, and let
+the workflow feed their reply back into the same session.
+
+```bash
+testeiya task "Review this pull request" \
+  --output gh:pr-comment \
+  --footer "> You can reply to this comment by typing /testeiya"
+```
+
 ## Sessions
 
 Runs are saved under `~/.testeiya`, so a follow-up picks up where the last one
@@ -286,8 +301,17 @@ testeiya sessions
 testeiya task "<task>" --resume <id>
 ```
 
-Pass `--name` to label a session and `--no-session` to save nothing. In CI,
-`--no-session` keeps runners stateless unless you deliberately chain `-c` steps.
+Pass `--name` to label a session and `--no-session` to save nothing.
+
+In CI, `--session <label>` is the one to reach for: it continues the session
+with that label, and starts it the first time, so a job that runs again and
+again needs no "does it exist yet" branch. Give each thread its own label, and
+carry `~/.testeiya` between rounds with the runner's cache. `--no-session` keeps
+runners stateless when continuity is not wanted.
+
+```bash
+testeiya task "Review the new commits" --session "pr-42" --output gh:pr-comment
+```
 
 ## Testomat.io
 
@@ -309,16 +333,17 @@ A skill is a folder with a `SKILL.md`. The agent loads them all and invokes the
 ones a task calls for — you never pick a skill explicitly, the task phrasing
 does.
 
-What ships today, vendored from upstream repositories:
+The set is vendored from upstream repositories and moves with every release, so
+ask your own install rather than a list in a README:
 
-| Category | Skills |
-|---|---|
-| QA process | `testing-workflow`, `qa-explain-behavior`, `qa-lead-strategy-advisor` |
-| Test management | `qa-write-test-cases`, `sync-test-cases-with-tms`, `qa-sprint-report-by-testomatio`, `qa-split-testing-levels-pyramid`, `qa-thinking` |
-| Test automation | `automate-manual-test-cases`, `setup-change-aware-pr-testing`, `run-tests-with-testomatio-reporter`, `setup-ci-automation`, `debug-fix-failed-flaky-autotests`, `qa-data-seeder`, `qa-automation-test-consolidation`, `testomat-allure-adapter` |
-| Explorbot | `explorbot-fundamentals`, `explorbot-setup`, `explorbot-plan` |
-| Playwright | `playwright-best-practices`, `playwright-cli` |
-| CodeceptJS | writing, refactoring, debugging, run analysis, migrations from Cypress/TestCafe/Selenium/Protractor, `ci-fix-tests` |
+```bash
+testeiya skills             # every bundled skill: name and what it is for
+testeiya skills playwright  # filter by name, category or description
+testeiya skills --json      # [{name, group, description}]
+```
+
+Categories today: QA process, test management, test automation, Explorbot,
+Playwright, CodeceptJS.
 
 Sources are declared in `skills/skills.yaml` and pinned in
 `skills/skills.lock.json`. The vendored folders are deliberately not committed —

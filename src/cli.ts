@@ -6,6 +6,7 @@ import { runDoctor } from "./doctor.js";
 import { loadEnvFiles, PACKAGE_ROOT } from "./env.js";
 import { UsageError } from "./model.js";
 import { runModels } from "./models.js";
+import { runSkills } from "./skills.js";
 import { parseDestinations, preflight } from "./output.js";
 import { runPrint } from "./run.js";
 import { openSessionManager, runSessions } from "./sessions.js";
@@ -47,6 +48,7 @@ async function main(argv: string[]): Promise<void> {
 
   try {
     if (args.command === "models") process.exit(await runModels(args.pattern, args.json));
+    if (args.command === "skills") process.exit(await runSkills(args.pattern, args.json));
     if (args.command === "doctor") {
       process.exit(await runDoctor({ envSources, json: args.json, probe: args.probe, model: args.model }));
     }
@@ -68,6 +70,11 @@ async function task(args: CliArgs): Promise<number> {
 
   const destinations = parseDestinations(args.outputs ?? [], args.json);
   if (typeof destinations === "string") throw new UsageError(destinations);
+  // A footer nobody will ever see is a workflow that thinks it started a
+  // conversation and did not.
+  if (args.footer && !destinations.some((d) => d.kind === "gh")) {
+    throw new UsageError("--footer needs a comment destination, e.g. -o gh:pr-comment");
+  }
 
   // Everything a destination needs is checked before a single token is spent.
   const unreachable = await preflight(destinations);
@@ -81,7 +88,16 @@ async function task(args: CliArgs): Promise<number> {
   if (!args.noSession) sessionId = sessionManager.getSessionId();
 
   const brief = args.command === "ask";
-  return runPrint({ prompt, destinations, sessionManager, sessionId, brief, model: args.model });
+  return runPrint({
+    prompt,
+    destinations,
+    sessionManager,
+    sessionId,
+    brief,
+    model: args.model,
+    exitZero: args.exitZero,
+    footer: args.footer,
+  });
 }
 
 async function readStdin(): Promise<string> {

@@ -29,7 +29,7 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
       toolBullets: options?.toolBullets,
       rules: options?.rules,
       connectedClis: options?.connectedClis,
-      supportedMcps: options?.supportedMcps,
+      connectedMcps: options?.connectedMcps,
     }),
   ];
 
@@ -97,6 +97,6 @@ export interface SystemPromptOptions {
   contextFolders?: ContextFolder[];
   /** CLI tools the user has connected and signed in (e.g. `gh`, `acli`). */
   connectedClis?: string[];
-  /** MCP servers Testeiya supports as connections (the connection catalog). */
-  supportedMcps?: string[];
+  /** MCP servers connected for this session (the enabled `mcp.json` set). */
+  connectedMcps?: string[];
 }

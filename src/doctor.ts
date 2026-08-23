@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { SettingsManager, type Skill } from "@earendil-works/pi-coding-agent";
-import { dirname, relative } from "node:path";
+import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { hasMcp, hasTestomatio, metadataCachePath, vendorBundle } from "./mcp.js";
 import { PROVIDER_KEYS, resolveModel, UsageError } from "./model.js";
-import { BUNDLED_SKILLS_DIR, createLoader, createRuntime } from "./session.js";
+import { loadBundledSkills } from "./skills.js";
+import { BUNDLED_SKILLS_DIR, createRuntime } from "./session.js";
 
 const MIN_NODE = [22, 19];
 
@@ -91,23 +91,16 @@ function modelCheck(runtime: Runtime, explicit?: string): { check: Check; resolv
 }
 
 async function skillsChecks(): Promise<SkillsResult> {
-  const loader = createLoader({
-    cwd: process.cwd(),
-    settingsManager: SettingsManager.inMemory(),
-    extensionPaths: [],
-    systemPrompt: () => "",
-  });
-  await loader.reload();
-  const { skills, diagnostics } = loader.getSkills();
+  const { count, groups, diagnostics } = await loadBundledSkills();
 
-  const groups = byGroup(skills);
   const checks: Check[] = [];
-  if (skills.length === 0) {
+  if (count === 0) {
     checks.push({ name: "skills", status: "warn", detail: "none loaded" });
   }
-  if (skills.length > 0) {
-    checks.push({ name: "skills", status: "ok", detail: `${skills.length} loaded` });
-    for (const [group, names] of groups) {
+  if (count > 0) {
+    checks.push({ name: "skills", status: "ok", detail: `${count} loaded` });
+    for (const { group, skills } of groups) {
+      const names = skills.map((skill) => skill.name);
       checks.push({ name: "", status: "list", detail: `${group.padEnd(28)} ${summarize(names)}` });
     }
   }
@@ -118,7 +111,11 @@ async function skillsChecks(): Promise<SkillsResult> {
     if (diagnostic.path) detail = `${detail} — ${shorten(diagnostic.path)}`;
     checks.push({ name: "skills", status, detail });
   }
-  return { checks, groups: [...groups].map(([group, names]) => ({ group, skills: names })) };
+  const listed = groups.map(({ group, skills }) => ({
+    group,
+    skills: skills.map((skill) => skill.name),
+  }));
+  return { checks, groups: listed };
 }
 
 function shorten(path: string): string {
@@ -127,22 +124,10 @@ function shorten(path: string): string {
   return inBundle;
 }
 
-// The full list is in --json; this line only has to prove the right set loaded.
+// The full list is `testeiya skills`; this line only proves the right set loaded.
 function summarize(names: string[]): string {
   if (names.length <= 6) return names.join(", ");
   return `${names.slice(0, 6).join(", ")}, +${names.length - 6}`;
-}
-
-function byGroup(skills: Skill[]): Map<string, string[]> {
-  const groups = new Map<string, string[]>();
-  for (const skill of skills) {
-    let group = dirname(relative(BUNDLED_SKILLS_DIR, skill.baseDir));
-    if (group === "." || group.startsWith("..")) group = "bundled";
-    const names = groups.get(group) ?? [];
-    names.push(skill.name);
-    groups.set(group, names);
-  }
-  return groups;
 }
 
 function testomatioCheck(): Check {

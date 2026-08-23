@@ -59,7 +59,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   run.unsubscribe();
   if (verbose) note("");
 
-  let code = exitCode(run.error, result.status, Boolean(outputPath), report);
+  let code = exitCode(run.error, result.status, Boolean(outputPath), report, options.exitZero);
   const envelope: RunEnvelope = {
     status: result.status ?? (code === 0 ? "pass" : "fail"),
     reason: result.reason ?? run.error,
@@ -80,7 +80,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     note("");
   }
 
-  const failure = await deliver(options.destinations, envelope);
+  const failure = await deliver(options.destinations, envelope, options.footer);
   if (failure) {
     note(`  ${c.red(`✗ ${failure}`)}`);
     // The report is worth more than the destination: never lose it.
@@ -96,9 +96,13 @@ export function exitCode(
   error: string | null,
   status: "pass" | "fail" | undefined,
   wantsReport: boolean,
-  report: string | null
+  report: string | null,
+  exitZero?: boolean
 ): number {
   if (error) return 1;
+  // --exit-zero only forgives the verdict. A run that broke still broke, and a
+  // pipeline that reads the envelope still sees status "fail".
+  if (exitZero) return 0;
   if (status === "fail") return 1;
   if (wantsReport && !report) return 1;
   return 0;
@@ -312,6 +316,8 @@ export interface PrintOptions {
   sessionId?: string | null;
   model?: string;
   brief?: boolean;
+  exitZero?: boolean;
+  footer?: string;
 }
 
 interface Summary {

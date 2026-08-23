@@ -55,3 +55,18 @@ function onPath(bin: string): boolean {
   }
   return false;
 }
+
+/**
+ * CLIs Testeiya knows how to connect, probed on PATH — the same trio routed in
+ * `<available-tools>` above. Shared with the prompt's connections section so
+ * the two can never disagree about whether `gh` etc. exist.
+ */
+export const KNOWN_CLIS: { bin: string; label: string }[] = [
+  { bin: 'gh', label: 'gh (GitHub CLI)' },
+  { bin: 'acli', label: 'acli (Atlassian CLI)' },
+  { bin: 'glab', label: 'glab (GitLab CLI)' },
+];
+
+export function pathClis(): string[] {
+  return KNOWN_CLIS.filter((c) => onPath(c.bin)).map((c) => c.label);
+}

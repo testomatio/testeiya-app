@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { markdownPath, parseDestinations } from "../dist/src/output.js";
+import { commentBody, markdownPath, parseDestinations } from "../dist/src/output.js";
 
 test("no output means markdown on stdout", () => {
   assert.deepEqual(parseDestinations([]), [{ kind: "stdout" }]);
@@ -35,4 +35,10 @@ test("markdownPath finds the file the agent writes", () => {
   const destinations = parseDestinations(["report.md", "run.json"], true);
   assert.equal(markdownPath(destinations), "report.md");
   assert.equal(markdownPath(parseDestinations([])), undefined);
+});
+
+test("a footer goes under the posted comment", () => {
+  assert.equal(commentBody("verdict\n"), "verdict\n");
+  assert.equal(commentBody("verdict\n", "> Reply with /testeiya"), "verdict\n\n> Reply with /testeiya\n");
+  assert.equal(commentBody("verdict\n", "   "), "verdict\n");
 });

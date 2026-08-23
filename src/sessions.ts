@@ -10,6 +10,17 @@ export async function openSessionManager(
 ): Promise<SessionManager | string> {
   if (args.noSession) return SessionManager.inMemory(cwd);
 
+  // One label, one thread: a CI job that restores the same store every round
+  // says --session <label> and never has to know whether a session exists yet.
+  if (args.session) {
+    const sessions = await SessionManager.list(cwd);
+    const named = sessions.find((s) => s.name === args.session);
+    if (named) return SessionManager.open(named.path);
+    const manager = SessionManager.create(cwd);
+    manager.appendSessionInfo(args.session);
+    return manager;
+  }
+
   if (args.resume) {
     const sessions = await SessionManager.list(cwd);
     const matched = sessions.filter((s) => s.id.startsWith(args.resume ?? ""));
@@ -70,6 +81,7 @@ export function shortId(id: string): string {
 export interface SessionArgs {
   continueLast?: boolean;
   resume?: string;
+  session?: string;
   noSession?: boolean;
 }
 

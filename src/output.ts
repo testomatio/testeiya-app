@@ -56,18 +56,29 @@ export async function preflight(destinations: Destination[]): Promise<string | n
 /** Route the finished report. Returns a message when a destination failed. */
 export async function deliver(
   destinations: Destination[],
-  envelope: RunEnvelope
+  envelope: RunEnvelope,
+  footer?: string
 ): Promise<string | null> {
   for (const destination of destinations) {
-    const failure = await deliverOne(destination, envelope);
+    const failure = await deliverOne(destination, envelope, footer);
     if (failure) return failure;
   }
   return null;
 }
 
+/**
+ * The comment as posted. The footer is how a thread stays a thread: it tells
+ * the reader what to type to answer this comment.
+ */
+export function commentBody(report: string, footer?: string): string {
+  if (!footer?.trim()) return report;
+  return `${report.trimEnd()}\n\n${footer.trim()}\n`;
+}
+
 async function deliverOne(
   destination: Destination,
-  envelope: RunEnvelope
+  envelope: RunEnvelope,
+  footer?: string
 ): Promise<string | null> {
   if (destination.kind === "markdown") return null;
 
@@ -90,7 +101,7 @@ async function deliverOne(
   }
 
   const result = await run("gh", ["pr", "comment", String(destination.pr), "--body-file", "-"], {
-    stdin: envelope.report,
+    stdin: commentBody(envelope.report, footer),
   });
   if (result.code !== 0) return `gh pr comment failed: ${result.stderr.trim() || result.code}`;
   return null;
