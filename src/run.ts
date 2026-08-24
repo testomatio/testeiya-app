@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
+import { VERSION } from "./env.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
 import {
@@ -56,7 +57,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // run info on stderr, no banner in front of it.
   const verbose = options.destinations.some((destination) => destination.kind !== "stdout");
   if (verbose) {
-    note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
+    note(`  Testeiya ${c.dim(`v${VERSION}`)} ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
     note(c.dim(`  ${skills.length} skills`));
     if (task.loaded.length > 0) note(c.dim(`  ↳ ${task.loaded.join(", ")}`));
     for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));

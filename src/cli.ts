@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { HELP, parseCliArgs, USAGE, WELCOME, type CliArgs } from "./args.js";
 import { runDoctor } from "./doctor.js";
-import { loadEnvFiles, PACKAGE_ROOT } from "./env.js";
+import { loadEnvFiles, VERSION } from "./env.js";
 import { UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
@@ -37,7 +35,7 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (args.command === "version") {
-    process.stdout.write(`${version()}\n`);
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
 
@@ -101,11 +99,4 @@ async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
   return Buffer.concat(chunks).toString("utf8");
-}
-
-function version(): string {
-  const pkg = JSON.parse(
-    readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8")
-  );
-  return pkg.version;
 }

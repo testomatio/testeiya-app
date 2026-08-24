@@ -14,6 +14,9 @@ export const TESTEIYA_HOME = join(homedir(), ".testeiya");
  */
 export const PACKAGE_ROOT = packageRoot();
 
+/** This package's version, read from the same package.json. */
+export const VERSION = packageVersion();
+
 /**
  * Where pi keeps its own state for this CLI. Deliberately not `~/.pi` — running
  * `npx testeiya` must not write into a user's own pi installation.
@@ -81,6 +84,14 @@ function loadFile(path: string, sources: Map<string, string>): void {
     if (process.env[key] !== undefined) continue;
     process.env[key] = value;
     sources.set(key, path);
+  }
+}
+
+function packageVersion(): string {
+  try {
+    return JSON.parse(readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8")).version ?? "";
+  } catch {
+    return "";
   }
 }
 
