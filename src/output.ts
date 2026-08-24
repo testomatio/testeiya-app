@@ -56,31 +56,51 @@ export async function preflight(destinations: Destination[]): Promise<string | n
 /** Route the finished report. Returns a message when a destination failed. */
 export async function deliver(
   destinations: Destination[],
-  envelope: RunEnvelope,
-  footer?: string
+  envelope: RunEnvelope
 ): Promise<string | null> {
   for (const destination of destinations) {
-    const failure = await deliverOne(destination, envelope, footer);
+    const failure = await deliverOne(destination, envelope);
     if (failure) return failure;
   }
   return null;
 }
 
 /**
- * The comment as posted. The footer is how a thread stays a thread: it tells
- * the reader what to type to answer this comment.
+ * The report as delivered, header above it and footer under it. A footer is
+ * how a thread stays a thread: it tells the reader what to type to answer a
+ * posted comment.
  */
-export function commentBody(report: string, footer?: string): string {
-  if (!footer?.trim()) return report;
-  return `${report.trimEnd()}\n\n${footer.trim()}\n`;
+export function decorate(report: string, decoration?: Decoration): string {
+  const header = decoration?.header?.trim();
+  const footer = decoration?.footer?.trim();
+  let body = report.trimEnd();
+  if (header) body = `${header}\n\n${body}`;
+  if (footer) body = `${body}\n\n${footer}`;
+  return `${body}\n`;
+}
+
+/** What signs the report when the caller writes no footer of their own. */
+export function defaultFooter(model: string): string {
+  return `*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & ${modelName(model)}*`;
+}
+
+/** The model name you would recognise, without the provider namespace. */
+export function modelName(model: string): string {
+  return model.slice(model.lastIndexOf("/") + 1);
 }
 
 async function deliverOne(
   destination: Destination,
-  envelope: RunEnvelope,
-  footer?: string
+  envelope: RunEnvelope
 ): Promise<string | null> {
-  if (destination.kind === "markdown") return null;
+  // The agent wrote this file, so it is rewritten rather than written: what
+  // lands on disk is the same body every other destination gets.
+  if (destination.kind === "markdown") {
+    if (!envelope.report) return null;
+    const written = await writeFile(destination.path, envelope.report, "utf8").then(pass, fail);
+    if (!written) return `could not write ${destination.path}`;
+    return null;
+  }
 
   if (destination.kind === "json") {
     const body = `${JSON.stringify(envelope, null, 2)}\n`;
@@ -101,7 +121,7 @@ async function deliverOne(
   }
 
   const result = await run("gh", ["pr", "comment", String(destination.pr), "--body-file", "-"], {
-    stdin: commentBody(envelope.report, footer),
+    stdin: envelope.report,
   });
   if (result.code !== 0) return `gh pr comment failed: ${result.stderr.trim() || result.code}`;
   return null;
@@ -191,6 +211,11 @@ function pass(): true {
 
 function fail(): false {
   return false;
+}
+
+export interface Decoration {
+  header?: string;
+  footer?: string;
 }
 
 export type Destination =

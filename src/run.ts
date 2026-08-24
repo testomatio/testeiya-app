@@ -5,9 +5,18 @@ import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-age
 
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
-import { deliver, markdownPath, type Destination, type RunEnvelope } from "./output.js";
+import {
+  decorate,
+  defaultFooter,
+  deliver,
+  markdownPath,
+  modelName,
+  type Destination,
+  type RunEnvelope,
+} from "./output.js";
 import { shortId } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
+import { expandSkills } from "./skills.js";
 import type { RunResult } from "./result.js";
 
 export async function runPrint(options: PrintOptions): Promise<number> {
@@ -37,6 +46,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   }
 
   const { session, model, skills } = created;
+  const task = expandSkills(options.prompt, skills);
   process.on("SIGINT", () => {
     note(c.yellow("\n  ⨯ interrupted"));
     void session.abort().finally(() => process.exit(130));
@@ -47,14 +57,16 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const verbose = options.destinations.some((destination) => destination.kind !== "stdout");
   if (verbose) {
     note(`  Testeiya ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
-    note(c.dim(`  ${skills} skills`));
+    note(c.dim(`  ${skills.length} skills`));
+    if (task.loaded.length > 0) note(c.dim(`  ↳ ${task.loaded.join(", ")}`));
     for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
     note("");
   }
 
   const run = watchRun(session);
-  await promptOnce(session, options.prompt, run);
-  const report = await collectReport(session, run, outputPath, stampBefore, result.status);
+  await promptOnce(session, task.prompt, run);
+  const written = await collectReport(session, run, outputPath, stampBefore, result.status);
+  const report = sign(written, options, model);
 
   run.unsubscribe();
   if (verbose) note("");
@@ -80,7 +92,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     note("");
   }
 
-  const failure = await deliver(options.destinations, envelope, options.footer);
+  const failure = await deliver(options.destinations, envelope);
   if (failure) {
     note(`  ${c.red(`✗ ${failure}`)}`);
     // The report is worth more than the destination: never lose it.
@@ -106,6 +118,21 @@ export function exitCode(
   if (status === "fail") return 1;
   if (wantsReport && !report) return 1;
   return 0;
+}
+
+// The header and footer go wherever the report goes, so they are added once,
+// before anything is delivered.
+function sign(report: string | null, options: PrintOptions, model: string): string | null {
+  if (!report) return report;
+  return decorate(report, { header: options.header, footer: footerFor(options, model) });
+}
+
+// Every report says what wrote it, until someone says otherwise.
+function footerFor(options: PrintOptions, model: string): string | undefined {
+  if (options.footer !== undefined) return options.footer;
+  if (options.noDefaultFooter) return undefined;
+  if (process.env.TESTEIYA_NO_DEFAULT_FOOTER) return undefined;
+  return defaultFooter(model);
 }
 
 // A tool name alone says the run is alive and nothing else. The command or the
@@ -254,12 +281,6 @@ function summarize(s: Summary): void {
   note(`  ${c.green("✓")} ${stats}`);
 }
 
-// The provider and its namespace are in the envelope; the line only needs the
-// name you would recognise.
-function modelName(id: string): string {
-  return id.slice(id.lastIndexOf("/") + 1);
-}
-
 async function readIfFresh(path: string, before: string | null): Promise<string | null> {
   if (fileStamp(path) === before) return null;
   const text = await readFile(path, "utf8").catch(() => "");
@@ -317,7 +338,9 @@ export interface PrintOptions {
   model?: string;
   brief?: boolean;
   exitZero?: boolean;
+  header?: string;
   footer?: string;
+  noDefaultFooter?: boolean;
 }
 
 interface Summary {

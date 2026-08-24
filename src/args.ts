@@ -22,27 +22,30 @@ Usage:
   testeiya sessions           list saved sessions for this folder
 
 Options:
-  -o, --output <dest>   report destination, repeatable: file.md, file.json, gh:pr-comment
-      --model <id>      provider/model to run
-      --project <id>    Testomat.io project id
-  -c, --continue        continue the last session in this folder
-      --resume <id>     continue that session
-      --session <label> continue the session with that name, or start it
-      --name <label>    name the session
-      --no-session      do not save the session
-      --exit-zero       a negative verdict exits 0
-      --footer <text>   line added under a posted comment
-      --json            machine-readable output
-      --probe           doctor only: test the key with one request
-  -h, --help            show this
-  -v, --version         show version
+  -o, --output <dest>      report destination, repeatable: file.md, file.json, gh:pr-comment
+      --model <id>         provider/model to run
+      --project <id>       Testomat.io project id
+  -c, --continue           continue the last session in this folder
+      --resume <id>        continue that session
+      --session <label>    continue the session with that name, or start it
+      --name <label>       name the session
+      --no-session         do not save the session
+      --exit-zero          a negative verdict exits 0
+      --header <text>      line added above the report
+      --footer <text>      line added under the report
+      --no-default-footer  do not sign the report
+      --json               machine-readable output
+      --probe              doctor only: test the key with one request
+  -h, --help               show this
+  -v, --version            show version
 
 Environment:
-  TESTEIYA_MODEL          model to run, e.g. openrouter/anthropic/claude-sonnet-5
-  OPENROUTER_API_KEY      provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
-  TESTOMATIO              Testomat.io project API key
-  TESTOMATIO_PROJECT_ID   Testomat.io project id, same as --project
-  TESTOMATIO_URL          Testomat.io base url, for self-hosted
+  TESTEIYA_MODEL              model to run, e.g. openrouter/anthropic/claude-sonnet-5
+  TESTEIYA_NO_DEFAULT_FOOTER  do not sign the report
+  OPENROUTER_API_KEY          provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+  TESTOMATIO                  Testomat.io project API key
+  TESTOMATIO_PROJECT_ID       Testomat.io project id, same as --project
+  TESTOMATIO_URL              Testomat.io base url, for self-hosted
 
 Run "testeiya help" for the full guide.`;
 
@@ -72,8 +75,15 @@ Where the report goes
   gh:pr-comment   posted on this branch's pull request, through the GitHub CLI
   gh:pr#123       posted on that pull request
 
-  --footer adds a line under a posted comment, and nowhere else. Use it to say
-  how to answer the comment, e.g. --footer "> Reply with /testeiya to continue."
+  --footer adds a line under the report and --header adds one above. Both go
+  wherever the report goes: stdout, the file, the posted comment. Use --footer
+  to say how to answer a comment, e.g. --footer "> Reply with /testeiya".
+
+  The report is signed, unless you write your own footer:
+
+    *🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & <model>*
+
+  --no-default-footer drops the signature, so does TESTEIYA_NO_DEFAULT_FOOTER.
 
   Every destination is checked before the run starts, so a missing gh costs no
   tokens.
@@ -101,8 +111,9 @@ Skills
 
   The package ships the skills the agent reads, and only those: skills found in
   the folder it runs in are ignored, so a checkout cannot hand it its own.
-  "testeiya skills" lists them. Name one in the task to use it, e.g. a task
-  ending in "/qa-thinking".
+  "testeiya skills" lists them. Name one in the task with a slash and it is
+  loaded before the run, e.g. "/qa-thinking". A name we do not ship is left
+  alone, so a stray "/word" in the task is just a word.
 
 Testomat.io
 
@@ -149,7 +160,9 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (typeof values.name === "string") args.name = values.name;
   if (values["no-session"]) args.noSession = true;
   if (values["exit-zero"]) args.exitZero = true;
+  if (typeof values.header === "string") args.header = values.header;
   if (typeof values.footer === "string") args.footer = values.footer;
+  if (values["no-default-footer"]) args.noDefaultFooter = true;
   if (args.session && (args.continueLast || args.resume || args.name || args.noSession)) {
     return { error: "--session already names and continues a session" };
   }
@@ -170,7 +183,9 @@ const RUN_OPTIONS: ParseArgsConfig["options"] = {
   name: { type: "string" },
   "no-session": { type: "boolean" },
   "exit-zero": { type: "boolean" },
+  header: { type: "string" },
   footer: { type: "string" },
+  "no-default-footer": { type: "boolean" },
   help: HELP_FLAG,
 };
 
@@ -212,7 +227,9 @@ export interface CliArgs {
   name?: string;
   noSession?: boolean;
   exitZero?: boolean;
+  header?: string;
   footer?: string;
+  noDefaultFooter?: boolean;
   /** Set when argv was malformed; the caller prints the message and exits 2. */
   error?: string;
 }

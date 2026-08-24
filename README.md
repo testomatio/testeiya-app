@@ -279,15 +279,23 @@ Posting uses the GitHub CLI and resolves the PR number from `GITHUB_EVENT_PATH`,
 `GITHUB_REF`, or `gh pr view` — so inside Actions it just works. Every
 destination is checked before the run starts, so a missing `gh` costs no tokens.
 
-`--footer "<text>"` adds a line under a posted comment, and nowhere else. It is
-what turns a report into a conversation: tell the reader how to answer, and let
-the workflow feed their reply back into the same session.
+`--footer "<text>"` adds a line under the report and `--header "<text>"` adds
+one above. Both go wherever the report goes: stdout, the file, the posted
+comment. A footer is what turns a posted report into a conversation: tell the
+reader how to answer, and let the workflow feed their reply back into the same
+session.
 
 ```bash
 testeiya task "Review this pull request" \
   --output gh:pr-comment \
   --footer "> You can reply to this comment by typing /testeiya"
 ```
+
+Write no footer of your own and the report is signed:
+
+> *🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*
+
+Pass `--no-default-footer`, or set `TESTEIYA_NO_DEFAULT_FOOTER`, to drop it.
 
 ## Sessions
 
@@ -329,9 +337,17 @@ points at a self-hosted instance.
 
 ## Skills
 
-A skill is a folder with a `SKILL.md`. The agent loads them all and invokes the
-ones a task calls for — you never pick a skill explicitly, the task phrasing
-does.
+A skill is a folder with a `SKILL.md`. The agent sees them all and reaches for
+the ones a task calls for. Name one with a slash to make it certain:
+
+```bash
+testeiya task "Review this pull request as a QA engineer /qa-thinking"
+```
+
+That skill is loaded in front of the task before the run starts, so it does not
+depend on the model deciding to open it. A name the package does not ship is
+left as plain text, which keeps a task safe to build from someone else's words —
+a `/word` in a pull request comment stays a word.
 
 The set is vendored from upstream repositories and moves with every release, so
 ask your own install rather than a list in a README:

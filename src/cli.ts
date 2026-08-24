@@ -70,12 +70,6 @@ async function task(args: CliArgs): Promise<number> {
 
   const destinations = parseDestinations(args.outputs ?? [], args.json);
   if (typeof destinations === "string") throw new UsageError(destinations);
-  // A footer nobody will ever see is a workflow that thinks it started a
-  // conversation and did not.
-  if (args.footer && !destinations.some((d) => d.kind === "gh")) {
-    throw new UsageError("--footer needs a comment destination, e.g. -o gh:pr-comment");
-  }
-
   // Everything a destination needs is checked before a single token is spent.
   const unreachable = await preflight(destinations);
   if (unreachable) throw new UsageError(unreachable);
@@ -96,7 +90,9 @@ async function task(args: CliArgs): Promise<number> {
     brief,
     model: args.model,
     exitZero: args.exitZero,
+    header: args.header,
     footer: args.footer,
+    noDefaultFooter: args.noDefaultFooter,
   });
 }
 

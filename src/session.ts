@@ -6,6 +6,7 @@ import {
   SettingsManager,
   type AgentSession,
   type SessionManager,
+  type Skill,
 } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "../prompt/index.js";
 import { pathClis } from "../prompt/tools.js";
@@ -111,7 +112,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     },
   });
 
-  const skills = loader.getSkills().skills.length;
+  const skills = loader.getSkills().skills;
   return { session, model: `${model.provider}/${model.id}`, skills };
 }
 
@@ -137,5 +138,6 @@ export interface SessionOptions {
 export interface CreatedSession {
   session: AgentSession;
   model: string;
-  skills: number;
+  /** What the run can reach — the list a `/name` in the task is matched against. */
+  skills: Skill[];
 }

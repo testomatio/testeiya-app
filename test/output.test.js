@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commentBody, markdownPath, parseDestinations } from "../dist/src/output.js";
+import { decorate, defaultFooter, markdownPath, parseDestinations } from "../dist/src/output.js";
 
 test("no output means markdown on stdout", () => {
   assert.deepEqual(parseDestinations([]), [{ kind: "stdout" }]);
@@ -37,8 +37,25 @@ test("markdownPath finds the file the agent writes", () => {
   assert.equal(markdownPath(parseDestinations([])), undefined);
 });
 
-test("a footer goes under the posted comment", () => {
-  assert.equal(commentBody("verdict\n"), "verdict\n");
-  assert.equal(commentBody("verdict\n", "> Reply with /testeiya"), "verdict\n\n> Reply with /testeiya\n");
-  assert.equal(commentBody("verdict\n", "   "), "verdict\n");
+test("a footer goes under the report, a header above it", () => {
+  assert.equal(decorate("verdict\n"), "verdict\n");
+  assert.equal(
+    decorate("verdict\n", { footer: "> Reply with /testeiya" }),
+    "verdict\n\n> Reply with /testeiya\n"
+  );
+  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), "## Testeiya\n\nverdict\n");
+  assert.equal(
+    decorate("verdict\n", { header: "## Testeiya", footer: "> Reply" }),
+    "## Testeiya\n\nverdict\n\n> Reply\n"
+  );
+  assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), "verdict\n");
+});
+
+test("the report is signed by default", () => {
+  const footer = defaultFooter("openrouter/anthropic/claude-sonnet-5");
+  assert.equal(
+    footer,
+    "*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*"
+  );
+  assert.equal(decorate("verdict\n", { footer }), `verdict\n\n${footer}\n`);
 });
