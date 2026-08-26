@@ -9,9 +9,9 @@
  *
  * Plain Node, no build step and no task runner — the release workflow has neither.
  *
- *   node scripts/vendor-skills.js                    every source
- *   node scripts/vendor-skills.js testomatio         one vendor
- *   node scripts/vendor-skills.js --repo owner/repo:branch
+ *   node scripts/vendor-skills.js                            every source
+ *   node scripts/vendor-skills.js testomatio                 one vendor
+ *   node scripts/vendor-skills.js testomatio --branch my-wip  one vendor, from a branch
  */
 import { basename, dirname, join, resolve } from "node:path";
 import {
@@ -52,7 +52,7 @@ const TGZ_NAME = "source.tar.gz";
  * and the resolved SHAs + owned folders are pinned in skills/skills.lock.json.
  * @param {string} vendor - only update this vendor (folder, owner, or owner/repo)
  * @param {object} options
- * @param {string} [options.repo=""] - update one source from a branch, as <owner/repo:branch>; fails when the repo or branch does not exist
+ * @param {string} [options.branch=""] - fetch the named vendor from this branch instead of its default; fails when the branch does not exist
  * @param {Set<string>} [options.internalSlugs] - slugs a host harness ships itself, reported when a vendored skill collides with one
  */
 export async function vendorSkills(vendor = "", options = {}) {
@@ -60,15 +60,10 @@ export async function vendorSkills(vendor = "", options = {}) {
     console.warn(`No manifest at ${SKILLS_MANIFEST}`);
     return;
   }
-  let branch = null;
-  let filter = vendor;
-  if (options.repo) {
-    const match = String(options.repo).match(/^([^:]+):(.+)$/);
-    if (!match) {
-      throw new Error(`--repo expects <owner/repo:branch>, got "${options.repo}"`);
-    }
-    filter = match[1];
-    branch = match[2];
+  const filter = vendor;
+  const branch = options.branch || null;
+  if (branch && !filter) {
+    throw new Error("--branch needs a vendor: bunosh skills:update <vendor> --branch <branch>");
   }
   const parsed = parseYaml(readFileSync(SKILLS_MANIFEST, "utf-8")) ?? [];
   const allSources = (Array.isArray(parsed) ? parsed : Object.values(parsed).flat()).map(normalizeEntry);
@@ -154,13 +149,13 @@ export async function vendorSkills(vendor = "", options = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  let repo = "";
-  const flag = args.findIndex((arg) => arg.startsWith("--repo"));
+  let branch = "";
+  const flag = args.findIndex((arg) => arg.startsWith("--branch"));
   if (flag >= 0) {
-    repo = args[flag].split("=")[1] ?? args.splice(flag + 1, 1)[0] ?? "";
+    branch = args[flag].split("=")[1] ?? args.splice(flag + 1, 1)[0] ?? "";
     args.splice(flag, 1);
   }
-  await vendorSkills(args.find((arg) => !arg.startsWith("-")) ?? "", { repo });
+  await vendorSkills(args.find((arg) => !arg.startsWith("-")) ?? "", { branch });
 }
 
 function normalizeEntry(raw) {
