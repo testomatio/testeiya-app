@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": "feat/qa-thinking-review",
-      "sha": "e72b989995051c195e9291aa9f5f725365ad9699",
+      "sha": "475d97d4e02cb1c535dd90e7a70910d91e721056",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
@@ -17,8 +17,10 @@
         "qa-automation-test-consolidation",
         "qa-data-seeder",
         "qa-e2e-tests-reporting",
+        "qa-lead-strategy-advisor",
         "qa-pr-requirements-analyzer",
         "qa-requirement-reviewer",
+        "qa-review-pr",
         "qa-split-testing-levels-pyramid",
         "qa-sprint-report-by-testomatio",
         "qa-test-code-coverage",
@@ -29,6 +31,7 @@
         "setup-change-aware-pr-testing",
         "setup-ci-automation",
         "sync-test-cases-with-tms",
+        "testing-workflow",
         "testomat-allure-adapter",
         "testomatio-mcp"
       ]
