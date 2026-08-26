@@ -13,7 +13,7 @@
  *   node scripts/vendor-skills.js testomatio         one vendor
  *   node scripts/vendor-skills.js --repo owner/repo:branch
  */
-import { join, basename } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   existsSync,
   readdirSync,
@@ -22,7 +22,10 @@ import {
   mkdirSync,
   rmSync,
   cpSync,
+  copyFileSync,
   realpathSync,
+  statSync,
+  symlinkSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
@@ -32,6 +35,7 @@ import { parse as parseYaml } from "yaml";
 export const SKILLS_OUTPUT = join(import.meta.dirname, "..", "skills");
 export const SKILLS_MANIFEST = join(SKILLS_OUTPUT, "skills.yaml");
 export const SKILLS_LOCK = join(SKILLS_OUTPUT, "skills.lock.json");
+const TGZ_NAME = "source.tar.gz";
 
 /**
  * Vendor every source in the manifest (or one, when `vendor` names it) into
@@ -135,7 +139,7 @@ export async function vendorSkills(vendor = "", options = {}) {
       vendored.push(skill.slug);
       console.log(`  ✓ ${rel}`);
     }
-    updatedLock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, folder, skills: vendored });
+    updatedLock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, folder, skills: vendored.slice().sort() });
     managed.add(folder);
     if (from.cleanup) rmSync(from.cleanup, { recursive: true, force: true });
   }
@@ -274,7 +278,7 @@ async function fetchGitSource(entry) {
   rmSync(extractDir, { recursive: true, force: true });
   mkdirSync(extractDir, { recursive: true });
 
-  const tgz = join(extractDir, "source.tar.gz");
+  const tgz = join(extractDir, TGZ_NAME);
   const url = `https://codeload.github.com/${owner}/${repo}/tar.gz/${sha}`;
   const res = await fetch(url, { headers: githubHeaders() });
   if (!res.ok) {
@@ -283,10 +287,16 @@ async function fetchGitSource(entry) {
   }
   writeFileSync(tgz, Buffer.from(await res.arrayBuffer()));
   try {
-    execFileSync("tar", ["-xzf", tgz, "-C", extractDir], { stdio: "pipe" });
+    // Relative name, resolved from cwd: GNU tar reads an absolute `C:\...`
+    // after -f as host:path and refuses it.
+    execFileSync("tar", ["-xzf", TGZ_NAME], { cwd: extractDir, stdio: "pipe" });
   } catch {
-    console.warn(`tar failed for ${entry.source}`);
-    return null;
+    // Windows tar cannot create the archive's symlinks without a privilege, but
+    // every regular file extracts — rebuild the links as junctions and go on.
+    if (process.platform !== "win32" || !rebuildLinks(extractDir)) {
+      console.warn(`tar failed for ${entry.source}`);
+      return null;
+    }
   }
 
   const inner = readdirSync(extractDir, { withFileTypes: true }).find((e) => e.isDirectory());
@@ -298,6 +308,43 @@ async function fetchGitSource(entry) {
   const sub = entry.subpath ?? subpath;
   if (sub) root = join(root, sub);
   return { root, sha, cleanup: extractDir };
+}
+
+// Windows tar extracts every regular file and fails only on symlinks. The
+// listing still names them all, so rebuild each inside the tree: junctions for
+// folders (no privilege needed), copies for files.
+function rebuildLinks(extractDir) {
+  let listing;
+  try {
+    listing = execFileSync("tar", ["-tvzf", TGZ_NAME], { cwd: extractDir, stdio: "pipe" }).toString();
+  } catch {
+    return false;
+  }
+  const root = readdirSync(extractDir, { withFileTypes: true }).find((e) => e.isDirectory());
+  if (!root) return false;
+  for (const line of listing.split(/\r?\n/)) {
+    if (!line.startsWith("l")) continue;
+    const arrow = line.indexOf(" -> ");
+    if (arrow < 0) continue;
+    const name = line.slice(0, arrow).trimEnd().split(" ").pop();
+    if (!name) continue;
+    const linkPath = join(extractDir, name);
+    let target = resolve(dirname(linkPath), line.slice(arrow + 4));
+    if (!existsSync(target)) {
+      // The walk's rule: a plugin entry named X aliases the real skills/X, so a
+      // link pointing at its author's own disk resolves there too.
+      const conventional = join(extractDir, root.name, "skills", basename(name));
+      if (!existsSync(join(conventional, "SKILL.md"))) continue;
+      target = conventional;
+    }
+    try {
+      if (statSync(target).isDirectory()) symlinkSync(target, linkPath, "junction");
+      else copyFileSync(target, linkPath);
+    } catch {
+      // tar already materialized it, or it cannot be rebuilt — the walk falls back.
+    }
+  }
+  return true;
 }
 
 function resolveLocalSource(entry) {

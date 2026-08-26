@@ -39,7 +39,7 @@
     {
       "source": "codeceptjs/skills",
       "ref": null,
-      "sha": "e19ba9d0f513cbc9c3e4a4c5c6dd02cfedde4afd",
+      "sha": "d3d6a4e0e29207b1afb051eeb6f5f36984f4752b",
       "folder": "codeceptjs",
       "skills": [
         "codeceptjs-exploration",
