@@ -32,3 +32,4 @@
   folder: playwright
 - source: microsoft/playwright-cli/tree/main/skills/playwright-cli
   folder: playwright
+
