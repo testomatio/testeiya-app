@@ -60,8 +60,9 @@ async function main(argv: string[]): Promise<void> {
 }
 
 async function task(args: CliArgs): Promise<number> {
+  const followUp = args.followUp ?? process.env.TESTEIYA_FOLLOW_UP;
   const prompt = args.prompt ?? (await readStdin());
-  if (!prompt.trim()) {
+  if (!prompt.trim() && !followUp?.trim()) {
     process.stderr.write(`  ${args.command} needs something to work on\n\n${USAGE}\n`);
     process.exit(2);
   }
@@ -72,6 +73,11 @@ async function task(args: CliArgs): Promise<number> {
   const unreachable = await preflight(destinations);
   if (unreachable) throw new UsageError(unreachable);
 
+  // A job-level TESTEIYA_SESSION_FILE must not quietly redirect a run that named
+  // its own session on the command line.
+  if (!args.session && !args.resume && !args.continueLast) {
+    args.sessionFile ??= process.env.TESTEIYA_SESSION_FILE;
+  }
   const sessionManager = await openSessionManager(process.cwd(), args);
   if (typeof sessionManager === "string") throw new UsageError(sessionManager);
   if (args.name) sessionManager.appendSessionInfo(args.name);
@@ -82,6 +88,7 @@ async function task(args: CliArgs): Promise<number> {
   const brief = args.command === "ask";
   return runPrint({
     prompt,
+    followUp,
     destinations,
     sessionManager,
     sessionId,

@@ -1,14 +1,31 @@
+import { resolve } from "node:path";
+
 import { buildSessionContext, SessionManager } from "@earendil-works/pi-coding-agent";
 
 /**
  * Sessions are pi's, not ours: it stores, lists and reopens them under
- * PI_STATE_DIR. `--no-session` keeps a run entirely in memory.
+ * PI_STATE_DIR, or in the one file `--session-file` names. `--no-session` keeps
+ * a run entirely in memory.
  */
 export async function openSessionManager(
   cwd: string,
   args: SessionArgs
 ): Promise<SessionManager | string> {
   if (args.noSession) return SessionManager.inMemory(cwd);
+
+  // One file holds the transcript and the checkpoint, so a runner that keeps
+  // nothing carries a thread by caching it. A path that is not there yet is the
+  // first round, not an error. The cwd override lets a restored file resume in
+  // a workspace at a different path than the round that wrote it.
+  if (args.sessionFile) {
+    const path = resolve(cwd, args.sessionFile);
+    try {
+      return SessionManager.open(path, undefined, cwd);
+    } catch (err) {
+      if (err instanceof Error) return `cannot open ${path} as a session: ${err.message}`;
+      return `cannot open ${path} as a session: ${String(err)}`;
+    }
+  }
 
   // One label, one thread: a CI job that restores the same store every round
   // says --session <label> and never has to know whether a session exists yet.
@@ -82,6 +99,7 @@ export interface SessionArgs {
   continueLast?: boolean;
   resume?: string;
   session?: string;
+  sessionFile?: string;
   noSession?: boolean;
 }
 

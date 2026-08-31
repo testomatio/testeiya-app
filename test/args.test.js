@@ -32,6 +32,20 @@ test("--session replaces the session flags it would fight with", () => {
   assert.match(parseCliArgs(["task", "x", "--session", "pr-42", "--name", "n"]).error, /--session/);
 });
 
+test("--session-file is a run flag and stands alone", () => {
+  const args = parseCliArgs(["task", "x", "--session-file", ".cache/pr-42.jsonl"]);
+  assert.equal(args.sessionFile, ".cache/pr-42.jsonl");
+  assert.match(parseCliArgs(["task", "x", "--session-file", "s.jsonl", "-c"]).error, /--session-file/);
+  assert.match(parseCliArgs(["task", "x", "--session-file", "s.jsonl", "--session", "p"]).error, /--session/);
+  assert.match(parseCliArgs(["skills", "--session-file", "s.jsonl"]).error, /session-file/);
+});
+
+test("--followup is a run flag", () => {
+  assert.equal(parseCliArgs(["task", "x", "--followup", "also check login"]).followUp, "also check login");
+  assert.equal(parseCliArgs(["ask", "x", "--followup", ""]).followUp, "");
+  assert.match(parseCliArgs(["skills", "--followup", "x"]).error, /followup/);
+});
+
 test("--exit-zero is a run flag", () => {
   assert.equal(parseCliArgs(["task", "x", "--exit-zero"]).exitZero, true);
   assert.match(parseCliArgs(["skills", "--exit-zero"]).error, /exit-zero/);

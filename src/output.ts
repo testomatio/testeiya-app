@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
 import { access, constants, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { run } from "./exec.js";
 
 const GH_SCHEME = "gh:";
 
@@ -82,6 +82,14 @@ export function decorate(report: string, decoration?: Decoration): string {
 /** What signs the report when the caller writes no footer of their own. */
 export function defaultFooter(model: string): string {
   return `*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & ${modelName(model)}*`;
+}
+
+/** The pull request `preflight` resolved, when the report is posted to one. */
+export function pullRequestNumber(destinations: Destination[]): number | undefined {
+  for (const destination of destinations) {
+    if (destination.kind === "gh") return destination.pr;
+  }
+  return undefined;
 }
 
 /** The model name you would recognise, without the provider namespace. */
@@ -191,20 +199,6 @@ function positive(value: string): number | null {
   return null;
 }
 
-function run(command: string, args: string[], options?: { stdin?: string }): Promise<Executed> {
-  return new Promise((done) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk));
-    child.stderr.on("data", (chunk) => (stderr += chunk));
-    child.on("error", (err) => done({ code: 127, stdout, stderr: err.message }));
-    child.on("close", (code) => done({ code: code ?? 1, stdout, stderr }));
-    if (options?.stdin) child.stdin.write(options.stdin);
-    child.stdin.end();
-  });
-}
-
 function pass(): true {
   return true;
 }
@@ -234,10 +228,4 @@ export interface RunEnvelope {
   tokens: { input: number; output: number };
   durationMs: number;
   sessionId: string | null;
-}
-
-interface Executed {
-  code: number;
-  stdout: string;
-  stderr: string;
 }

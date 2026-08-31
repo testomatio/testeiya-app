@@ -2,8 +2,8 @@
   "sources": [
     {
       "source": "testomatio/skills",
-      "ref": "feat/qa-thinking-review",
-      "sha": "475d97d4e02cb1c535dd90e7a70910d91e721056",
+      "ref": null,
+      "sha": "07a67b75bb49fb7f9e8061ab69a6cbfa45f9b99f",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
@@ -13,10 +13,12 @@
         "explorbot-plan",
         "explorbot-setup",
         "improve-test-cases",
+        "prima",
         "pull-request-diff-analyzer",
         "qa-automation-test-consolidation",
         "qa-data-seeder",
         "qa-e2e-tests-reporting",
+        "qa-explain-behavior",
         "qa-lead-strategy-advisor",
         "qa-pr-requirements-analyzer",
         "qa-requirement-reviewer",
@@ -69,7 +71,7 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "2f85a94b7b885dbf4a5d34462f253a8746a690c9",
+      "sha": "cbc09311c468e10fba47964e9b3830fe625c9b01",
       "folder": "playwright",
       "skills": [
         "playwright-cli"

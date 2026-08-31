@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
+import { describeUpdate, lastCheckpoint, readCheckpoint, saveCheckpoint } from "./checkpoint.js";
 import { VERSION } from "./env.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
@@ -12,6 +13,7 @@ import {
   deliver,
   markdownPath,
   modelName,
+  pullRequestNumber,
   type Destination,
   type RunEnvelope,
 } from "./output.js";
@@ -26,6 +28,14 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const outputPath = markdownPath(options.destinations);
   const stampBefore = fileStamp(outputPath);
   const cwd = process.cwd();
+
+  // Only a saved session has a next round to catch up, so a one-shot run never
+  // pays for the git calls.
+  let checkpoint = null;
+  if (options.sessionManager.isPersisted()) {
+    checkpoint = await readCheckpoint(cwd, pullRequestNumber(options.destinations));
+  }
+  const update = describeUpdate(lastCheckpoint(options.sessionManager), checkpoint);
 
   let created;
   try {
@@ -47,7 +57,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   }
 
   const { session, model, skills } = created;
-  const task = expandSkills(options.prompt, skills);
+  const task = expandSkills(compose(options.prompt, update, options.followUp), skills);
   process.on("SIGINT", () => {
     note(c.yellow("\n  ⨯ interrupted"));
     void session.abort().finally(() => process.exit(130));
@@ -60,6 +70,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     note(`  Testeiya ${c.dim(`v${VERSION}`)} ${c.dim("·")} ${model} ${c.dim("·")} ${cwd}`);
     note(c.dim(`  ${skills.length} skills`));
     if (task.loaded.length > 0) note(c.dim(`  ↳ ${task.loaded.join(", ")}`));
+    if (update) note(c.dim("  ↻ catching up on what changed since the last round"));
     for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
     note("");
   }
@@ -67,6 +78,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const run = watchRun(session);
   await promptOnce(session, task.prompt, run);
   const written = await collectReport(session, run, outputPath, stampBefore, result.status);
+  if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);
   const report = sign(written, options, model);
 
   run.unsubscribe();
@@ -87,7 +99,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
 
   // Nobody is watching this run, so the status goes above the answer rather
   // than after it: the last thing on screen should be the agent's output.
-  summarize({ run, result, envelope, started });
+  summarize({ run, result, envelope, started, resume: resumeHint(options) });
   if (willPrint(options.destinations, report)) {
     note(c.dim(`  ${"─".repeat(rule())}`));
     note("");
@@ -103,6 +115,23 @@ export async function runPrint(options: PrintOptions): Promise<number> {
 
   await session.dispose();
   return code;
+}
+
+/**
+ * What the agent is asked, in the order it reads: the task, what moved since
+ * the last round, then the user's reply. The task stays in front of both —
+ * session restore is best-effort in CI, and a round that lost its thread must
+ * still know what it was asked to do. An empty reply changes nothing, so a job
+ * can pass a comment body that is not there.
+ */
+export function compose(prompt: string, update?: string | null, followUp?: string): string {
+  const parts = [prompt.trim(), update?.trim()].filter(Boolean);
+  const reply = followUp?.trim();
+  if (reply) {
+    parts.push(`User replied:\n\n<user_reply>\n${reply}\n</user_reply>`);
+    parts.push(parts.length > 1 ? "Answer the reply. The task above stands." : "Answer the reply.");
+  }
+  return parts.join("\n\n");
 }
 
 export function exitCode(
@@ -266,7 +295,7 @@ function summarize(s: Summary): void {
   if (s.run.steps === 1) parts.push("1 step");
   if (s.run.steps > 1) parts.push(`${s.run.steps} steps`);
   parts.push(`tokens ${tokens(s.run.input)} in / ${tokens(s.run.output)} out`);
-  if (s.envelope.sessionId) parts.push(`--resume ${shortId(s.envelope.sessionId)}`);
+  if (s.resume) parts.push(s.resume);
   const stats = parts.join(` ${c.dim("·")} `);
 
   if (s.run.error) {
@@ -311,6 +340,17 @@ function lastAssistantText(session: AgentSession): string | null {
   return null;
 }
 
+/** How to reopen this run. A session outside the default store has no id to look up. */
+function resumeHint(options: PrintOptions): string | null {
+  if (!options.sessionId) return null;
+  if (options.sessionManager.usesDefaultSessionDir()) {
+    return `--resume ${shortId(options.sessionId)}`;
+  }
+  const file = options.sessionManager.getSessionFile();
+  if (!file) return null;
+  return `--session-file ${file}`;
+}
+
 function errorText(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
@@ -333,6 +373,7 @@ function tokens(count: number): string {
 
 export interface PrintOptions {
   prompt: string;
+  followUp?: string;
   destinations: Destination[];
   sessionManager: SessionManager;
   sessionId?: string | null;
@@ -349,6 +390,7 @@ interface Summary {
   result: RunResult;
   envelope: RunEnvelope;
   started: number;
+  resume: string | null;
 }
 
 interface RunState {

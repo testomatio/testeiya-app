@@ -22,25 +22,29 @@ Usage:
   testeiya sessions           list saved sessions for this folder
 
 Options:
-  -o, --output <dest>      report destination, repeatable: file.md, file.json, gh:pr-comment
-      --model <id>         provider/model to run
-      --project <id>       Testomat.io project id
-  -c, --continue           continue the last session in this folder
-      --resume <id>        continue that session
-      --session <label>    continue the session with that name, or start it
-      --name <label>       name the session
-      --no-session         do not save the session
-      --exit-zero          a negative verdict exits 0
-      --header <text>      line added above the report
-      --footer <text>      line added under the report
-      --no-default-footer  do not sign the report
-      --json               machine-readable output
-      --probe              doctor only: test the key with one request
-  -h, --help               show this
-  -v, --version            show version
+  -o, --output <dest>        report destination, repeatable: file.md, file.json, gh:pr-comment
+      --model <id>           provider/model to run
+      --project <id>         Testomat.io project id
+      --followup <text>      the user's reply, added to the task as a new message
+  -c, --continue             continue the last session in this folder
+      --resume <id>          continue that session
+      --session <label>      continue the session with that name, or start it
+      --session-file <path>  keep the session in that file, for CI caches
+      --name <label>         name the session
+      --no-session           do not save the session
+      --exit-zero            a negative verdict exits 0
+      --header <text>        line added above the report
+      --footer <text>        line added under the report
+      --no-default-footer    do not sign the report
+      --json                 machine-readable output
+      --probe                doctor only: test the key with one request
+  -h, --help                 show this
+  -v, --version              show version
 
 Environment:
   TESTEIYA_MODEL              model to run, e.g. openrouter/anthropic/claude-sonnet-5
+  TESTEIYA_FOLLOW_UP          the user's reply, same as --followup
+  TESTEIYA_SESSION_FILE       where to keep the session, same as --session-file
   TESTEIYA_NO_DEFAULT_FOOTER  do not sign the report
   OPENROUTER_API_KEY          provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
   TESTOMATIO                  Testomat.io project API key
@@ -97,15 +101,47 @@ Models and keys
   ~/.testeiya/auth.json, which is the file the desktop app's Settings dialog
   writes.
 
+Answering a reply
+
+  --followup carries what the user said back to the agent. The task stays the
+  standing instruction and the reply is added under it as a new user message,
+  so one command serves both the first round and every answer after it.
+
+  Set TESTEIYA_FOLLOW_UP instead when the text is a comment body: an empty
+  value is ignored, so the same job runs unchanged when nobody replied.
+
+    TESTEIYA_FOLLOW_UP="\${{ github.event.comment.body || '' }}" \\
+      testeiya task "Review this pull request" --session pr-42 -o gh:pr-comment
+
+  Pair it with --session <label> and the agent answers with its earlier work in
+  front of it. Without a session the reply is still delivered, just without the
+  thread behind it.
+
 Sessions
 
   Runs are saved under ~/.testeiya, so a follow-up picks up where the last one
   stopped. -c continues the last session in this folder, --resume <id> picks
   another, --name labels one, and --no-session saves nothing.
 
-  --session <label> is the one for a job that runs again and again: it continues
-  the session with that name, and starts it the first time. Give each thread its
-  own label and they never mix.
+  --session <label> is for a job that runs again and again on the same machine:
+  it continues the session with that name, and starts it the first time. Give
+  each thread its own label and they never mix.
+
+  --session-file <path> is the one for CI. The whole session is that one file,
+  so a runner that keeps nothing carries it between rounds as a cache or an
+  artifact. It is written the first time and continued after that, with no
+  "does it exist yet" branch. Keep it out of the working tree, or ignore it
+  there, so the agent does not read its own transcript back as a file.
+
+    testeiya task "Review this pull request" --session-file .cache/pr-42.jsonl
+
+  A saved session also records the commit it ran on, its branch and origin, and
+  the pull request it posted to. When the next round opens it on a newer commit,
+  the agent is told the range it has not read and reads that first. On a pull
+  request it is also told to read the comments added since. A round that broke
+  records nothing, so the one after it still catches up from where work stopped.
+  That history rides inside the session, so restoring it is all a round needs.
+  The checkout still needs enough history to reach the commit it stopped on.
 
 Skills
 
@@ -154,9 +190,11 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (values.probe) args.probe = true;
   if (typeof values.model === "string") args.model = values.model;
   if (typeof values.project === "string") args.project = values.project;
+  if (typeof values.followup === "string") args.followUp = values.followup;
   if (values.continue) args.continueLast = true;
   if (typeof values.resume === "string") args.resume = values.resume;
   if (typeof values.session === "string") args.session = values.session;
+  if (typeof values["session-file"] === "string") args.sessionFile = values["session-file"];
   if (typeof values.name === "string") args.name = values.name;
   if (values["no-session"]) args.noSession = true;
   if (values["exit-zero"]) args.exitZero = true;
@@ -165,6 +203,9 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (values["no-default-footer"]) args.noDefaultFooter = true;
   if (args.session && (args.continueLast || args.resume || args.name || args.noSession)) {
     return { error: "--session already names and continues a session" };
+  }
+  if (args.sessionFile && (args.session || args.continueLast || args.resume || args.noSession)) {
+    return { error: "--session-file already says which session to continue" };
   }
   return args;
 }
@@ -177,9 +218,11 @@ const RUN_OPTIONS: ParseArgsConfig["options"] = {
   json: JSON_FLAG,
   model: { type: "string" },
   project: { type: "string" },
+  followup: { type: "string" },
   continue: { type: "boolean", short: "c" },
   resume: { type: "string" },
   session: { type: "string" },
+  "session-file": { type: "string" },
   name: { type: "string" },
   "no-session": { type: "boolean" },
   "exit-zero": { type: "boolean" },
@@ -221,9 +264,11 @@ export interface CliArgs {
   probe?: boolean;
   model?: string;
   project?: string;
+  followUp?: string;
   continueLast?: boolean;
   resume?: string;
   session?: string;
+  sessionFile?: string;
   name?: string;
   noSession?: boolean;
   exitZero?: boolean;

@@ -146,8 +146,7 @@ locator drift, missing waits — reruns just the failing scenarios, rolls back a
 edit that did not help, and always writes `output/ci-fix.md` for the next job:
 
 ```bash
-testeiya task "Fix the failed CodeceptJS tests using ci-fix-tests. No refactors." \
-  --no-session
+testeiya task "Fix the failed CodeceptJS tests using ci-fix-tests. No refactors."
 ```
 
 ### Audit the test suite on a schedule
@@ -213,6 +212,70 @@ jobs:
 
 The same shape works for the other scenarios: trigger on `issues` and pipe the
 body in for test-case generation, or run on a `schedule` for the nightly audit.
+
+To let reviewers answer in the thread, add `issue_comment` to the triggers, sign
+the report with a line that says how to reply, and hand the comment body to the
+run as a follow-up:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  grill:
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/testeiya'))
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TESTEIYA_FOLLOW_UP: ${{ github.event.comment.body || '' }}
+      PR: ${{ github.event.number || github.event.issue.number }}
+    steps:
+      # full history, so the round can diff against the commit the last one saw
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # a comment event checks out the default branch, so move to the pull request
+      - run: gh pr checkout $PR
+      # the session lives here; without this every round starts empty
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/testeiya
+          key: testeiya-pr-${{ env.PR }}-${{ github.run_id }}
+          restore-keys: testeiya-pr-${{ env.PR }}-
+      - run: |
+          npx testeiya@latest task \
+            "Review this pull request as a QA engineer. What could go wrong?" \
+            --session-file ~/.cache/testeiya/pr-$PR.jsonl \
+            --footer "> Reply to this comment starting with /testeiya" \
+            --output gh:pr-comment
+      # save even when the verdict failed the job — that is the round people reply to
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ~/.cache/testeiya
+          key: testeiya-pr-${{ env.PR }}-${{ github.run_id }}
+```
+
+`issue_comment` fires on issues as well as pull requests and always runs the
+default branch's copy of the workflow, against the default branch's code. The
+`github.event.issue.pull_request` check and the `gh pr checkout` step above are
+what keep an answer on the right code. Gate the trigger on the author too: every
+comment spends tokens.
+
+Two details are load-bearing. The cache is split because `actions/cache` saves
+in a post step that a failed job never reaches, and a negative verdict fails the
+job — so the round a reviewer is most likely to answer would be the one that
+saved no session. Add `--exit-zero` instead if you would rather the verdict live
+only in the comment and never red the job. And the key carries `github.run_id`
+with a `restore-keys` prefix, because a cache entry is never overwritten: a
+fixed key would save the first round and restore it forever, in a green job that
+looks fine.
 
 ### GitLab CI
 
@@ -311,15 +374,69 @@ testeiya task "<task>" --resume <id>
 
 Pass `--name` to label a session and `--no-session` to save nothing.
 
-In CI, `--session <label>` is the one to reach for: it continues the session
-with that label, and starts it the first time, so a job that runs again and
-again needs no "does it exist yet" branch. Give each thread its own label, and
-carry `~/.testeiya` between rounds with the runner's cache. `--no-session` keeps
-runners stateless when continuity is not wanted.
+On a machine that keeps its home directory, `--session <label>` continues the
+session with that label and starts it the first time, so a job that runs again
+and again needs no "does it exist yet" branch. Give each thread its own label.
 
 ```bash
 testeiya task "Review the new commits" --session "pr-42" --output gh:pr-comment
 ```
+
+### One file for CI
+
+A CI runner keeps nothing, and `~/.testeiya` is a whole directory to move.
+`--session-file <path>` puts the session somewhere the job already caches:
+
+```bash
+testeiya task "Review the new commits" \
+  --session-file .cache/testeiya/pr-42.jsonl --output gh:pr-comment
+```
+
+That one file is the entire thread — the conversation and the catch-up state
+below. Restore it before the run, save it after, and the next round continues.
+It is written on the first round, so a path that is not there yet is not an
+error. `TESTEIYA_SESSION_FILE` sets the same thing from the environment.
+
+Two things to get right. Keep the file out of the working tree, or ignore it
+there, so the agent does not read its own transcript back as a file. And make
+sure the cache is actually rewritten each round: a cache key that never changes
+saves the first round and silently restores it forever.
+
+A saved session records more than the conversation: the commit it ran on, the
+branch, the origin, and the pull request it posted to. The next round compares
+that against the checkout it wakes up in, and when they differ the agent is told
+what it has not read — the commit range to diff, and on a pull request the
+comments added since. So a second round reacts to new commits instead of
+answering about code that has already moved.
+
+```
+Since your last round:
+
+- The checkout moved from a881ad1 to 700fbe1 on main. Read `git log --oneline
+  a881ad1..HEAD` and `git diff a881ad1...HEAD` before you answer.
+- Pull request #42 may have collected comments since 2026-08-28T20:00:40Z. Read
+  them with `gh pr view 42 --comments` and answer what is still open.
+```
+
+A round that broke records nothing, so the round after it still catches up from
+where the work actually stopped. This rides inside the session, so restoring it
+is all a round needs — but the checkout has to reach back far enough to see the
+commit the last round stopped on. `--no-session` skips all of it.
+
+### Answering a reply
+
+`--followup` carries what the user said back to the agent. The task stays the
+standing instruction and the reply is added under it as a new user message, so
+one command serves the first round and every answer after it.
+
+```bash
+testeiya task "Review this pull request" --followup "what about the login flow?" \
+  --session "pr-42" --output gh:pr-comment
+```
+
+`TESTEIYA_FOLLOW_UP` is the same thing from the environment, which is how a
+comment body reaches a run without going through the shell. An empty value is
+ignored, so the job runs unchanged when nobody replied.
 
 ## Testomat.io
 
