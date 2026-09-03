@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decorate, defaultFooter, markdownPath, parseDestinations } from "../dist/src/output.js";
+import { decorate, defaultFooter, marker, markdownPath, parseDestinations } from "../dist/src/output.js";
 
 test("no output means markdown on stdout", () => {
   assert.deepEqual(parseDestinations([]), [{ kind: "stdout" }]);
@@ -37,18 +37,30 @@ test("markdownPath finds the file the agent writes", () => {
   assert.equal(markdownPath(parseDestinations([])), undefined);
 });
 
+const MARK = "<!-- testeiya -->";
+
 test("a footer goes under the report, a header above it", () => {
-  assert.equal(decorate("verdict\n"), "verdict\n");
+  assert.equal(decorate("verdict\n"), `${MARK}\nverdict\n`);
   assert.equal(
     decorate("verdict\n", { footer: "> Reply with /testeiya" }),
-    "verdict\n\n> Reply with /testeiya\n"
+    `${MARK}\nverdict\n\n> Reply with /testeiya\n`
   );
-  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), "## Testeiya\n\nverdict\n");
+  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), `${MARK}\n## Testeiya\n\nverdict\n`);
   assert.equal(
     decorate("verdict\n", { header: "## Testeiya", footer: "> Reply" }),
-    "## Testeiya\n\nverdict\n\n> Reply\n"
+    `${MARK}\n## Testeiya\n\nverdict\n\n> Reply\n`
   );
-  assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), "verdict\n");
+  assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), `${MARK}\nverdict\n`);
+});
+
+test("the marker names the session and is never doubled", () => {
+  assert.equal(marker(), MARK);
+  assert.equal(marker("0198f2c1a3b4c"), "<!-- testeiya 0198f2c1a3b4c -->");
+  assert.equal(
+    decorate("verdict\n", { session: "0198f2c1a3b4c" }),
+    "<!-- testeiya 0198f2c1a3b4c -->\nverdict\n"
+  );
+  assert.equal(decorate(`${MARK}\nverdict\n`, { session: "0198f2c1a3b4c" }), `${MARK}\nverdict\n`);
 });
 
 test("the report is signed by default", () => {
@@ -57,5 +69,5 @@ test("the report is signed by default", () => {
     footer,
     "*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*"
   );
-  assert.equal(decorate("verdict\n", { footer }), `verdict\n\n${footer}\n`);
+  assert.equal(decorate("verdict\n", { footer }), `${MARK}\nverdict\n\n${footer}\n`);
 });

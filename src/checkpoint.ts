@@ -62,7 +62,7 @@ export function describeUpdate(previous: Checkpoint | null, current: Checkpoint 
 
   const pr = current.pr ?? previous.pr;
   if (pr) {
-    lines.push(`- Pull request #${pr} may have collected comments since ${previous.at}. Read them with \`gh pr view ${pr} --comments\` and answer what is still open.`);
+    lines.push(`- Pull request #${pr} may have collected comments since ${previous.at}. Read them with \`gh pr view ${pr} --comments\` and answer what is still open. Your own last comment is already in that thread — never post it again. Write only what is new since it.`);
   }
 
   if (lines.length === 0) return null;

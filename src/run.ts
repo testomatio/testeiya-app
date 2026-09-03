@@ -150,11 +150,13 @@ export function exitCode(
   return 0;
 }
 
-// The header and footer go wherever the report goes, so they are added once,
-// before anything is delivered.
+// The marker, header and footer go wherever the report goes, so they are added
+// once, before anything is delivered.
 function sign(report: string | null, options: PrintOptions, model: string): string | null {
   if (!report) return report;
-  return decorate(report, { header: options.header, footer: footerFor(options, model) });
+  let session;
+  if (options.sessionId) session = shortId(options.sessionId);
+  return decorate(report, { session, header: options.header, footer: footerFor(options, model) });
 }
 
 // Every report says what wrote it, until someone says otherwise.

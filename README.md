@@ -360,6 +360,11 @@ Write no footer of your own and the report is signed:
 
 Pass `--no-default-footer`, or set `TESTEIYA_NO_DEFAULT_FOOTER`, to drop it.
 
+Every report also opens with `<!-- testeiya <session> -->`. Markdown renders it
+as nothing, and it is how the next round tells its own comments apart from
+everyone else's: it answers what is new in the thread instead of posting the
+same report again.
+
 ## Sessions
 
 Runs are saved under `~/.testeiya`, so a follow-up picks up where the last one

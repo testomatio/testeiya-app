@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { run } from "./exec.js";
 
 const GH_SCHEME = "gh:";
+const MARKER = "<!-- testeiya";
 
 /**
  * Where the report goes. Only known schemes are recognised: a generic
@@ -66,9 +67,9 @@ export async function deliver(
 }
 
 /**
- * The report as delivered, header above it and footer under it. A footer is
- * how a thread stays a thread: it tells the reader what to type to answer a
- * posted comment.
+ * The report as delivered, marker on top, header above it and footer under it.
+ * A footer is how a thread stays a thread: it tells the reader what to type to
+ * answer a posted comment.
  */
 export function decorate(report: string, decoration?: Decoration): string {
   const header = decoration?.header?.trim();
@@ -76,7 +77,18 @@ export function decorate(report: string, decoration?: Decoration): string {
   let body = report.trimEnd();
   if (header) body = `${header}\n\n${body}`;
   if (footer) body = `${body}\n\n${footer}`;
+  if (!body.startsWith(MARKER)) body = `${marker(decoration?.session)}\n${body}`;
   return `${body}\n`;
+}
+
+/**
+ * What signs the text as ours. An HTML comment is invisible wherever markdown
+ * renders, and a later round reading the thread back knows which comments it
+ * wrote and must not post again.
+ */
+export function marker(session?: string): string {
+  if (!session) return `${MARKER} -->`;
+  return `${MARKER} ${session} -->`;
 }
 
 /** What signs the report when the caller writes no footer of their own. */
@@ -210,6 +222,8 @@ function fail(): false {
 export interface Decoration {
   header?: string;
   footer?: string;
+  /** Short session id for the marker line. Omitted on an unsaved run. */
+  session?: string;
 }
 
 export type Destination =
