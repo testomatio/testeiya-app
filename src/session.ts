@@ -21,6 +21,7 @@ import { sessionModel } from "./sessions.js";
 export const BUNDLED_SKILLS_DIR = join(PACKAGE_ROOT, "skills");
 
 const MCP_EXTENSION = join(import.meta.dirname, "mcp-extension.js");
+const ATTRIBUTION_EXTENSION = join(import.meta.dirname, "attribution-extension.js");
 
 /** The one runtime factory, so every command reads the same auth. */
 export async function createRuntime(): Promise<ModelRuntime> {
@@ -59,7 +60,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
 
   const settingsManager = SettingsManager.inMemory();
 
-  const extensionPaths: string[] = [];
+  const extensionPaths: string[] = [ATTRIBUTION_EXTENSION];
   const connectedMcps: string[] = [];
   if (hasMcp()) {
     extensionPaths.push(MCP_EXTENSION);
