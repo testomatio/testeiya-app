@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { describeUpdate, lastCheckpoint, readCheckpoint, saveCheckpoint } from "./checkpoint.js";
+import { describeUpdate, lastCheckpoint, readCheckpoint, readRepo, saveCheckpoint } from "./checkpoint.js";
 import { VERSION } from "./env.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
@@ -11,12 +11,16 @@ import {
   decorate,
   defaultFooter,
   deliver,
+  marker,
   markdownPath,
   modelName,
   pullRequestNumber,
+  threadName,
   type Destination,
+  type MarkerFields,
   type RunEnvelope,
 } from "./output.js";
+import { commentThread, threadHost } from "../prompt/comment-thread.js";
 import { shortId } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
 import { expandSkills } from "./skills.js";
@@ -29,13 +33,26 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const stampBefore = fileStamp(outputPath);
   const cwd = process.cwd();
 
-  // Only a saved session has a next round to catch up, so a one-shot run never
-  // pays for the git calls.
+  // A run that can use none of it never pays for the git calls: the checkout is
+  // read for a session with a next round to catch up, for a pull request to
+  // comment on, and in a CI job whose thread rules apply.
+  const pr = pullRequestNumber(options.destinations);
+  const host = threadHost(process.env);
+  const inThread = Boolean(pr) || Boolean(host);
+  const wantsRepo = inThread || options.sessionManager.isPersisted();
+  const repo = wantsRepo ? await readRepo(cwd) : { commit: null, branch: null, remote: null };
+
   let checkpoint = null;
-  if (options.sessionManager.isPersisted()) {
-    checkpoint = await readCheckpoint(cwd, pullRequestNumber(options.destinations));
-  }
+  if (options.sessionManager.isPersisted()) checkpoint = readCheckpoint(repo, pr);
   const update = describeUpdate(lastCheckpoint(options.sessionManager), checkpoint);
+
+  // How a thread is kept on this host. Rendered only in a job that has one.
+  const thread = threadName(options.thread);
+  const stamp = marks(options, thread, repo.commit, inThread);
+  const sections: string[] = [];
+  if (host) {
+    sections.push(commentThread({ host, thread, marker: marker(stamp), posts: Boolean(pr) }));
+  }
 
   let created;
   try {
@@ -46,6 +63,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
       model: options.model,
       outputFile: outputPath,
       brief: options.brief,
+      sections,
       ...connectionOptions(),
     });
   } catch (err) {
@@ -79,7 +97,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   await promptOnce(session, task.prompt, run);
   const written = await collectReport(session, run, outputPath, stampBefore, result.status);
   if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);
-  const report = sign(written, options, model);
+  const report = sign(written, options, model, stamp);
 
   run.unsubscribe();
   if (verbose) note("");
@@ -152,11 +170,30 @@ export function exitCode(
 
 // The marker, header and footer go wherever the report goes, so they are added
 // once, before anything is delivered.
-function sign(report: string | null, options: PrintOptions, model: string): string | null {
+function sign(
+  report: string | null,
+  options: PrintOptions,
+  model: string,
+  fields: MarkerFields
+): string | null {
   if (!report) return report;
-  let session;
-  if (options.sessionId) session = shortId(options.sessionId);
-  return decorate(report, { session, header: options.header, footer: footerFor(options, model) });
+  return decorate(report, { ...fields, header: options.header, footer: footerFor(options, model) });
+}
+
+// The thread and the commit are what a later round matches and diffs against,
+// so they are stamped only where a thread exists to match them in.
+function marks(
+  options: PrintOptions,
+  thread: string,
+  commit: string | null,
+  inThread: boolean
+): MarkerFields {
+  const fields: MarkerFields = {};
+  if (options.sessionId) fields.session = shortId(options.sessionId);
+  if (!inThread) return fields;
+  fields.thread = thread;
+  if (commit) fields.commit = commit;
+  return fields;
 }
 
 // Every report says what wrote it, until someone says otherwise.
@@ -376,6 +413,8 @@ function tokens(count: number): string {
 export interface PrintOptions {
   prompt: string;
   followUp?: string;
+  /** Which conversation this run is, for pull request comments (`--thread`). */
+  thread?: string;
   destinations: Destination[];
   sessionManager: SessionManager;
   sessionId?: string | null;

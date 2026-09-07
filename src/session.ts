@@ -81,6 +81,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
+        sections: options.sections,
         connectedClis: pathClis(),
         connectedMcps,
       }),
@@ -131,6 +132,8 @@ export interface SessionOptions {
   model?: string;
   outputFile?: string;
   brief?: boolean;
+  /** Whole prompt sections this run contributes (the pull request thread rules). */
+  sections?: string[];
   tokens?: Record<string, string>;
   connection?: { tokenAvailable?: boolean };
   backendUrl?: string;

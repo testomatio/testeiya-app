@@ -74,21 +74,31 @@ export async function deliver(
 export function decorate(report: string, decoration?: Decoration): string {
   const header = decoration?.header?.trim();
   const footer = decoration?.footer?.trim();
-  let body = report.trimEnd();
+  let body = stripMarker(report.trimEnd());
   if (header) body = `${header}\n\n${body}`;
   if (footer) body = `${body}\n\n${footer}`;
-  if (!body.startsWith(MARKER)) body = `${marker(decoration?.session)}\n${body}`;
-  return `${body}\n`;
+  return `${marker(decoration)}\n${body}\n`;
 }
 
 /**
  * What signs the text as ours. An HTML comment is invisible wherever markdown
  * renders, and a later round reading the thread back knows which comments it
- * wrote and must not post again.
+ * wrote, which conversation they belong to, and what they were written against.
+ * Key=value, so a round with nothing restored can still parse it with `split`.
  */
-export function marker(session?: string): string {
-  if (!session) return `${MARKER} -->`;
-  return `${MARKER} ${session} -->`;
+export function marker(fields?: MarkerFields): string {
+  const parts: string[] = [];
+  if (fields?.thread) parts.push(`thread=${fields.thread}`);
+  if (fields?.commit) parts.push(`commit=${fields.commit}`);
+  if (fields?.session) parts.push(`session=${fields.session}`);
+  if (parts.length === 0) return `${MARKER} -->`;
+  return `${MARKER} ${parts.join(" ")} -->`;
+}
+
+/** A thread name safe inside an HTML comment, which cannot contain `--`. */
+export function threadName(value?: string): string {
+  const clean = (value ?? "").toLowerCase().replaceAll(/[^a-z0-9._/]+/g, "-");
+  return clean.replaceAll(/-+/g, "-").replaceAll(/^-|-$/g, "") || "default";
 }
 
 /** What signs the report when the caller writes no footer of their own. */
@@ -211,6 +221,16 @@ function positive(value: string): number | null {
   return null;
 }
 
+// The prompt tells the agent to open a comment it writes with a bare marker, so
+// a report often arrives already carrying one. Replace that line rather than
+// leave it: the marker with the thread on it is what a later round matches on.
+function stripMarker(body: string): string {
+  if (!body.startsWith(MARKER)) return body;
+  const end = body.indexOf("\n");
+  if (end === -1) return "";
+  return body.slice(end + 1);
+}
+
 function pass(): true {
   return true;
 }
@@ -219,10 +239,17 @@ function fail(): false {
   return false;
 }
 
-export interface Decoration {
+export interface Decoration extends MarkerFields {
   header?: string;
   footer?: string;
-  /** Short session id for the marker line. Omitted on an unsaved run. */
+}
+
+export interface MarkerFields {
+  /** Which conversation this comment belongs to, so parallel runs never mix. */
+  thread?: string;
+  /** The commit the review was written against, read by the next round. */
+  commit?: string;
+  /** Short session id. Omitted on an unsaved run. */
   session?: string;
 }
 

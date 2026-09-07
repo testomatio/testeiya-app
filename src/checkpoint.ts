@@ -9,16 +9,25 @@ const CHECKPOINT = "testeiya:checkpoint";
  * commit and a thread of comments the transcript has never seen, and an agent
  * that does not know that answers about code nobody is looking at any more.
  */
-export async function readCheckpoint(cwd: string, pr?: number): Promise<Checkpoint | null> {
-  const commit = await git(cwd, ["rev-parse", "HEAD"]);
-  if (!commit) return null;
-  const checkpoint: Checkpoint = { commit, at: new Date().toISOString() };
-  const branch = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (branch && branch !== "HEAD") checkpoint.branch = branch;
-  const remote = await git(cwd, ["remote", "get-url", "origin"]);
-  if (remote) checkpoint.remote = remote;
+export function readCheckpoint(repo: Repo, pr?: number): Checkpoint | null {
+  if (!repo.commit) return null;
+  const checkpoint: Checkpoint = { commit: repo.commit, at: new Date().toISOString() };
+  if (repo.branch && repo.branch !== "HEAD") checkpoint.branch = repo.branch;
+  if (repo.remote) checkpoint.remote = repo.remote;
   if (pr) checkpoint.pr = pr;
   return checkpoint;
+}
+
+/**
+ * Where the checkout stands, read once. The marker stamps the commit on a
+ * comment, the pull request section picks its host from the remote, and the
+ * checkpoint keeps both for the next round — one set of git calls for all three.
+ */
+export async function readRepo(cwd: string): Promise<Repo> {
+  const commit = await git(cwd, ["rev-parse", "HEAD"]);
+  const branch = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const remote = await git(cwd, ["remote", "get-url", "origin"]);
+  return { commit, branch, remote };
 }
 
 /** The checkpoint the last round left behind, if this session has one. */
@@ -62,7 +71,7 @@ export function describeUpdate(previous: Checkpoint | null, current: Checkpoint 
 
   const pr = current.pr ?? previous.pr;
   if (pr) {
-    lines.push(`- Pull request #${pr} may have collected comments since ${previous.at}. Read them with \`gh pr view ${pr} --comments\` and answer what is still open. Your own last comment is already in that thread — never post it again. Write only what is new since it.`);
+    lines.push(`- Pull request #${pr} may have collected comments since ${previous.at}. Read the thread and answer what is still open. Your own earlier comments are marked as yours — never repeat one.`);
   }
 
   if (lines.length === 0) return null;
@@ -79,6 +88,12 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
 
 function short(commit: string): string {
   return commit.slice(0, 7);
+}
+
+export interface Repo {
+  commit: string | null;
+  branch: string | null;
+  remote: string | null;
 }
 
 export interface Checkpoint {

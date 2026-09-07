@@ -22,7 +22,8 @@ test("new commits come with the range to read", () => {
 
 test("a pull request round reads its comments, commit or not", () => {
   const same = describeUpdate({ ...before, pr: 42 }, { ...before, pr: 42, at: "2026-08-02T10:00:00.000Z" });
-  assert.match(same, /gh pr view 42 --comments/);
+  assert.match(same, /Pull request #42 may have collected comments/);
+  assert.match(same, /never repeat one/);
   assert.match(same, /since 2026-08-01T10:00:00\.000Z/);
   assert.doesNotMatch(same, /moved from/);
 });

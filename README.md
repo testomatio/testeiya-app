@@ -279,9 +279,9 @@ looks fine.
 
 ### GitLab CI
 
-GitLab runners do not ship `gh`, so the report goes to job artifacts — visible
-in the merge request pipeline page. Exit code `1` fails the job and blocks the
-merge when you mark it required.
+GitLab runners do not ship `gh`. The report goes to job artifacts, and when a
+token is present the agent also keeps its review on the merge request itself.
+Exit code `1` fails the job and blocks the merge when you mark it required.
 
 ```yaml
 qa-review:
@@ -291,6 +291,8 @@ qa-review:
   variables:
     TESTEIYA_MODEL: openrouter/anthropic/claude-sonnet-5
     TESTOMATIO_PROJECT_ID: my-project
+    # a project access token with the `api` scope; CI_JOB_TOKEN cannot write notes
+    GITLAB_TOKEN: $TESTEIYA_GITLAB_TOKEN
   script:
     - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - npx testeiya@latest doctor
@@ -306,9 +308,35 @@ qa-review:
     #   OPENROUTER_API_KEY (masked), TESTOMATIO (masked, protected)
 ```
 
-For posting back to the merge request, hand the envelope's report to GitLab's
-API in a follow-up step, or install `gh` plus a token mirror if the project is
-also on GitHub.
+Without `GITLAB_TOKEN` the run still produces the artifacts, it just posts
+nothing. With it, the agent keeps one note per thread and rewrites it each
+round. See [Comment threads](#comment-threads).
+
+### Bitbucket Pipelines
+
+There is no Bitbucket CLI, so the agent talks to the REST API directly. Put a
+repository access token that can write pull requests in `BITBUCKET_ACCESS_TOKEN`,
+and `BITBUCKET_PR_ID` does the rest.
+
+```yaml
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          image: node:22
+          script:
+            - export TESTEIYA_MODEL=openrouter/anthropic/claude-sonnet-5
+            # repository variables: OPENROUTER_API_KEY, BITBUCKET_ACCESS_TOKEN
+            - npx testeiya@latest task
+                "Review this pull request as a QA engineer. What could go wrong?"
+                --thread qa-review --output review.md
+          artifacts:
+            - review.md
+```
+
+`BITBUCKET_PR_ID` is only set on a pull request build, so keep the step under
+`pull-requests:`. Bitbucket caps a pull request at 200 comments, which is why
+the agent resolves its old ones instead of adding a fresh thread each round.
 
 ### Anywhere else
 
@@ -360,10 +388,55 @@ Write no footer of your own and the report is signed:
 
 Pass `--no-default-footer`, or set `TESTEIYA_NO_DEFAULT_FOOTER`, to drop it.
 
-Every report also opens with `<!-- testeiya <session> -->`. Markdown renders it
-as nothing, and it is how the next round tells its own comments apart from
-everyone else's: it answers what is new in the thread instead of posting the
-same report again.
+## Comment threads
+
+Every report opens with a marker that markdown renders as nothing:
+
+```
+<!-- testeiya thread=qa-review commit=700fbe1d9c... session=0198f2c1a3b4c -->
+```
+
+That line is how a later round finds its own earlier comments, which
+conversation they belong to, and what they were written against. It lives in the
+thread, not in a cache, so a round that starts with an empty runner still knows
+what it last reviewed and can diff from there.
+
+In a thread the agent looks after those comments rather than piling them up.
+A thread is any subject it posts into: a pull request, a merge request, an
+issue. Each round writes the complete current answer, opening with a short list
+of what changed since the last one, and makes the earlier comments recede:
+
+| CI | How the earlier answer recedes |
+|---|---|
+| GitHub Actions | folded in place, as an outdated comment |
+| Bitbucket Pipelines | resolved, which collapses it |
+| GitLab CI | one note, rewritten, with the previous answer folded inside it |
+| any other CI | the agent reads the host's API and picks whichever of the two fits |
+
+There are two strategies, not one per host. Where the host can fold a whole
+comment the agent appends and folds; where it can only fold the body, the
+comment chrome would pile up, so it keeps one comment and rewrites it. GitLab is
+the odd one out for that reason. A CI we ship no calls for gets both strategies
+and picks, from that host's own documentation.
+
+Nothing is ever deleted. A human reply may be sitting under a comment, and every
+step here can be undone where a delete cannot.
+
+`--thread <name>` says which conversation a run belongs to. Run two jobs on one
+pull request, say one grilling it and one writing test cases, and give each its
+own name so neither touches the other's comments. The default is `default`, and
+`TESTEIYA_THREAD` does the same from the environment.
+
+```bash
+testeiya task "Review this pull request" \
+  --thread qa-review --output gh:pr-comment
+```
+
+The host comes from the job, not from the checkout: `GITHUB_ACTIONS`,
+`GITLAB_CI`, `BITBUCKET_BUILD_NUMBER`, else `CI`. A remote only says where the
+code lives, while those say the run has a subject to answer and a token to
+answer with. So these rules never reach a developer's own checkout, and the
+agent is told about one host, never the others.
 
 ## Sessions
 

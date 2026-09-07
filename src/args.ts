@@ -26,6 +26,7 @@ Options:
       --model <id>           provider/model to run
       --project <id>         Testomat.io project id
       --followup <text>      the user's reply, added to the task as a new message
+      --thread <name>        which conversation this is, for posted comments
   -c, --continue             continue the last session in this folder
       --resume <id>          continue that session
       --session <label>      continue the session with that name, or start it
@@ -44,6 +45,7 @@ Options:
 Environment:
   TESTEIYA_MODEL              model to run, e.g. openrouter/anthropic/claude-sonnet-5
   TESTEIYA_FOLLOW_UP          the user's reply, same as --followup
+  TESTEIYA_THREAD             which conversation this is, same as --thread
   TESTEIYA_SESSION_FILE       where to keep the session, same as --session-file
   TESTEIYA_NO_DEFAULT_FOOTER  do not sign the report
   OPENROUTER_API_KEY          provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
@@ -91,6 +93,25 @@ Where the report goes
 
   Every destination is checked before the run starts, so a missing gh costs no
   tokens.
+
+Comment threads
+
+  In a thread the agent looks after its own comments instead of piling them up.
+  A thread is any subject it posts into: a pull request, a merge request, an
+  issue. Every comment it writes opens with an invisible marker naming the
+  conversation and the commit it answered, so the next round finds its earlier
+  work even when nothing was cached.
+
+  Each round writes the complete current answer and makes the earlier ones
+  recede. GitHub folds them, Bitbucket resolves them, GitLab keeps one note and
+  rewrites it. Nothing is ever deleted. The host comes from the CI job, so a
+  local run is never in a thread.
+
+  --thread <name> says which conversation this is. Run two jobs on one pull
+  request, say one grilling it and one writing test cases, and give each its own
+  name so neither touches the other's comments. The default is "default".
+
+    testeiya task "Review this pull request" --thread qa-review -o gh:pr-comment
 
 Models and keys
 
@@ -191,6 +212,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (typeof values.model === "string") args.model = values.model;
   if (typeof values.project === "string") args.project = values.project;
   if (typeof values.followup === "string") args.followUp = values.followup;
+  if (typeof values.thread === "string") args.thread = values.thread;
   if (values.continue) args.continueLast = true;
   if (typeof values.resume === "string") args.resume = values.resume;
   if (typeof values.session === "string") args.session = values.session;
@@ -219,6 +241,7 @@ const RUN_OPTIONS: ParseArgsConfig["options"] = {
   model: { type: "string" },
   project: { type: "string" },
   followup: { type: "string" },
+  thread: { type: "string" },
   continue: { type: "boolean", short: "c" },
   resume: { type: "string" },
   session: { type: "string" },
@@ -265,6 +288,7 @@ export interface CliArgs {
   model?: string;
   project?: string;
   followUp?: string;
+  thread?: string;
   continueLast?: boolean;
   resume?: string;
   session?: string;

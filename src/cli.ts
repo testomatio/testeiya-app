@@ -93,6 +93,7 @@ async function task(args: CliArgs): Promise<number> {
     sessionManager,
     sessionId,
     brief,
+    thread: args.thread ?? process.env.TESTEIYA_THREAD,
     model: args.model,
     exitZero: args.exitZero,
     header: args.header,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decorate, defaultFooter, marker, markdownPath, parseDestinations } from "../dist/src/output.js";
+import { decorate, defaultFooter, marker, markdownPath, parseDestinations, threadName } from "../dist/src/output.js";
 
 test("no output means markdown on stdout", () => {
   assert.deepEqual(parseDestinations([]), [{ kind: "stdout" }]);
@@ -53,14 +53,38 @@ test("a footer goes under the report, a header above it", () => {
   assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), `${MARK}\nverdict\n`);
 });
 
-test("the marker names the session and is never doubled", () => {
+test("the marker carries the thread, the commit and the session", () => {
   assert.equal(marker(), MARK);
-  assert.equal(marker("0198f2c1a3b4c"), "<!-- testeiya 0198f2c1a3b4c -->");
+  assert.equal(marker({ session: "0198f2c1a3b4c" }), "<!-- testeiya session=0198f2c1a3b4c -->");
+  assert.equal(
+    marker({ thread: "qa-review", commit: "700fbe1d", session: "0198f2c1a3b4c" }),
+    "<!-- testeiya thread=qa-review commit=700fbe1d session=0198f2c1a3b4c -->"
+  );
   assert.equal(
     decorate("verdict\n", { session: "0198f2c1a3b4c" }),
-    "<!-- testeiya 0198f2c1a3b4c -->\nverdict\n"
+    "<!-- testeiya session=0198f2c1a3b4c -->\nverdict\n"
   );
-  assert.equal(decorate(`${MARK}\nverdict\n`, { session: "0198f2c1a3b4c" }), `${MARK}\nverdict\n`);
+});
+
+test("a marker the agent wrote is replaced, never doubled", () => {
+  assert.equal(
+    decorate(`${MARK}\nverdict\n`, { thread: "qa-review" }),
+    "<!-- testeiya thread=qa-review -->\nverdict\n"
+  );
+  assert.equal(
+    decorate("<!-- testeiya thread=stale -->\nverdict\n", { thread: "qa-review" }),
+    "<!-- testeiya thread=qa-review -->\nverdict\n"
+  );
+  assert.equal(decorate(`${MARK}\nverdict\n`), `${MARK}\nverdict\n`);
+});
+
+test("a thread name is safe inside an html comment", () => {
+  assert.equal(threadName(), "default");
+  assert.equal(threadName("  "), "default");
+  assert.equal(threadName("QA Review"), "qa-review");
+  assert.equal(threadName("qa--review"), "qa-review");
+  assert.equal(threadName("--qa!!review--"), "qa-review");
+  assert.equal(threadName("build/pr-review"), "build/pr-review");
 });
 
 test("the report is signed by default", () => {
