@@ -13,7 +13,7 @@ export function contextPromptSection(
 
   ${contextLines(entries, folders)}
 
-    ALL of it lives under the hidden \`${TESTEIYA_DIR_NAME}/\` dir: file-search tools skip hidden dirs by default, so search it explicitly (pass hidden:true, or prefix the path with \`${TESTEIYA_DIR_NAME}/\`). Linked folders and cloned repositories are reference material: read them, never modify them. A linked folder is a symlink — wildcard searches do not descend into it; search it with its own path prefix (e.g. \`${TESTEIYA_DIR_NAME}/<name>/\`). Documents under \`${TESTEIYA_DIR_NAME}/requirements\` and \`${TESTEIYA_DIR_NAME}/docs\` are specs and plans — use them when writing or reviewing tests.
+    Everything whose path starts with \`${TESTEIYA_DIR_NAME}/\` is in a hidden dir: file-search tools skip hidden dirs by default, so search those explicitly (pass hidden:true, or prefix the path with \`${TESTEIYA_DIR_NAME}/\`). Any other path above is an ordinary workspace path the user attached — read it where it is. Linked folders and cloned repositories are reference material: read them, never modify them. A linked folder is a symlink — wildcard searches do not descend into it; search it with its own path prefix (e.g. \`${TESTEIYA_DIR_NAME}/<name>/\`). Documents under \`${TESTEIYA_DIR_NAME}/requirements\` and \`${TESTEIYA_DIR_NAME}/docs\` are specs and plans — use them when writing or reviewing tests.
   </workspace-context>
   `;
 }
@@ -71,6 +71,13 @@ function parentDir(rel: string): string {
 
 function describeEntry(e: ContextEntry): string {
   const date = e.addedAt?.split("T")[0] ?? "";
+  // A path outside the hidden dir is one the user attached where it already
+  // lives — it is part of the project, not reference material dropped beside it.
+  if (!e.path.startsWith(`${TESTEIYA_DIR_NAME}/`)) {
+    let what = "folder";
+    if (e.kind === "file") what = "file";
+    return `\`${e.path}\` — workspace ${what}, attached by the user (${date})`;
+  }
   let from = "";
   if (e.origin && e.origin !== e.name) from = ` from ${e.origin}`;
   if (e.kind === "repo") return `\`${e.path}\` — git repository${from} (${date})`;
