@@ -20,7 +20,7 @@ const HOSTS = {
     rules: dedent`
     **Append and collapse.** GitHub hides a whole comment, so leave the earlier ones where they are and fold each one with the GraphQL \`minimizeComment\` mutation, classifier \`OUTDATED\`. Issues and pull requests share the same comment API, so this is the same call on both.
 
-    Read comment bodies from \`body\`; \`body_text\` has the marker stripped out. Never \`gh pr comment --edit-last\` or \`--delete-last\`: they mean the last comment by this user, which in CI is a bot account shared with every other tool in the repository.`,
+    Read comment bodies from \`body\`; \`body_text\` has the marker stripped out. \`isMinimized\` per comment is both the list you fold from and the check that it worked — a mutation that answers without an error has still not necessarily hidden anything. Never \`gh pr comment --edit-last\` or \`--delete-last\`: they mean the last comment by this user, which in CI is a bot account shared with every other tool in the repository.`,
   },
 
   gitlab: {
@@ -28,7 +28,7 @@ const HOSTS = {
     rules: dedent`
     **Rewrite.** GitLab folds the body of a note but never the note itself, so a note per round leaves a column of headers behind. Keep one note in this thread and rewrite it: the current answer on top, the previous one under it inside a \`<details>\` block, stripped of the \`<details>\` block it already carried. Fold one generation, never a chain of them.
 
-    \`CI_JOB_TOKEN\` cannot write notes, so \`$GITLAB_TOKEN\` must carry a project access token with the \`api\` scope; report it as a blocker when it is empty. Use notes rather than discussions: a discussion is a resolvable thread, and an unresolved one blocks the merge wherever all threads must be resolved.`,
+    \`CI_JOB_TOKEN\` cannot write notes, so \`$GITLAB_TOKEN\` must carry a project access token with the \`api\` scope; report it as a blocker when it is empty. Use notes rather than discussions: a discussion is a resolvable thread, and an unresolved one blocks the merge wherever all threads must be resolved. Read the note body back to check the rewrite landed and carries exactly one folded generation.`,
   },
 
   bitbucket: {
@@ -36,7 +36,7 @@ const HOSTS = {
     rules: dedent`
     **Append and collapse.** Bitbucket resolves a whole comment thread, so leave the earlier ones where they are and resolve each one. Only a top-level comment resolves; a reply answers 403.
 
-    \`$BITBUCKET_ACCESS_TOKEN\` carries the token; report it as a blocker when it is empty. Deleted comments stay in the list as blanked tombstones, so filter on \`deleted=false\`. A pull request caps at 200 comments, so post once per round and never twice. The marker may render as visible text here — keep it anyway, since finding your own comments matters more than a tidy first line.`,
+    \`$BITBUCKET_ACCESS_TOKEN\` carries the token; report it as a blocker when it is empty. Deleted comments stay in the list as blanked tombstones, so filter on \`deleted=false\`. \`resolved\` per thread is both the list you resolve from and the check that it worked. A pull request caps at 200 comments, so post once per round and never twice. The marker may render as visible text here — keep it anyway, since finding your own comments matters more than a tidy first line.`,
   },
 
   generic: {
@@ -44,7 +44,7 @@ const HOSTS = {
     rules: dedent`
     **Find out which of the two applies.** If this host can hide, minimise, resolve or otherwise fold a whole comment, append the new answer and fold the earlier ones. If it can only edit, keep one comment and rewrite it, with the previous answer folded inside wherever the host renders collapsible markup.
 
-    If it can do neither, post the answer and say in your output that this host cannot collapse the earlier ones.`,
+    Whichever it is, find the field the host exposes for that state and read it back afterwards; if it exposes none, fetch the comment again and look. If the host can do neither, post the answer and say in your output that this host cannot collapse the earlier ones.`,
   },
 } satisfies Record<string, Host>;
 
@@ -67,8 +67,10 @@ export function threadMarker(thread: string): string {
 
 export function commentThread(options: CommentThreadOptions): string {
   const write = options.posts
-    ? 'Your report is posted for you. Do not post it yourself.'
-    : 'Post it yourself, opening the body with that same marker line.';
+    ? dedent`
+    Your report is posted for you, once this turn ends. Do not post it yourself — so at step 5 no comment of yours is showing yet.`
+    : dedent`
+    Post it yourself, opening the body with that same marker line — so at step 5 the one comment of yours still showing is the one you just posted.`;
   return dedent`
   <comment-thread>
     This section governs threads you post into: a pull request, a merge request, an issue. It says nothing about any other kind of work.
@@ -83,12 +85,13 @@ export function commentThread(options: CommentThreadOptions): string {
 
     Each round:
 
-    1. Find your earlier comments — raw body starting \`${threadMarker(options.thread)}\`. Read the raw body; a rendered one may have dropped the marker.
+    1. Ask the host for the thread, now, in this round. Yours are the comments whose raw body starts \`${threadMarker(options.thread)}\` — read the raw body, a rendered one may have dropped the marker. Take the list, every id in it and how many there are from that answer alone. An id, a command line or a count further up this conversation describes the thread as it stood in an earlier round; reusing one acts on that thread, not this one.
     2. The newest one is your complete answer as of the \`commit=\` in its marker, so \`git diff <that sha>...HEAD\` is what you have not seen.
-    3. Make the earlier ones recede, by the rule below.
+    3. Make **every** one of them recede, by the rule below. Not the first, not the one you folded last time — each comment of yours the host still shows. One folded and the rest left standing is the same broken thread as folding none.
     4. Write the **complete current answer**, not a delta — everything earlier is folded, so a delta would leave the thread with no visible state. Open with a short "Since the last round" list of what was fixed, what is new and what is still open.
+    5. Read the thread back before you finish and check the state field on each of your comments. Nothing of yours may still be showing except this round's answer. Fold whatever is, then check again. If something will not recede, or the answer that landed is not the one you meant, say so in your output — a half-folded thread is a result to report, not a detail to drop.
 
-    ${write}
+    ${indent(write)}
 
     ${indent(HOSTS[options.host].rules)}
   </comment-thread>`;

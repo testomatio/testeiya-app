@@ -29,19 +29,51 @@ test("the thread is a subject, not a pull request", () => {
   }
 });
 
-test("github folds and leaves the posting alone", () => {
-  const text = block("github", { posts: true });
-  assert.match(text, /Append and collapse/);
-  assert.match(text, /minimizeComment/);
-  assert.match(text, /OUTDATED/);
-  assert.match(text, /Issues and pull requests share the same comment API/);
-  assert.match(text, /--edit-last/);
-  assert.match(text, /posted for you/);
+// The round is the same wherever the thread lives; only the mechanism differs.
+// Every host gets the guard against the failure that broke a live thread: one
+// shell line, replayed from the restored session every round, re-folding the
+// comment it folded the first time while the rest of the thread stayed open.
+test("every host is told to rebuild the list, fold all of it, and check", () => {
+  for (const host of HOSTS) {
+    const text = block(host);
+    assert.match(text, /Ask the host for the thread, now, in this round/, host);
+    assert.match(text, /from that answer alone/, host);
+    assert.match(text, /every id in it and how many there are/, host);
+    assert.match(text, /reusing one acts on that thread, not this one/, host);
+    assert.match(text, /Make \*\*every\*\* one of them recede/, host);
+    assert.match(text, /Not the first, not the one you folded last time/, host);
+    assert.match(text, /Read the thread back before you finish/, host);
+    assert.match(text, /Fold whatever is, then check again/, host);
+    assert.match(text, /say so in your output/, host);
+  }
+});
+
+// Each host names the field that answers "did it actually recede?" — a mutation
+// returning no error is not the same as a hidden comment.
+test("every host names the state it must read back", () => {
+  assert.match(block("github"), /`isMinimized` per comment is both the list you fold from and the check/);
+  assert.match(block("gitlab"), /Read the note body back to check the rewrite landed/);
+  assert.match(block("bitbucket"), /`resolved` per thread is both the list you resolve from and the check/);
+  assert.match(block("generic"), /read it back afterwards/);
+});
+
+// Who posts changes only what step 5 should find, never who folds.
+test("the poster changes what step 5 expects, not the host rules", () => {
+  const posted = block("github", { posts: true });
+  assert.match(posted, /posted for you, once this turn ends/);
+  assert.match(posted, /no comment of yours is showing yet/);
+  assert.match(posted, /Append and collapse/);
+  assert.match(posted, /minimizeComment/);
 });
 
 test("github posts its own comment when nothing else will", () => {
   const text = block("github");
   assert.match(text, /Post it yourself/);
+  assert.match(text, /Append and collapse/);
+  assert.match(text, /minimizeComment/);
+  assert.match(text, /OUTDATED/);
+  assert.match(text, /Issues and pull requests share the same comment API/);
+  assert.match(text, /--edit-last/);
   assert.doesNotMatch(text, /posted for you/);
 });
 

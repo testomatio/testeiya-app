@@ -1,5 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
@@ -29,7 +31,7 @@ import type { RunResult } from "./result.js";
 export async function runPrint(options: PrintOptions): Promise<number> {
   const started = Date.now();
   const result: RunResult = {};
-  const outputPath = markdownPath(options.destinations);
+  const outputPath = markdownPath(options.destinations) ?? impliedReport(options.destinations);
   const stampBefore = fileStamp(outputPath);
   const cwd = process.cwd();
 
@@ -95,7 +97,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
 
   const run = watchRun(session);
   await promptOnce(session, task.prompt, run);
-  const written = await collectReport(session, run, outputPath, stampBefore, result.status);
+  const written = await collectReport(session, run, outputPath, stampBefore);
   if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);
   const report = sign(written, options, model, stamp);
 
@@ -298,14 +300,12 @@ async function collectReport(
   session: AgentSession,
   run: RunState,
   path: string | undefined,
-  before: string | null,
-  status: "pass" | "fail" | undefined
+  before: string | null
 ): Promise<string | null> {
   if (run.error) return null;
   if (!path) return lastAssistantText(session);
   const report = await readIfFresh(path, before);
   if (report) return report;
-  if (status === "fail") return null;
   return nudgeForReport(session, run, path, before);
 }
 
@@ -356,6 +356,16 @@ async function readIfFresh(path: string, before: string | null): Promise<string 
   if (!text.trim()) return null;
   if (text.endsWith("\n")) return text;
   return `${text}\n`;
+}
+
+/**
+ * A posted comment is read by people, so it must be the report the agent wrote,
+ * not whatever it happened to say last. Without a markdown `--output` the run
+ * gets a scratch one anyway, and the report file the prompt demands with it.
+ */
+function impliedReport(destinations: Destination[]): string | undefined {
+  if (!destinations.some((destination) => destination.kind === "gh")) return undefined;
+  return join(tmpdir(), `testeiya-report-${process.pid}.md`);
 }
 
 function fileStamp(path: string | undefined): string | null {
