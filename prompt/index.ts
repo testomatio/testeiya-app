@@ -11,6 +11,7 @@ import {
   contextPromptSection,
   type ContextEntry,
   type ContextFolder,
+  type OffContext,
 } from "./context.js";
 import type { TestomatioProjectInfo } from "./project-info.js";
 
@@ -30,6 +31,7 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
       rules: options?.rules,
       connectedClis: options?.connectedClis,
       connectedMcps: options?.connectedMcps,
+      contextOff: options?.contextOff,
     }),
   ];
 
@@ -50,11 +52,12 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
   if (options?.promptContext) {
     parts.push(`## Project Test Context\n\n${options.promptContext}`);
   }
-  if (options?.contextEntries?.length || options?.contextFolders?.length) {
-    parts.push(
-      contextPromptSection(options.contextEntries ?? [], options.contextFolders ?? [])
-    );
-  }
+  const section = contextPromptSection(
+    options?.contextEntries ?? [],
+    options?.contextFolders ?? [],
+    options?.contextOff ?? {}
+  );
+  if (section) parts.push(section);
   if (options?.projectInfo) {
     parts.push(projectSettings(options.projectInfo));
   }
@@ -95,6 +98,8 @@ export interface SystemPromptOptions {
   contextEntries?: ContextEntry[];
   /** Non-empty predefined `.testeiya` context folders (manual-tests, code, …). */
   contextFolders?: ContextFolder[];
+  /** Context the user switched off: on disk, out of bounds for this task. */
+  contextOff?: OffContext;
   /** CLI tools the user has connected and signed in (e.g. `gh`, `acli`). */
   connectedClis?: string[];
   /** MCP servers connected for this session (the enabled `mcp.json` set). */

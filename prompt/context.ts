@@ -1,44 +1,74 @@
-import dedent from "dedent";
 import { TESTEIYA_DIR_NAME } from "./vocab.js";
 
-/** System-prompt section describing the workspace context; "" when none. */
+/**
+ * System-prompt section describing the workspace context; "" when there is
+ * none. `off` is what the user switched off: still on disk, out of bounds, and
+ * named here so the agent knows to leave it alone rather than wander in.
+ */
 export function contextPromptSection(
   entries: ContextEntry[],
-  folders: ContextFolder[] = []
+  folders: ContextFolder[] = [],
+  off: OffContext = {}
 ): string {
-  if (entries.length === 0 && folders.length === 0) return "";
-  return dedent`
-  <workspace-context>
-    This workspace has context attached — the user (or you, earlier) put it there for a purpose. Consult it before answering, and prefer it over assumptions about the project.
-
-  ${contextLines(entries, folders)}
-
-    Everything whose path starts with \`${TESTEIYA_DIR_NAME}/\` is in a hidden dir: file-search tools skip hidden dirs by default, so search those explicitly (pass hidden:true, or prefix the path with \`${TESTEIYA_DIR_NAME}/\`). Any other path above is an ordinary workspace path the user attached — read it where it is. Linked folders and cloned repositories are reference material: read them, never modify them. A linked folder is a symlink — wildcard searches do not descend into it; search it with its own path prefix (e.g. \`${TESTEIYA_DIR_NAME}/<name>/\`). Documents under \`${TESTEIYA_DIR_NAME}/requirements\` and \`${TESTEIYA_DIR_NAME}/docs\` are specs and plans — use them when writing or reviewing tests.
-  </workspace-context>
-  `;
+  const body: string[] = [];
+  if (entries.length > 0 || folders.length > 0) {
+    body.push(
+      "This workspace has context attached — the user (or you, earlier) put it there for a purpose. Consult it before answering, and prefer it over assumptions about the project.",
+      contextLines(entries, folders),
+      `Everything whose path starts with \`${TESTEIYA_DIR_NAME}/\` is in a hidden dir: file-search tools skip hidden dirs by default, so search those explicitly (pass hidden:true, or prefix the path with \`${TESTEIYA_DIR_NAME}/\`). Any other path above is an ordinary workspace path the user attached — read it where it is. Linked folders and cloned repositories are reference material: read them, never modify them. A linked folder is a symlink — wildcard searches do not descend into it; search it with its own path prefix (e.g. \`${TESTEIYA_DIR_NAME}/<name>/\`). Documents under \`${TESTEIYA_DIR_NAME}/requirements\` and \`${TESTEIYA_DIR_NAME}/docs\` are specs and plans — use them when writing or reviewing tests.`
+    );
+  }
+  body.push(...ignoreBlock(off));
+  if (body.length === 0) return "";
+  return `<workspace-context>\n${indent(body.join("\n\n"))}\n</workspace-context>`;
 }
 
 /** Per-prompt notice when the context changed mid-session; appended to the next prompt. */
 export function contextUpdateNotice(
   entries: ContextEntry[],
-  folders: ContextFolder[] = []
+  folders: ContextFolder[] = [],
+  off: OffContext = {}
 ): string {
-  if (entries.length === 0 && folders.length === 0) {
-    return dedent`
-    <workspace-context-update>
-      All extra workspace context was removed. Do not rely on it anymore.
-    </workspace-context-update>
-    `;
+  const body: string[] = [];
+  if (entries.length > 0 || folders.length > 0) {
+    body.push(
+      "The workspace context just changed. It now contains:",
+      contextLines(entries, folders),
+      `This was done for a purpose — take it into account for this and future requests. Remember \`${TESTEIYA_DIR_NAME}/\` is hidden: search it with hidden:true or an explicit path prefix.`
+    );
   }
-  return dedent`
-  <workspace-context-update>
-    The workspace context just changed. It now contains:
+  body.push(...ignoreBlock(off));
+  if (body.length === 0) {
+    body.push("Nothing is attached to this workspace any more. Do not rely on earlier context.");
+  }
+  return `<workspace-context-update>\n${indent(body.join("\n\n"))}\n</workspace-context-update>`;
+}
 
-  ${contextLines(entries, folders)}
+/**
+ * The paths the user switched off. Nothing was deleted, so the agent would
+ * otherwise walk straight back into them. Naming them as out of bounds is what
+ * makes the switch mean anything to the agent.
+ */
+function ignoreBlock(off: OffContext): string[] {
+  const paths: string[] = [];
+  for (const f of off.folders ?? []) paths.push(`\`${f.path}/\``);
+  for (const e of off.entries ?? []) paths.push(`\`${e.path}\``);
+  if (paths.length === 0) return [];
+  return [
+    `Switched off by the user: ${paths.join(", ")}.`,
+    "Ignore them while they are off: do not read, search, list or write into them, and do not count what they hold — not even where another rule points at them by name. They are still on disk, switched off on purpose. If a task cannot be done without them, say so instead of using them.",
+  ];
+}
 
-    This was done for a purpose — take it into account for this and future requests. Remember \`${TESTEIYA_DIR_NAME}/\` is hidden: search it with hidden:true or an explicit path prefix.
-  </workspace-context-update>
-  `;
+/** Two spaces on every non-empty line, so a body sits inside its tag. */
+function indent(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line) return line;
+      return `  ${line}`;
+    })
+    .join("\n");
 }
 
 function contextLines(entries: ContextEntry[], folders: ContextFolder[]): string {
@@ -86,6 +116,12 @@ function describeEntry(e: ContextEntry): string {
 }
 
 export type ContextKind = "folder" | "repo" | "file";
+
+/** What the user switched off: on disk, out of bounds until switched back on. */
+export interface OffContext {
+  folders?: ContextFolder[];
+  entries?: ContextEntry[];
+}
 
 /** A top-level `.testeiya` folder shown as a status-bar section. */
 export interface ContextFolder {

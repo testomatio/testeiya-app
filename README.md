@@ -530,6 +530,26 @@ comes from `--project` or from `TESTOMATIO_PROJECT_ID`; the MCP server needs it,
 because a token alone does not say which project to talk to. `TESTOMATIO_URL`
 points at a self-hosted instance.
 
+## Tracing
+
+Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` and every run is sent to
+[Langfuse](https://langfuse.com) as a trace. `LANGFUSE_BASE_URL` points at a
+self-hosted instance; without it the trace goes to Langfuse Cloud.
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-xxx LANGFUSE_SECRET_KEY=sk-lf-xxx \
+  testeiya task "Review this pull request as a QA engineer"
+```
+
+One trace per run: the task at the root, a generation for every model call with
+its tokens and cost, an observation for every tool call with its arguments and
+result. Runs of the same session share a session id, so a task and its follow-up
+read as one thread. `testeiya doctor` says whether tracing is on and which file
+the keys came from.
+
+Without both keys nothing is sent and nothing is installed for it — the trace is
+plain OTLP JSON over `fetch`, so an install carries no OpenTelemetry SDK.
+
 ## Skills
 
 A skill is a folder with a `SKILL.md`. The agent sees them all and reaches for

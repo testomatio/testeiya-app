@@ -1,4 +1,5 @@
 import { tools } from './tools.js';
+import type { OffContext } from './context.js';
 import { TESTEIYA_DIR_NAME } from './vocab.js';
 
 import dedent from 'dedent';
@@ -9,6 +10,11 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
   if (!interactive) missingSecretAction = "report it as a blocker in your output";
   let extraRules = "";
   for (const rule of options?.rules ?? []) extraRules += `    * ${rule}\n`;
+  // Never point at a folder the user switched off — `<workspace-context>` bans
+  // it, and a standing rule naming the same path would only argue with it.
+  let manualTestsHint = ` Pulled manual tests usually live in \`${TESTEIYA_DIR_NAME}/manual-tests/\` — check there before declaring the project has no manual tests.`;
+  const offFolders = (options?.contextOff?.folders ?? []).map((f) => f.path);
+  if (offFolders.includes(`${TESTEIYA_DIR_NAME}/manual-tests`)) manualTestsHint = "";
   const cliList = (options?.connectedClis ?? []).join(", ") || "none connected yet";
   const mcpList = (options?.connectedMcps ?? []).join(", ") || "none connected yet";
   return dedent`
@@ -27,7 +33,7 @@ export function getSystemPrompt(cwd?: string, options?: PromptSurface): string {
       * **Working Storage:** All persistent QA metadata must live in \`${TESTEIYA_DIR_NAME}\` in root.
       * **Safety root:** Never add \`${TESTEIYA_DIR_NAME}\` to the repo's \`.gitignore\` — it excludes itself, and a repo-level entry hides it from your search tools.
     * **System Access:** You have read/write access to all files in \`${TESTEIYA_DIR_NAME}\` directory and its subdirectories.
-    * **Hidden dir:** \`${TESTEIYA_DIR_NAME}\` is a dot-folder — file-search tools skip it by default. Search it with hidden:true or an explicit \`${TESTEIYA_DIR_NAME}/\` path prefix. Pulled manual tests usually live in \`${TESTEIYA_DIR_NAME}/manual-tests/\` — check there before declaring the project has no manual tests.
+    * **Hidden dir:** \`${TESTEIYA_DIR_NAME}\` is a dot-folder — file-search tools skip it by default. Search it with hidden:true or an explicit \`${TESTEIYA_DIR_NAME}/\` path prefix.${manualTestsHint}
 
     * If the workspace is application source code, do never change it, use it for discovery. Save what you keep into \`${TESTEIYA_DIR_NAME}\` context directory.
     * If the workspace is e2e tests directory you can write tests for it. All additional context
@@ -164,6 +170,8 @@ export interface PromptSurface {
   connectedClis?: string[];
   /** MCP servers connected for this session (the enabled `mcp.json` set). */
   connectedMcps?: string[];
+  /** Context the user switched off, so no rule here points at it. */
+  contextOff?: OffContext;
 }
 
 /*

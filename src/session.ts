@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   createAgentSession,
@@ -11,6 +12,7 @@ import {
 import { buildSystemPrompt } from "../prompt/index.js";
 import { pathClis } from "../prompt/tools.js";
 import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
+import { langfuseConfig } from "./langfuse.js";
 import { hasMcp, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
 import { createSetResultTool, type RunResult } from "./result.js";
@@ -20,8 +22,9 @@ import { sessionModel } from "./sessions.js";
 // resolve to dist/skills, and the filter below would silently drop everything.
 export const BUNDLED_SKILLS_DIR = join(PACKAGE_ROOT, "skills");
 
-const MCP_EXTENSION = join(import.meta.dirname, "mcp-extension.js");
-const ATTRIBUTION_EXTENSION = join(import.meta.dirname, "attribution-extension.js");
+const MCP_EXTENSION = extensionPath("mcp-extension");
+const ATTRIBUTION_EXTENSION = extensionPath("attribution-extension");
+const LANGFUSE_EXTENSION = extensionPath("langfuse-extension");
 
 /** The one runtime factory, so every command reads the same auth. */
 export async function createRuntime(): Promise<ModelRuntime> {
@@ -61,6 +64,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
   const settingsManager = SettingsManager.inMemory();
 
   const extensionPaths: string[] = [ATTRIBUTION_EXTENSION];
+  if (langfuseConfig()) extensionPaths.push(LANGFUSE_EXTENSION);
   const connectedMcps: string[] = [];
   if (hasMcp()) {
     extensionPaths.push(MCP_EXTENSION);
@@ -116,6 +120,17 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
 
   const skills = loader.getSkills().skills;
   return { session, model: `${model.provider}/${model.id}`, skills };
+}
+
+/**
+ * The built file, or the source one when this CLI runs from source. pi loads an
+ * extension by path and only reports a missing one in a diagnostic nobody
+ * prints, so a `.js` guess turns a dev run into a run with no extensions.
+ */
+function extensionPath(name: string): string {
+  const built = join(import.meta.dirname, `${name}.js`);
+  if (existsSync(built)) return built;
+  return join(import.meta.dirname, `${name}.ts`);
 }
 
 export interface LoaderOptions {

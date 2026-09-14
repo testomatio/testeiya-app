@@ -3,16 +3,18 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "07a67b75bb49fb7f9e8061ab69a6cbfa45f9b99f",
+      "sha": "b29f59256c3a344c2a563906314e3132bbfeee92",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
         "debug-fix-failed-flaky-autotests",
         "detect-duplicate-test-cases",
+        "epic-requirements-specification",
         "explorbot-fundamentals",
         "explorbot-plan",
         "explorbot-setup",
         "improve-test-cases",
+        "migrate-to-testomatio",
         "prima",
         "pull-request-diff-analyzer",
         "qa-automation-test-consolidation",
@@ -35,7 +37,8 @@
         "sync-test-cases-with-tms",
         "testing-workflow",
         "testomat-allure-adapter",
-        "testomatio-mcp"
+        "testomatio-mcp",
+        "write-user-story"
       ]
     },
     {
@@ -71,7 +74,7 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "cbc09311c468e10fba47964e9b3830fe625c9b01",
+      "sha": "655530f6d0dc71a0d6bf46ae165877d3c7311099",
       "folder": "playwright",
       "skills": [
         "playwright-cli"

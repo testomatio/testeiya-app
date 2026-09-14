@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
+import { langfuseConfig } from "./langfuse.js";
 import { hasMcp, hasTestomatio, metadataCachePath, vendorBundle } from "./mcp.js";
 import { PROVIDER_KEYS, resolveModel, UsageError } from "./model.js";
 import { loadBundledSkills } from "./skills.js";
@@ -24,7 +25,7 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
 
   const skills = await skillsChecks();
   checks.push(...skills.checks);
-  checks.push(testomatioCheck(), mcpCacheCheck());
+  checks.push(testomatioCheck(), mcpCacheCheck(), langfuseCheck(options.envSources));
 
   if (options.probe) checks.push(await probeCheck(runtime, model.resolved));
 
@@ -142,6 +143,13 @@ function testomatioCheck(): Check {
     };
   }
   return { name: "testomatio", status: "ok", detail: "token and project id, MCP tools on" };
+}
+
+function langfuseCheck(sources: Map<string, string>): Check {
+  const config = langfuseConfig();
+  if (!config) return { name: "langfuse", status: "ok", detail: "off" };
+  const from = sources.get("LANGFUSE_PUBLIC_KEY") ?? "environment";
+  return { name: "langfuse", status: "ok", detail: `${config.baseUrl}, keys from ${from}` };
 }
 
 function mcpCacheCheck(): Check {

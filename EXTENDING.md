@@ -15,6 +15,7 @@ This page is about doing that. It assumes pi **0.84.x**; the SDK is pre-1.0 and 
 | `src/run.ts` | A hand-rolled run loop: `session.prompt()`, event subscription, the report contract |
 | `src/model.ts` | Provider keys and model resolution; no default model |
 | `src/mcp.ts` · `src/mcp-extension.ts` | The Testomat.io MCP server, delivered as a pi extension |
+| `src/langfuse.ts` · `src/langfuse-extension.ts` | Langfuse tracing, delivered as a pi extension: hooks in, no dependency |
 | `src/result.ts` | The `set_result` custom tool, which becomes the process exit code |
 | `prompt/` | `buildSystemPrompt()` — role, rules, Testomat.io operating rules, report contract |
 | `skills/` | Where the vendored skill folders land — the manifest is committed, the folders are fetched by `scripts/vendor-skills.js` |
