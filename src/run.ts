@@ -17,6 +17,7 @@ import {
   markdownPath,
   modelName,
   pullRequestNumber,
+  threadComments,
   threadName,
   type Destination,
   type MarkerFields,
@@ -51,10 +52,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // How a thread is kept on this host. Rendered only in a job that has one.
   const thread = threadName(options.thread);
   const stamp = marks(options, thread, repo.commit, inThread);
-  const sections: string[] = [];
-  if (host) {
-    sections.push(commentThread({ host, thread, marker: marker(stamp), posts: Boolean(pr) }));
-  }
+
 
   let created;
   try {
@@ -65,7 +63,21 @@ export async function runPrint(options: PrintOptions): Promise<number> {
       model: options.model,
       outputFile: outputPath,
       brief: options.brief,
-      sections,
+      // The model names itself in the default footer, and the agent posts that
+      // footer, so the section cannot be built until the model is resolved.
+      sections: (model) => {
+        if (!host) return [];
+        return [
+          commentThread({
+            host,
+            thread,
+            marker: marker(stamp),
+            reportFile: outputPath,
+            footer: footerFor(options, model),
+            delivered: Boolean(pr),
+          }),
+        ];
+      },
       ...connectionOptions(),
     });
   } catch (err) {
@@ -94,6 +106,10 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     for (const line of describe(options.destinations)) note(c.dim(`  → ${line}`));
     note("");
   }
+
+  // Read before the run: the answer delivered afterwards cannot be in it, so
+  // collapsing this list needs no judgement about which comment is the new one.
+  const earlier = await threadComments(pr, stamp.thread);
 
   const run = watchRun(session);
   await promptOnce(session, task.prompt, run);
@@ -125,7 +141,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
     note("");
   }
 
-  const failure = await deliver(options.destinations, envelope);
+  const failure = await deliver(options.destinations, envelope, { earlier });
   if (failure) {
     note(`  ${c.red(`✗ ${failure}`)}`);
     // The report is worth more than the destination: never lose it.

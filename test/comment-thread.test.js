@@ -22,97 +22,95 @@ test("the job says which host, the checkout never does", () => {
 test("the thread is a subject, not a pull request", () => {
   for (const host of HOSTS) {
     const text = block(host);
-    assert.match(text, /pull request, a merge request, an issue/);
+    assert.match(text, /a pull request, a merge request, an issue/, host);
     assert.ok(text.includes(MARKER), `${host} omits the line to write`);
-    assert.match(text, /Never delete a comment/);
-    assert.match(text, /complete current answer/);
+    assert.match(text, /Never delete/, host);
+    assert.match(text, /complete current answer/, host);
   }
 });
 
-// The round is the same wherever the thread lives; only the mechanism differs.
-// Every host gets the guard against the failure that broke a live thread: one
-// shell line, replayed from the restored session every round, re-folding the
-// comment it folded the first time while the rest of the thread stayed open.
-test("every host is told to rebuild the list, fold all of it, and check", () => {
+// The round reads the same on every host; only the mechanism under it changes.
+// Posting comes before collapsing on purpose. While the CLI posted, the agent
+// worked a thread its own answer was not in yet, so the newest comment it could
+// see read as the current one and survived every wording. Posting first makes
+// "leave the newest" true.
+test("every host gets the same round: post, then collapse the rest", () => {
   for (const host of HOSTS) {
     const text = block(host);
-    assert.match(text, /Ask the host for the thread, now, in this round/, host);
-    assert.match(text, /from that answer alone/, host);
-    assert.match(text, /every id in it and how many there are/, host);
-    assert.match(text, /reusing one acts on that thread, not this one/, host);
-    assert.match(text, /Make \*\*every\*\* one of them recede/, host);
-    assert.match(text, /Not the first, not the one you folded last time/, host);
-    assert.match(text, /Read the thread back before you finish/, host);
-    assert.match(text, /Fold whatever is, then check again/, host);
-    assert.match(text, /say so in your output/, host);
+    assert.match(text, /Fetch the thread from the host\. Fresh/, host);
+    assert.match(text, /an id or a count from earlier in this conversation is stale/, host);
+    assert.match(text, /Collect every id/, host);
+    const post = text.indexOf("Post ");
+    const collapse = text.indexOf("Collapse every id from step 2");
+    assert.ok(post > 0 && collapse > post, `${host} collapses before it posts`);
+    assert.match(text, /all of them, the newest included/, host);
+    assert.match(text, /Only what you just posted stays open/, host);
+    assert.match(text, /Nothing of yours but the new comment is open/, host);
   }
 });
 
-// Each host names the field that answers "did it actually recede?" — a mutation
-// returning no error is not the same as a hidden comment.
-test("every host names the state it must read back", () => {
-  assert.match(block("github"), /`isMinimized` per comment is both the list you fold from and the check/);
-  assert.match(block("gitlab"), /Read the note body back to check the rewrite landed/);
-  assert.match(block("bitbucket"), /`resolved` per thread is both the list you resolve from and the check/);
-  assert.match(block("generic"), /read it back afterwards/);
+test("each host supplies its mechanism and nobody else's", () => {
+  assert.match(block("github"), /minimizeComment.*OUTDATED.*isMinimized/s);
+  assert.match(block("gitlab"), /Notes cannot collapse.*<details>/s);
+  assert.match(block("bitbucket"), /resolving the comment thread.*`resolved` reports it/s);
+  assert.match(block("generic"), /whatever hides a whole comment here/);
+
+  for (const [host, foreign] of [
+    ["gitlab", /minimizeComment/],
+    ["bitbucket", /minimizeComment|GITLAB_TOKEN/],
+    ["generic", /minimizeComment|GITLAB_TOKEN|BITBUCKET_ACCESS_TOKEN/],
+  ]) {
+    assert.doesNotMatch(block(host), foreign, `${host} carries another host's calls`);
+  }
 });
 
-// Who posts changes only what step 5 should find, never who folds.
-test("the poster changes what step 5 expects, not the host rules", () => {
-  const posted = block("github", { posts: true });
-  assert.match(posted, /posted for you, once this turn ends/);
-  assert.match(posted, /no comment of yours is showing yet/);
-  assert.match(posted, /Append and collapse/);
-  assert.match(posted, /minimizeComment/);
+// The comment body is the report file, so a reader gets the review rather than
+// whatever the agent happened to say last.
+test("the answer is the report file, marker first and footer last", () => {
+  const text = block("github", { reportFile: "/tmp/report.md", footer: "> Reply with /testeiya" });
+  assert.match(text, /Write the complete current answer to `\/tmp\/report\.md`/);
+  assert.match(text, /Its first line is the marker above/);
+  assert.match(text, /Its last line is exactly `> Reply with \/testeiya`/);
+  assert.match(text, /Post that file as a new comment — the comment is the file/);
+
+  // With no report file it still posts, it just has no file to point at.
+  const bare = block("github");
+  assert.match(bare, /Post it as a new comment/);
+  assert.doesNotMatch(bare, /report\.md/);
+  assert.doesNotMatch(bare, /Its last line is exactly/);
 });
 
-test("github posts its own comment when nothing else will", () => {
-  const text = block("github");
-  assert.match(text, /Post it yourself/);
-  assert.match(text, /Append and collapse/);
-  assert.match(text, /minimizeComment/);
-  assert.match(text, /OUTDATED/);
-  assert.match(text, /Issues and pull requests share the same comment API/);
-  assert.match(text, /--edit-last/);
-  assert.doesNotMatch(text, /posted for you/);
-});
-
-test("gitlab rewrites one note and stays off discussions", () => {
-  const text = block("gitlab");
-  assert.match(text, /\*\*Rewrite\.\*\*/);
-  assert.match(text, /<details>/);
-  assert.match(text, /Fold one generation/);
-  assert.match(text, /notes rather than discussions/);
-  assert.match(text, /CI_JOB_TOKEN` cannot write/);
-  assert.doesNotMatch(text, /minimizeComment/);
-});
-
-test("bitbucket resolves and respects the comment cap", () => {
-  const text = block("bitbucket");
-  assert.match(text, /Append and collapse/);
-  assert.match(text, /resolve each one/);
-  assert.match(text, /200 comments/);
-  assert.match(text, /deleted=false/);
-});
-
-test("an unclaimed host is told the choice, never another host's calls", () => {
-  const text = block("generic");
-  assert.match(text, /which of the two applies/i);
-  assert.doesNotMatch(text, /minimizeComment/);
-  assert.doesNotMatch(text, /GITLAB_TOKEN/);
-  assert.doesNotMatch(text, /bitbucket/i);
-});
-
-test("the block states rules, not shell", () => {
+test("the block states intent, not shell", () => {
   for (const host of HOSTS) {
     const text = block(host);
     assert.doesNotMatch(text, /curl/, `${host} explains curl`);
     assert.doesNotMatch(text, /--header|--data-urlencode|--raw-field|--paginate|--jq/, `${host} spells out flags`);
-    assert.doesNotMatch(text, /There is no /, `${host} states what does not exist`);
     for (const line of text.split("\n").slice(1, -1)) {
       if (line.trim()) assert.match(line, /^ {2}\S|^ {5}\S|^ {2} /, `${host} line at column 0: ${line}`);
     }
     const lines = text.split("\n").length;
-    assert.ok(lines < 28, `${host} block is ${lines} lines`);
+    assert.ok(lines < 20, `${host} block is ${lines} lines`);
+    assert.ok(text.length < 1500, `${host} block is ${text.length} chars`);
   }
+});
+
+// Whoever posts collapses, because only the poster knows which comment is new.
+// Asked to do both while the command posted, the agent had to guess which
+// comment was this round's answer — it is not there yet — and kept sparing the
+// newest one it could see. Delivered rounds hand it neither job.
+test("a delivered round leaves the thread alone", () => {
+  const text = block("github", { delivered: true, reportFile: "/tmp/report.md" });
+  assert.match(text, /Posting it and collapsing the older ones are done for you/);
+  assert.match(text, /Never post, edit, collapse or delete a comment yourself/);
+  assert.match(text, /git diff <that sha>\.\.\.HEAD/);
+  assert.doesNotMatch(text, /minimizeComment/);
+  assert.doesNotMatch(text, /Collapse every id/);
+  assert.ok(text.length < 900, `delivered block is ${text.length} chars`);
+});
+
+test("a round the agent delivers still carries the whole job", () => {
+  const text = block("github");
+  assert.match(text, /Collapse every id from step 2/);
+  assert.match(text, /minimizeComment/);
+  assert.doesNotMatch(text, /done for you/);
 });

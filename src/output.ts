@@ -1,8 +1,11 @@
 import { access, constants, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { run } from "./exec.js";
+import { threadMarker } from "../prompt/comment-thread.js";
 
 const GH_SCHEME = "gh:";
+const MINIMIZE =
+  "mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}";
 const MARKER = "<!-- testeiya";
 
 /**
@@ -57,13 +60,34 @@ export async function preflight(destinations: Destination[]): Promise<string | n
 /** Route the finished report. Returns a message when a destination failed. */
 export async function deliver(
   destinations: Destination[],
-  envelope: RunEnvelope
+  envelope: RunEnvelope,
+  thread?: ThreadState
 ): Promise<string | null> {
   for (const destination of destinations) {
-    const failure = await deliverOne(destination, envelope);
+    const failure = await deliverOne(destination, envelope, thread);
     if (failure) return failure;
   }
   return null;
+}
+
+/**
+ * This thread's comments, read before the run. Collapsing them afterwards needs
+ * no judgement: the answer posted in between cannot be in a list taken before
+ * it existed, which is the one thing an agent working the thread cannot know.
+ */
+export async function threadComments(pr: number | undefined, thread?: string): Promise<string[]> {
+  if (!pr || !thread) return [];
+  const view = await run("gh", ["pr", "view", String(pr), "--json", "comments"]);
+  if (view.code !== 0) return [];
+  // The trailing space stops `thread=qa` from matching `thread=qa-nightly`.
+  const prefix = `${threadMarker(thread)} `;
+  const ids: string[] = [];
+  for (const comment of parseComments(view.stdout)) {
+    if (comment.isMinimized) continue;
+    if (!comment.body?.startsWith(prefix)) continue;
+    if (comment.id) ids.push(comment.id);
+  }
+  return ids;
 }
 
 /**
@@ -121,7 +145,8 @@ export function modelName(model: string): string {
 
 async function deliverOne(
   destination: Destination,
-  envelope: RunEnvelope
+  envelope: RunEnvelope,
+  thread?: ThreadState
 ): Promise<string | null> {
   // The agent wrote this file, so it is rewritten rather than written: what
   // lands on disk is the same body every other destination gets.
@@ -154,7 +179,26 @@ async function deliverOne(
     stdin: envelope.report,
   });
   if (result.code !== 0) return `gh pr comment failed: ${result.stderr.trim() || result.code}`;
+  await collapse(thread?.earlier ?? []);
   return null;
+}
+
+// The answer is already posted, so a comment that will not collapse is a
+// blemish on the thread, never a failed delivery.
+async function collapse(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    const result = await run("gh", ["api", "graphql", "-f", `query=${MINIMIZE}`, "-f", `id=${id}`]);
+    if (result.code === 0) continue;
+    process.stderr.write(`  could not collapse ${id}: ${result.stderr.trim() || result.code}\n`);
+  }
+}
+
+function parseComments(stdout: string): ThreadComment[] {
+  try {
+    return (JSON.parse(stdout) as { comments?: ThreadComment[] }).comments ?? [];
+  } catch {
+    return [];
+  }
 }
 
 function parseOne(value: string): Destination | string {
@@ -251,6 +295,18 @@ export interface MarkerFields {
   commit?: string;
   /** Short session id. Omitted on an unsaved run. */
   session?: string;
+}
+
+interface ThreadComment {
+  /** The GraphQL node id the collapse mutation takes, which is what `gh` returns. */
+  id?: string;
+  body?: string;
+  isMinimized?: boolean;
+}
+
+/** This thread's comments as they were before the run. */
+export interface ThreadState {
+  earlier: string[];
 }
 
 export type Destination =

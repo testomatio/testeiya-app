@@ -85,7 +85,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
-        sections: options.sections,
+        sections: options.sections?.(`${model.provider}/${model.id}`),
         connectedClis: pathClis(),
         connectedMcps,
       }),
@@ -147,8 +147,9 @@ export interface SessionOptions {
   model?: string;
   outputFile?: string;
   brief?: boolean;
-  /** Whole prompt sections this run contributes (the pull request thread rules). */
-  sections?: string[];
+  /** Whole prompt sections this run contributes (the pull request thread rules).
+   * Built from the resolved model, which the caller cannot know before this. */
+  sections?: (model: string) => string[];
   tokens?: Record<string, string>;
   connection?: { tokenAvailable?: boolean };
   backendUrl?: string;
