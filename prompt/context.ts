@@ -52,12 +52,22 @@ export function contextUpdateNotice(
 function ignoreBlock(off: OffContext): string[] {
   const paths: string[] = [];
   for (const f of off.folders ?? []) paths.push(`\`${f.path}/\``);
-  for (const e of off.entries ?? []) paths.push(`\`${e.path}\``);
+  for (const e of off.entries ?? []) paths.push(offName(e));
   if (paths.length === 0) return [];
-  return [
+  const block = [
     `Switched off by the user: ${paths.join(", ")}.`,
     "Ignore them while they are off: do not read, search, list or write into them, and do not count what they hold — not even where another rule points at them by name. They are still on disk, switched off on purpose. If a task cannot be done without them, say so instead of using them.",
   ];
+  if (off.entries?.some((e) => e.kind === "test")) {
+    block.push("A switched-off test is that one test: the rest of its suite file is not switched off.");
+  }
+  return block;
+}
+
+/** A switched-off test is named as that test, never as its whole file. */
+function offName(e: ContextEntry): string {
+  if (e.kind === "test") return `the test "${e.anchor}" in \`${e.path}\``;
+  return `\`${e.path}\``;
 }
 
 /** Two spaces on every non-empty line, so a body sits inside its tag. */
@@ -101,6 +111,9 @@ function parentDir(rel: string): string {
 
 function describeEntry(e: ContextEntry): string {
   const date = e.addedAt?.split("T")[0] ?? "";
+  if (e.kind === "test") {
+    return `\`${e.path}\` — only the ${e.testType ?? "manual"} test "${e.anchor}" in this suite file, attached by the user (${date})`;
+  }
   // A path outside the hidden dir is one the user attached where it already
   // lives — it is part of the project, not reference material dropped beside it.
   if (!e.path.startsWith(`${TESTEIYA_DIR_NAME}/`)) {
@@ -115,7 +128,7 @@ function describeEntry(e: ContextEntry): string {
   return `\`${e.path}\` — document${from} (${date})`;
 }
 
-export type ContextKind = "folder" | "repo" | "file";
+export type ContextKind = "folder" | "repo" | "file" | "test";
 
 /** What the user switched off: on disk, out of bounds until switched back on. */
 export interface OffContext {
@@ -141,4 +154,7 @@ export interface ContextEntry {
   /** Where it came from: an absolute local path, a git URL, or the uploaded filename. */
   origin: string;
   addedAt: string;
+  /** A `test` entry's heading in its `*.test.md` file. */
+  anchor?: string;
+  testType?: "manual" | "automated";
 }
