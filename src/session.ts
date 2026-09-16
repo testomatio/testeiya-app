@@ -9,8 +9,8 @@ import {
   type SessionManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
-import { buildSystemPrompt } from "../prompt/index.js";
-import { pathClis } from "../prompt/tools.js";
+import { buildSystemPrompt } from "../prompt/system-prompt.js";
+import { pathClis } from "../prompt/clis.js";
 import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
 import { hasMcp, tmsAccess } from "./mcp.js";
@@ -78,10 +78,8 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     systemPrompt: () =>
       buildSystemPrompt({
         cwd: options.cwd,
-        mode: "print",
         tms: tmsAccess(),
-        tokens: options.tokens,
-        connection: options.connection,
+        connected: options.connection?.tokenAvailable,
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
@@ -150,7 +148,6 @@ export interface SessionOptions {
   /** Whole prompt sections this run contributes (the pull request thread rules).
    * Built from the resolved model, which the caller cannot know before this. */
   sections?: (model: string) => string[];
-  tokens?: Record<string, string>;
   connection?: { tokenAvailable?: boolean };
   backendUrl?: string;
 }

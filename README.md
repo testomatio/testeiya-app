@@ -19,7 +19,7 @@ It ships as a desktop app, a web app, and the command-line agent in this reposit
 
 | Folder | What it is |
 |---|---|
-| `prompt/` | System-prompt fragments: the agent's role, rules, tool guidance, Testomat.io operating rules, and the report contract |
+| `prompt/` | The system prompt: the agent's role, the trigger-run contract, workspace and tool guidance, Testomat.io rules, and the report contract. Plus the comment-thread rules a CI run adds |
 | `skills/` | The manifest of skills the agent can invoke. Every folder is fetched from its own upstream repository |
 | `src/` | The `testeiya` command-line agent (Node) |
 

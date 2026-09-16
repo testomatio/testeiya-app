@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { TmsAccess } from "../prompt/testomatio.js";
+import type { TmsAccess } from "../prompt/system-prompt.js";
 import { PACKAGE_ROOT, PI_STATE_DIR } from "./env.js";
 
 const require_ = createRequire(import.meta.url);

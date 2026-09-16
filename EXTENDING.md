@@ -117,7 +117,7 @@ import {
   SettingsManager,
   type CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
-import { buildSystemPrompt } from "../prompt/index.js";
+import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { loadEnvFiles, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { hasMcp, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
@@ -152,12 +152,10 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async (options) => {
     resourceLoaderOptions: {
       additionalSkillPaths: [BUNDLED_SKILLS_DIR],
       additionalExtensionPaths: extensionPaths,
+      // The worker prompt, as a start. It tells the agent nobody is watching;
+      // for a real TUI copy prompt/system-prompt.ts and rewrite that part.
       systemPromptOverride: () =>
-        buildSystemPrompt({
-          cwd: options.cwd,
-          mode: "tui",
-          tms: tmsAccess(),
-        }),
+        buildSystemPrompt({ cwd: options.cwd, tms: tmsAccess(), connected: hasMcp() }),
       skillsOverride: (current) => ({
         skills: current.skills.filter((s) => s.baseDir.startsWith(BUNDLED_SKILLS_DIR)),
         diagnostics: current.diagnostics,
@@ -186,7 +184,7 @@ Five details in there are the ones that bite:
 
 - **Keep `skillsOverride`.** It is easy to read as boilerplate and drop. Dropping it on the machine this was written on took the agent from 47 skills to 86 — pi had found another 39 in the user's own directories, adding some 20,000 characters to the system prompt, most of it about frameworks this agent has nothing to do with.
 
-- **`mode: "tui"`.** `buildSystemPrompt` already knows this mode — it is the default. It drops the `<non-interactive>` block, which tells the agent that nobody is watching, that it must never wait for input, that it must not drive a browser, and that it should call `set_result`; and it drops the report contract. Drop the matching machinery with it — `set_result` and the report nudge in `run.ts` exist to produce an exit code, and an interactive session has nobody to return one to.
+- **The prompt is a worker's.** `prompt/system-prompt.ts` describes a one-shot run: the `<trigger-run>` block tells the agent that nobody is watching, that it must never wait for input, that it must not drive a browser, and that it should call `set_result`. An interactive front end writes its own prompt — copy the file, keep the role, workspace, tools and rules, replace the trigger block with what its user can do: answer a question, watch a browser. Drop the matching machinery with it — `set_result` and the report nudge in `run.ts` exist to produce an exit code, and an interactive session has nobody to return one to.
 - **No `bindExtensions()`.** pi's own modes call it themselves; `src/session.ts` has to because its run loop is hand-rolled. The call is not idempotent — it re-emits `session_start` to every extension — so calling it in a TUI as well fires every startup handler twice.
 - **`SessionManager.create(cwd)`**, not `inMemory()` — that is what gives you `/resume` and a transcript on disk.
 - **`agentDir: PI_STATE_DIR`** stays, so extension and skill discovery keeps pointing at `~/.testeiya/pi` and not the user's pi install.
@@ -215,7 +213,7 @@ And for a UI that owns its own event loop, skip the modes entirely: subscribe wi
 
 Whatever the front end, four things make the agent a *testing* agent rather than a generic one:
 
-1. `buildSystemPrompt()` from `prompt/` — pass your harness's own capabilities through `sections`, `toolBullets` and `rules` instead of forking a fragment. If your harness can ask the user a question or open a browser, that belongs in your options, not in `prompt/`.
+1. `buildSystemPrompt()` from `prompt/system-prompt.ts` for a one-shot worker — pass what the run contributes through `sections`. An interactive harness writes its own prompt file; if it can ask the user a question or open a browser, that belongs there, not in `prompt/`.
 2. `additionalSkillPaths: [BUNDLED_SKILLS_DIR]` — the skills are most of the domain knowledge, so point this at whatever tree you vendor. A fresh clone has none until `node scripts/vendor-skills.js` fills it.
 3. `tms` — `"mcp-direct"`, `"mcp-proxy"` or `"cli-only"`, matching how your harness actually reaches Testomat.io. Saying tools exist that do not wastes the model's turns discovering that.
 4. The MCP extension, if you have both a token and a project id. A token alone identifies no project to the server; `tmsAccess()` in `src/mcp.ts` encodes that rule.
