@@ -1,4 +1,62 @@
-import dedent from 'dedent';
+import dedent from "dedent";
+
+/**
+ * What this run continues, said as the three states a run can be in. A thread
+ * round knows its history from the checkpoint: "Since your last round" is in
+ * the task when there is one, so the prompt only names the state and the
+ * reading order. A first thread round and a standalone run share the rule that
+ * there is nothing to catch up on; the thread one adds that the thread starts
+ * with this answer.
+ */
+export function thread(options: ThreadOptions): string {
+  const parts = [dedent`
+    The task is the request for this run. An optional <user_reply> is the user's latest instruction: answer it while keeping the task in scope.
+  `];
+  if (options.threadMode) {
+    parts.push(dedent`
+      \`--thread\` names the conversation, not a live session.
+      When configured, new PR commits or replies trigger separate one-shot messages in that conversation.
+      Finish this run and exit; never poll or wait for future commits, replies or approval.
+    `);
+  }
+  parts.push(threadState(options));
+  return parts.join("\n\n");
+}
+
+function threadState(options: ThreadOptions): string {
+  if (options.threadMode === "continuing") {
+    return dedent`
+      This is a later round in a thread.
+      Catch up first: read what moved before anything else, and never repeat an answer that is still visible in the thread.
+      If present, "Since your last round" below lists what moved since you last answered;
+      read it before anything else. Otherwise read the earlier answer and current thread from the host.
+    `;
+  }
+  if (options.threadMode === "first") {
+    return dedent`
+      This is the first message in this thread: no earlier answer of yours exists there,
+      and there is no "Since your last round" to catch up on.
+      Later rounds will continue from what you write now.
+      There is nothing to catch up on: start the task directly.
+    `;
+  }
+  return dedent`
+    This is the first and only message of the run: there is no earlier round, no thread history,
+    and no "Since your last round" to catch up on.
+    There is nothing to catch up on: start the task directly.
+  `;
+}
+
+export type ThreadMode = "first" | "continuing";
+
+export interface ThreadOptions {
+  /**
+   * Where this run sits in its thread. `continuing` is a later round with
+   * history to catch up on; `first` opens a thread; undefined is a standalone
+   * run with no thread at all.
+   */
+  threadMode?: ThreadMode;
+}
 
 /**
  * How a host collapses a comment. The round is the same everywhere, so a host
@@ -29,7 +87,7 @@ const HOSTS = {
   generic: {
     env: [],
     collapse: dedent`
-    Use whatever hides a whole comment here — hide, minimise, collapse, resolve — and read back whatever field reports it. If the host can only edit, keep one comment and rewrite it with the previous answer folded inside. If it can do neither, say so in your output.`,
+    Use whatever hides a whole comment here — hide, minimise, collapse, delete, resolve — and read back whatever field reports it. If the host can only edit, keep one comment and rewrite it with the previous answer folded inside. If it can do neither, say so in your output.`,
   },
 } satisfies Record<string, Host>;
 
@@ -71,7 +129,7 @@ function round(options: CommentThreadOptions): string {
     return dedent`
     Each round:
 
-    1. Fetch the thread from the host. Yours are the raw bodies starting \`${threadMarker(options.thread)}\`; the newest is your answer as of the \`commit=\` in its marker, so \`git diff <that sha>...HEAD\` is what you have not seen. A different \`thread=\` is someone else's conversation.
+    1. Fetch the thread from the host. Yours are the raw bodies starting \`${threadMarker(options.thread)}\`; if any exist, the newest is your answer as of the \`commit=\` in its marker, so \`git diff <that sha>...HEAD\` is what you have not seen. A different \`thread=\` is someone else's conversation.
     2. ${answer(options)}
 
     Posting it and collapsing the older ones are done for you. Never post, edit, collapse or delete a comment yourself.`;
@@ -96,9 +154,15 @@ function answer(options: CommentThreadOptions): string {
   const where = options.reportFile ? ` to \`${options.reportFile}\`` : '';
   const parts = [
     `Write the complete current answer${where}, never a delta.`,
-    'Open with "Since the last round": what was fixed, what is new, what is still open.',
-    'Its first line is the marker above.',
   ];
+  if (options.threadMode === 'continuing') {
+    parts.push('Open with "Since the last round": what was fixed, what is new, what is still open.');
+  } else if (options.threadMode === 'first') {
+    parts.push('The thread starts with this answer, so open with the task: what you found, what is still open.');
+  } else {
+    parts.push('If earlier rounds of yours exist, open with "Since the last round": what was fixed, what is new, what is still open.');
+  }
+  parts.push('Its first line is the marker above.');
   if (options.footer) parts.push(`Its last line is exactly \`${options.footer}\`.`);
   return parts.join(' ');
 }
@@ -125,7 +189,7 @@ interface Host {
   collapse: string;
 }
 
-export interface CommentThreadOptions {
+export interface CommentThreadOptions extends ThreadOptions {
   host: ThreadHost;
   /** Which conversation this run is, so parallel runs never touch each other. */
   thread: string;

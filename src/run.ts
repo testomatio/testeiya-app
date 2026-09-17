@@ -23,7 +23,7 @@ import {
   type MarkerFields,
   type RunEnvelope,
 } from "./output.js";
-import { commentThread, threadHost } from "../prompt/comment-thread.js";
+import { commentThread, threadHost } from "../prompt/thread.js";
 import { shortId } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
 import { expandSkills } from "./skills.js";
@@ -53,9 +53,23 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const thread = threadName(options.thread);
   const stamp = marks(options, thread, repo.commit, inThread);
 
+  // Read before the run: the answer delivered afterwards cannot be in it, so
+  // collapsing this list needs no judgement about which comment is the new one.
+  // Its length is also whether this thread already has answers: the prompt
+  // wants to know first or continuing before the session is built.
+  const earlier = inThread ? await threadComments(pr, stamp.thread) : [];
 
   let created;
   try {
+    // First or continuing: a checkpoint left by a previous round of this
+    // session, or an answer already visible in the thread, makes this a later
+    // round. Nothing does: the run opens the thread.
+    const threadMode: "first" | "continuing" | undefined = !inThread
+      ? undefined
+      : lastCheckpoint(options.sessionManager) || earlier.length > 0
+        ? "continuing"
+        : "first";
+
     created = await createTesteiyaSession({
       cwd,
       result,
@@ -63,6 +77,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
       model: options.model,
       outputFile: outputPath,
       brief: options.brief,
+      threadMode,
       // The model names itself in the default footer, and the agent posts that
       // footer, so the section cannot be built until the model is resolved.
       sections: (model) => {
@@ -75,6 +90,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
             reportFile: outputPath,
             footer: footerFor(options, model),
             delivered: Boolean(pr),
+            threadMode,
           }),
         ];
       },
@@ -109,9 +125,8 @@ export async function runPrint(options: PrintOptions): Promise<number> {
 
   // Read before the run: the answer delivered afterwards cannot be in it, so
   // collapsing this list needs no judgement about which comment is the new one.
-  const earlier = await threadComments(pr, stamp.thread);
-
   const run = watchRun(session);
+
   await promptOnce(session, task.prompt, run);
   const written = await collectReport(session, run, outputPath, stampBefore);
   if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);

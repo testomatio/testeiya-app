@@ -1,7 +1,7 @@
 import { access, constants, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { run } from "./exec.js";
-import { threadMarker } from "../prompt/comment-thread.js";
+import { threadMarker } from "../prompt/thread.js";
 
 const GH_SCHEME = "gh:";
 const MINIMIZE =

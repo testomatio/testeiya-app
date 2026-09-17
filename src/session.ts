@@ -83,6 +83,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
+        threadMode: options.threadMode,
         sections: options.sections?.(`${model.provider}/${model.id}`),
         connectedClis: pathClis(),
         connectedMcps,
@@ -148,6 +149,8 @@ export interface SessionOptions {
   /** Whole prompt sections this run contributes (the pull request thread rules).
    * Built from the resolved model, which the caller cannot know before this. */
   sections?: (model: string) => string[];
+  /** Where this run sits in its thread, so the prompt says first or continuing. */
+  threadMode?: "first" | "continuing";
   connection?: { tokenAvailable?: boolean };
   backendUrl?: string;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commentThread, threadHost } from "../dist/prompt/comment-thread.js";
+import { commentThread, thread, threadHost, threadMarker } from "../dist/prompt/thread.js";
 import { marker } from "../dist/src/output.js";
 
 const MARKER = marker({ thread: "qa-review", commit: "700fbe1d9c" });
@@ -113,4 +113,43 @@ test("a round the agent delivers still carries the whole job", () => {
   assert.match(text, /Collapse every id from step 2/);
   assert.match(text, /minimizeComment/);
   assert.doesNotMatch(text, /done for you/);
+});
+
+test("thread lifecycle describes separate configured triggers, not a live conversation", () => {
+  for (const threadMode of ["first", "continuing"]) {
+    const text = thread({ threadMode });
+    assert.match(text, /`--thread` names the conversation, not a live session/);
+    assert.match(text, /When configured, new PR commits or replies trigger separate one-shot messages/);
+    assert.match(text, /Finish this run and exit; never poll or wait/);
+    assert.match(text, /<user_reply>.*keeping the task in scope/);
+  }
+  assert.doesNotMatch(thread({}), /new PR commits|Later rounds will continue/);
+});
+
+test("first, continuing and unknown comment rounds use the right opening on every host", () => {
+  for (const host of HOSTS) {
+    for (const delivered of [false, true]) {
+      const first = block(host, { delivered, threadMode: "first" });
+      assert.doesNotMatch(first, /Since the last round/);
+      assert.match(first, /The thread starts with this answer/);
+      const continuing = block(host, { delivered, threadMode: "continuing" });
+      assert.match(continuing, /Open with "Since the last round"/);
+      assert.doesNotMatch(continuing, /The thread starts with this answer/);
+      const unknown = block(host, { delivered });
+      assert.match(unknown, /If earlier rounds of yours exist, open with "Since the last round"/);
+      for (const text of [first, continuing, unknown]) {
+        assert.match(text, /complete current answer, never a delta/);
+        assert.match(text, /Its first line is the marker above/);
+      }
+    }
+  }
+});
+
+test("a delivered round only compares against an earlier answer when one exists", () => {
+  assert.match(block("github", { delivered: true, threadMode: "first" }), /if any exist, the newest/);
+});
+
+test("the consolidated marker matches the CLI stamp", () => {
+  assert.ok(MARKER.startsWith(threadMarker("qa-review")));
+  assert.equal(threadMarker("qa-review"), "<!-- testeiya thread=qa-review");
 });
