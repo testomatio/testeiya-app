@@ -119,8 +119,8 @@ Models and keys
   reuses its session's model. "testeiya models" lists what your key can reach.
 
   The provider key comes from the environment, from ~/.testeiya/.env, or from
-  ~/.testeiya/auth.json, which is the file the desktop app's Settings dialog
-  writes.
+  ~/.testeiya/auth.json. The desktop app reads ~/.testeiya/.env too, so a key
+  there works in both.
 
 Answering a reply
 
