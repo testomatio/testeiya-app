@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "62b0867430784a654a98b1896cd30500f25c11fa",
+      "sha": "2aea76e9f1b6680e6b4b215c6ad096c8268a1b22",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
@@ -38,6 +38,7 @@
         "testing-workflow",
         "testomat-allure-adapter",
         "testomatio-mcp",
+        "wiki-from-code",
         "write-user-story"
       ]
     },
