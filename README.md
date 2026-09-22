@@ -37,8 +37,8 @@ npx testeiya doctor
 
 The key comes from the environment (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `GEMINI_API_KEY`), from `~/.testeiya/.env`, or from
-`~/.testeiya/auth.json`. That last file is the one the desktop app's Settings
-dialog writes, so configuring it once covers both.
+`~/.testeiya/auth.json`. The desktop app reads `~/.testeiya/.env` too, so a key
+there covers both. Keys saved in the desktop app's Settings stay in the app.
 
 There is no default model. Name one with `--model <provider>/<id>` or
 `TESTEIYA_MODEL`. CI usually has neither set, so a run that resolves no model
