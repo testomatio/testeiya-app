@@ -91,9 +91,8 @@ export async function threadComments(pr: number | undefined, thread?: string): P
 }
 
 /**
- * The report as delivered, marker on top, header above it and footer under it.
- * A footer is how a thread stays a thread: it tells the reader what to type to
- * answer a posted comment.
+ * The report as delivered, header above it and footer under it. The marker goes
+ * on top only in a thread: it is how a later round finds the comments we posted.
  */
 export function decorate(report: string, decoration?: Decoration): string {
   const header = decoration?.header?.trim();
@@ -101,6 +100,7 @@ export function decorate(report: string, decoration?: Decoration): string {
   let body = stripMarker(report.trimEnd());
   if (header) body = `${header}\n\n${body}`;
   if (footer) body = `${body}\n\n${footer}`;
+  if (!decoration?.thread) return `${body}\n`;
   return `${marker(decoration)}\n${body}\n`;
 }
 

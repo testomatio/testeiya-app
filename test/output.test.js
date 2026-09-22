@@ -40,17 +40,22 @@ test("markdownPath finds the file the agent writes", () => {
 const MARK = "<!-- testeiya -->";
 
 test("a footer goes under the report, a header above it", () => {
-  assert.equal(decorate("verdict\n"), `${MARK}\nverdict\n`);
-  assert.equal(
-    decorate("verdict\n", { footer: "> Reply with /testeiya" }),
-    `${MARK}\nverdict\n\n> Reply with /testeiya\n`
-  );
-  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), `${MARK}\n## Testeiya\n\nverdict\n`);
+  assert.equal(decorate("verdict\n"), "verdict\n");
+  assert.equal(decorate("verdict\n", { footer: "> Reply with /testeiya" }), "verdict\n\n> Reply with /testeiya\n");
+  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), "## Testeiya\n\nverdict\n");
   assert.equal(
     decorate("verdict\n", { header: "## Testeiya", footer: "> Reply" }),
-    `${MARK}\n## Testeiya\n\nverdict\n\n> Reply\n`
+    "## Testeiya\n\nverdict\n\n> Reply\n"
   );
-  assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), `${MARK}\nverdict\n`);
+  assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), "verdict\n");
+});
+
+test("only a thread report carries the marker", () => {
+  assert.equal(decorate("verdict\n", { session: "0198f2c1a3b4c" }), "verdict\n");
+  assert.equal(
+    decorate("verdict\n", { thread: "qa-review", session: "0198f2c1a3b4c" }),
+    "<!-- testeiya thread=qa-review session=0198f2c1a3b4c -->\nverdict\n"
+  );
 });
 
 test("the marker carries the thread, the commit and the session", () => {
@@ -59,10 +64,6 @@ test("the marker carries the thread, the commit and the session", () => {
   assert.equal(
     marker({ thread: "qa-review", commit: "700fbe1d", session: "0198f2c1a3b4c" }),
     "<!-- testeiya thread=qa-review commit=700fbe1d session=0198f2c1a3b4c -->"
-  );
-  assert.equal(
-    decorate("verdict\n", { session: "0198f2c1a3b4c" }),
-    "<!-- testeiya session=0198f2c1a3b4c -->\nverdict\n"
   );
 });
 
@@ -75,7 +76,7 @@ test("a marker the agent wrote is replaced, never doubled", () => {
     decorate("<!-- testeiya thread=stale -->\nverdict\n", { thread: "qa-review" }),
     "<!-- testeiya thread=qa-review -->\nverdict\n"
   );
-  assert.equal(decorate(`${MARK}\nverdict\n`), `${MARK}\nverdict\n`);
+  assert.equal(decorate(`${MARK}\nverdict\n`), "verdict\n");
 });
 
 test("a thread name is safe inside an html comment", () => {
@@ -93,5 +94,5 @@ test("the report is signed by default", () => {
     footer,
     "*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*"
   );
-  assert.equal(decorate("verdict\n", { footer }), `${MARK}\nverdict\n\n${footer}\n`);
+  assert.equal(decorate("verdict\n", { footer }), `verdict\n\n${footer}\n`);
 });

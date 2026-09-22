@@ -18,7 +18,10 @@ export function finalReport(path: string): string {
     <final-report>
     * Write your complete final report to \`${path}\` with the \`write\` tool. Writing it is required before you finish.
     * That file is your answer. It is the run's deliverable; nothing else you say is kept.
-    * Markdown. Open with an \`#\` title, then the findings. Overwrite the file; never append.
+    * Decide the **severity of your report**. If it is low - keep the minimize text amount, keep text short and bullet points few.
+    * Ensure we won't grab user's attention by making them read long detailed report for a very minor issue that has no effect
+    * However, explain in all details things that have high severity and are important to note.
+    * Format as markdown. Open with an \`##\` title, then the findings. Overwrite the file; never append.
     * In a thread round (see <comment-thread>) the file is the whole current answer, never a delta.
     * Prefer short sentences and bullet points inside your answer
     * Avoid long sentances and long paragraphs
