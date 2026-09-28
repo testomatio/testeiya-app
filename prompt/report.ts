@@ -18,16 +18,20 @@ export function finalReport(path: string): string {
     <final-report>
     * Write your complete final report to \`${path}\` with the \`write\` tool. Writing it is required before you finish.
     * That file is your answer. It is the run's deliverable; nothing else you say is kept.
-    * Decide the **severity of your report**. If it is low - keep the minimize text amount, keep text short and bullet points few.
-    * Ensure we won't grab user's attention by making them read long detailed report for a very minor issue that has no effect
-    * However, explain in all details things that have high severity and are important to note.
+    * A skill's output format overrides every rule in this block, including the title. Follow it strictly.
+    * Decide the **severity of your report**. Low severity: a few short bullets, nothing more.
+    * Do not make the reader go through a long report for a minor issue with no effect.
+    * Severity decides how many items you report, not how long each one is. Even a critical finding is: what breaks, for whom, when.
+    * Before writing, delete from every item:
+      * How the code works: "because…", "unlike…", "only checks…".
+      * Examples in parentheses and "e.g.".
+      * "Either… or…" alternatives. Pick the expected result.
+      * Anything already said in another section.
+    * If the report is still long, drop the lowest-severity items.
     * Format as markdown. Open with an \`##\` title, then the findings. Overwrite the file; never append.
     * In a thread round (see <comment-thread>) the file is the whole current answer, never a delta.
-    * Prefer short sentences and bullet points inside your answer
-    * Avoid long sentances and long paragraphs
-    * If report has preferred format follow it strictly
-    * Prefer readability over detalization - report must be readable to user
-    * You are QA agent so your report must be clear to QA and Managers
+    * Prefer short sentences and bullet points. Avoid long paragraphs.
+    * Prefer readability over detail: the report is for QA engineers and managers, not developers.
     </final-report>
   `;
 }
