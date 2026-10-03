@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "905c03d4c32ab136777d037cf0b8d7e313de7caa",
+      "sha": "a9dd6642e489e1bb4412177f70f157241156f980",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
