@@ -12,6 +12,7 @@ import { UsageError } from "./model.js";
 import {
   decorate,
   defaultFooter,
+  defaultHeader,
   deliver,
   marker,
   markdownPath,
@@ -88,6 +89,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
             thread,
             marker: marker(stamp),
             reportFile: outputPath,
+            header: headerFor(options, inThread),
             footer: footerFor(options, model),
             delivered: Boolean(pr),
             threadMode,
@@ -130,7 +132,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   await promptOnce(session, task.prompt, run);
   const written = await collectReport(session, run, outputPath, stampBefore);
   if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);
-  const report = sign(written, options, model, stamp);
+  const report = sign(written, options, model, stamp, inThread);
 
   run.unsubscribe();
   if (verbose) note("");
@@ -207,10 +209,11 @@ function sign(
   report: string | null,
   options: PrintOptions,
   model: string,
-  fields: MarkerFields
+  fields: MarkerFields,
+  inThread: boolean
 ): string | null {
   if (!report) return report;
-  return decorate(report, { ...fields, header: options.header, footer: footerFor(options, model) });
+  return decorate(report, { ...fields, header: headerFor(options, inThread), footer: footerFor(options, model) });
 }
 
 // The thread and the commit are what a later round matches and diffs against,
@@ -235,6 +238,15 @@ function footerFor(options: PrintOptions, model: string): string | undefined {
   if (options.noDefaultFooter) return undefined;
   if (process.env.TESTEIYA_NO_DEFAULT_FOOTER) return undefined;
   return defaultFooter(model);
+}
+
+// A posted comment opens with the logo, so a reader knows whose answer it is.
+function headerFor(options: PrintOptions, inThread: boolean): string | undefined {
+  if (options.header !== undefined) return options.header;
+  if (!inThread) return undefined;
+  if (options.noDefaultFooter) return undefined;
+  if (process.env.TESTEIYA_NO_DEFAULT_FOOTER) return undefined;
+  return defaultHeader();
 }
 
 // A tool name alone says the run is alive and nothing else. The command or the

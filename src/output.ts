@@ -7,6 +7,7 @@ const GH_SCHEME = "gh:";
 const MINIMIZE =
   "mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}";
 const MARKER = "<!-- testeiya";
+const LOGO = "https://raw.githubusercontent.com/testomatio/testeiya-app/main/assets/testeiya-cli-logo-64.png";
 
 /**
  * Where the report goes. Only known schemes are recognised: a generic
@@ -98,7 +99,7 @@ export function decorate(report: string, decoration?: Decoration): string {
   const header = decoration?.header?.trim();
   const footer = decoration?.footer?.trim();
   let body = stripMarker(report.trimEnd());
-  if (header) body = `${header}\n\n${body}`;
+  if (header && !body.startsWith(header)) body = `${header}\n\n${body}`;
   if (footer) body = `${body}\n\n${footer}`;
   if (!decoration?.thread) return `${body}\n`;
   return `${marker(decoration)}\n${body}\n`;
@@ -123,6 +124,11 @@ export function marker(fields?: MarkerFields): string {
 export function threadName(value?: string): string {
   const clean = (value ?? "").toLowerCase().replaceAll(/[^a-z0-9._/]+/g, "-");
   return clean.replaceAll(/-+/g, "-").replaceAll(/^-|-$/g, "") || "default";
+}
+
+/** What a posted comment opens with when the caller writes no header of their own. */
+export function defaultHeader(): string {
+  return `### <img src="${LOGO}" width="24" height="24" align="top" alt=""> Testeiya QA Agent`;
 }
 
 /** What signs the report when the caller writes no footer of their own. */

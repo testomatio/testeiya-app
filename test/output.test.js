@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decorate, defaultFooter, marker, markdownPath, parseDestinations, threadName } from "../dist/src/output.js";
+import { decorate, defaultFooter, defaultHeader, marker, markdownPath, parseDestinations, threadName } from "../dist/src/output.js";
 
 test("no output means markdown on stdout", () => {
   assert.deepEqual(parseDestinations([]), [{ kind: "stdout" }]);
@@ -95,4 +95,11 @@ test("the report is signed by default", () => {
     "*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*"
   );
   assert.equal(decorate("verdict\n", { footer }), `verdict\n\n${footer}\n`);
+});
+
+test("the default header carries the logo and is not added twice", () => {
+  const header = defaultHeader();
+  assert.ok(header.includes("testeiya-cli-logo-64.png"));
+  assert.equal(decorate("verdict\n", { header }), `${header}\n\nverdict\n`);
+  assert.equal(decorate(`${header}\n\nverdict\n`, { header }), `${header}\n\nverdict\n`);
 });
