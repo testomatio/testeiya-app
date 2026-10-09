@@ -9,13 +9,42 @@
 
 An agent, app, and the goddess of testing.
 
-Testeiya is an autonomous QA agent. It reacts to triggers — a pull request, a new
-issue, a failed test run, a deploy — runs exactly one analysis, and delivers its
-verdict where your team works: a PR comment, a markdown report, or a Testomat.io
-project. There is no interactive mode and no human in the loop. That is the point:
-you wire it into CI once, and every event that should get QA thinking gets it.
+Testeiya is an AI QA agent. This repository is home to two things:
 
-It ships as a desktop app, a web app, and the command-line agent in this repository.
+- **Testeiya Desktop**, the app. Download it from [Releases](https://github.com/testomatio/testeiya-app/releases/latest).
+- **Testeiya CLI**, the command-line agent for CI. Install it from [npm](https://www.npmjs.com/package/testeiya).
+
+## Desktop app
+
+Chat with a QA agent that works inside your project. It reads your code and
+test files, writes and reviews test cases, runs tests, explores a live app in
+its own browser, and syncs with your Testomat.io project.
+
+| OS | Download |
+|---|---|
+| macOS (Apple Silicon) | [`stable-macos-arm64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-arm64-Testeiya.dmg) |
+| Windows (x64) | [`stable-win-x64-Testeiya.zip`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-win-x64-Testeiya.zip) |
+| Linux (x64) | [`Testeiya-x86_64.AppImage`](https://github.com/testomatio/testeiya-app/releases/latest/download/Testeiya-x86_64.AppImage) |
+
+The builds are unsigned, so each OS warns once on first launch:
+
+- **macOS**: open the `.dmg` and drag Testeiya into Applications. On first launch, right-click it and pick **Open**. If macOS still blocks it, run `xattr -dr com.apple.quarantine /Applications/Testeiya.app`.
+- **Windows**: extract the zip to a short path such as `C:\Testeiya` and run `Testeiya\bin\launcher.exe`. If SmartScreen appears, click **More info**, then **Run anyway**.
+- **Linux**: `chmod +x Testeiya-x86_64.AppImage && ./Testeiya-x86_64.AppImage`. Without FUSE, add `--appimage-extract-and-run`.
+
+Once installed, the app updates itself. Add an LLM provider key in Settings, or
+put one in `~/.testeiya/.env` to share it with the CLI, and open a project folder.
+
+The app's source is not open. This repository holds what the agent reads: its
+prompt and skills, shared with the CLI. Report app issues here too.
+
+## CLI
+
+The `testeiya` command is the same agent, built for CI. It reacts to triggers —
+a pull request, a new issue, a failed test run, a deploy — runs exactly one
+analysis, and delivers its verdict where your team works: a PR comment, a
+markdown report, or a Testomat.io project. There is no interactive mode and no human in the loop. That is the point:
+you wire it into CI once, and every event that should get QA thinking gets it.
 
 | Folder | What it is |
 |---|---|
@@ -23,9 +52,7 @@ It ships as a desktop app, a web app, and the command-line agent in this reposit
 | `skills/` | The manifest of skills the agent can invoke. Every folder is fetched from its own upstream repository |
 | `src/` | The `testeiya` command-line agent (Node) |
 
-The desktop and web harness is not open source. That covers the servers, session management, sync, and UI.
-
-## Install
+### Install
 
 Requires Node 22.19 or newer, an LLM provider key, and a model.
 

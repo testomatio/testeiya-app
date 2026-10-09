@@ -89,7 +89,11 @@ Where the report goes
 
     *🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & <model>*
 
-  --no-default-footer drops the signature, so does TESTEIYA_NO_DEFAULT_FOOTER.
+  A posted comment also opens with the Testeiya logo and heading, unless you
+  write your own --header.
+
+  --no-default-footer drops the signature and the heading, so does
+  TESTEIYA_NO_DEFAULT_FOOTER.
 
   Every destination is checked before the run starts, so a missing gh costs no
   tokens.

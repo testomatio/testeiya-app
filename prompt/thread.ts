@@ -163,6 +163,7 @@ function answer(options: CommentThreadOptions): string {
     parts.push('If earlier rounds of yours exist, open with "Since the last round": what was fixed, what is new, what is still open.');
   }
   parts.push('Its first line is the marker above.');
+  if (options.header) parts.push(`Its second line is exactly \`${options.header}\`, then a blank line.`);
   if (options.footer) parts.push(`Its last line is exactly \`${options.footer}\`.`);
   return parts.join(' ');
 }
@@ -201,6 +202,8 @@ export interface CommentThreadOptions extends ThreadOptions {
   marker: string;
   /** The report file, so the comment body is the report and not a remark. */
   reportFile?: string;
+  /** The heading the CLI would have opened the report with, if any. */
+  header?: string;
   /** The line the CLI would have signed the report with, if any. */
   footer?: string;
   /** True when the command posts the answer and collapses the older ones. */
