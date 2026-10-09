@@ -3,12 +3,13 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "a9dd6642e489e1bb4412177f70f157241156f980",
+      "sha": "0d4a8add8c39301979a171dd42804823d38e11de",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
         "debug-fix-failed-flaky-autotests",
         "detect-duplicate-test-cases",
+        "detect-useless-tests",
         "epic-requirements-specification",
         "explorbot-fundamentals",
         "explorbot-plan",
