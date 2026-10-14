@@ -7,6 +7,7 @@ const GH_SCHEME = "gh:";
 const MINIMIZE =
   "mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}";
 const MARKER = "<!-- testeiya";
+const RULE = "---";
 const LOGO = "https://raw.githubusercontent.com/testomatio/testeiya-app/main/assets/testeiya-cli-logo-64.png";
 
 /**
@@ -98,8 +99,11 @@ export async function threadComments(pr: number | undefined, thread?: string): P
 export function decorate(report: string, decoration?: Decoration): string {
   const header = decoration?.header?.trim();
   const footer = decoration?.footer?.trim();
-  let body = stripMarker(report.trimEnd());
-  if (header && !body.startsWith(header)) body = `${header}\n\n${body}`;
+  // The agent is told to write the header and footer too, so they are rebuilt, never stacked.
+  let body = stripMarker(report.trim()).trim();
+  if (header && body.startsWith(header)) body = stripRule(body.slice(header.length));
+  if (footer && body.endsWith(footer)) body = body.slice(0, -footer.length).trimEnd();
+  if (header) body = `${header}\n\n${RULE}\n\n${body}`;
   if (footer) body = `${body}\n\n${footer}`;
   if (!decoration?.thread) return `${body}\n`;
   return `${marker(decoration)}\n${body}\n`;
@@ -128,7 +132,7 @@ export function threadName(value?: string): string {
 
 /** What a posted comment opens with when the caller writes no header of their own. */
 export function defaultHeader(): string {
-  return `### <img src="${LOGO}" width="24" height="24" align="top" alt=""> Testeiya QA Agent`;
+  return `### <img src="${LOGO}" width="32" height="32" align="top" alt=""> Testeiya QA Agent`;
 }
 
 /** What signs the report when the caller writes no footer of their own. */
@@ -279,6 +283,12 @@ function stripMarker(body: string): string {
   const end = body.indexOf("\n");
   if (end === -1) return "";
   return body.slice(end + 1);
+}
+
+function stripRule(body: string): string {
+  const rest = body.trim();
+  if (!rest.startsWith(RULE)) return rest;
+  return rest.slice(RULE.length).trim();
 }
 
 function pass(): true {

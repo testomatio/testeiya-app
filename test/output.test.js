@@ -42,10 +42,10 @@ const MARK = "<!-- testeiya -->";
 test("a footer goes under the report, a header above it", () => {
   assert.equal(decorate("verdict\n"), "verdict\n");
   assert.equal(decorate("verdict\n", { footer: "> Reply with /testeiya" }), "verdict\n\n> Reply with /testeiya\n");
-  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), "## Testeiya\n\nverdict\n");
+  assert.equal(decorate("verdict\n", { header: "## Testeiya" }), "## Testeiya\n\n---\n\nverdict\n");
   assert.equal(
     decorate("verdict\n", { header: "## Testeiya", footer: "> Reply" }),
-    "## Testeiya\n\nverdict\n\n> Reply\n"
+    "## Testeiya\n\n---\n\nverdict\n\n> Reply\n"
   );
   assert.equal(decorate("verdict\n", { footer: "   ", header: "  " }), "verdict\n");
 });
@@ -100,6 +100,16 @@ test("the report is signed by default", () => {
 test("the default header carries the logo and is not added twice", () => {
   const header = defaultHeader();
   assert.ok(header.includes("testeiya-cli-logo-64.png"));
-  assert.equal(decorate("verdict\n", { header }), `${header}\n\nverdict\n`);
-  assert.equal(decorate(`${header}\n\nverdict\n`, { header }), `${header}\n\nverdict\n`);
+  assert.equal(decorate("verdict\n", { header }), `${header}\n\n---\n\nverdict\n`);
+  assert.equal(decorate(`${header}\n\nverdict\n`, { header }), `${header}\n\n---\n\nverdict\n`);
+});
+
+test("a header and footer the agent already wrote are not added twice", () => {
+  const header = defaultHeader();
+  const footer = "> Reply with /testeiya";
+  const written = `${MARK}\n\n${header}\n\n---\n\nverdict\n\n${footer}\n`;
+  assert.equal(
+    decorate(written, { thread: "qa", header, footer }),
+    `<!-- testeiya thread=qa -->\n${header}\n\n---\n\nverdict\n\n${footer}\n`
+  );
 });
