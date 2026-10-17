@@ -120,6 +120,7 @@ stages:
     inputs: [explore.md, review.md]
 `);
   const dir = join(repo, ".qa");
+  mkdirSync(join(repo, "out"));
   const code = await inRepo(repo, () => runPipeline({ name: file, dir, cli, outputs: ["gh:pr#7", "out/final.md"], thread: "demo" }));
   assert.equal(code, 0);
 
@@ -146,6 +147,30 @@ stages:
   assert.ok(!summary.includes("out/final.md"));
   assert.equal(calls.filter((args) => args.includes("gh:pr#7")).length, 1);
   assert.ok(existsSync(join(repo, "out/final.md")));
+});
+
+test("changes git cannot read stop the run instead of skipping it", async () => {
+  const { repo, cli } = setup();
+  const file = write(repo, "pipe.yml", `
+gates:
+  big:
+    changes: { min_files: 1 }
+    message: Too small.
+when: [big]
+stages:
+  - id: one
+    run: echo one
+`);
+  await assert.rejects(
+    inRepo(repo, () => runPipeline({ name: file, dir: join(repo, ".qa"), cli, sets: { BASE_BRANCH: "nope" } })),
+    /fetch-depth: 0/
+  );
+});
+
+test("the checkout itself is not a pipeline folder", async () => {
+  const { repo, cli } = setup();
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    run: echo one\n");
+  await assert.rejects(inRepo(repo, () => runPipeline({ name: file, dir: repo, cli })), /folder of its own/);
 });
 
 test("a failed gate in when skips the whole run", async () => {

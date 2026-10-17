@@ -281,6 +281,9 @@ with a session are told what changed, and the summary updates its comment.
     key: qa-pr-${{ github.event.number }}-${{ github.run_id }}-${{ github.run_attempt }}
 ```
 
+Stages ignore `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE`:
+those belong to a single task. Use `--thread` on the pipeline instead.
+
 `--set KEY=VALUE` sets a variable for every stage. `--dry-run` prints every
 gate and stage and spends nothing. `pipeline.json` in the folder holds each
 stage's status; `--json` prints it.

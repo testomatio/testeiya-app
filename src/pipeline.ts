@@ -12,14 +12,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chalkStderr as c } from "chalk";
 
 import { headCommit, readChanges, type Changes } from "./changes.js";
 import { checkGates, expand } from "./gates.js";
 import { UsageError } from "./model.js";
-import { parseDestinations } from "./output.js";
+import { parseDestinations, preflight } from "./output.js";
 import {
   listBundled,
   parsePipeline,
@@ -59,9 +59,12 @@ export function runPipelineList(json?: boolean): number {
 export async function runPipeline(options: PipelineOptions): Promise<number> {
   const cwd = process.cwd();
   const source = resolvePipelinePath(options.name);
-  const reporting = splitDestinations(options.outputs ?? []);
+  const reporting = await splitDestinations(options.outputs ?? []);
   const named = parsePipeline(readFileSync(source, "utf8"), source);
   const dir = folder(options, named.name);
+  if (dir === cwd || cwd.startsWith(dir + sep)) {
+    throw new UsageError("--dir must be a folder of its own, not the checkout or a folder above it");
+  }
 
   const previous = readState(dir);
   const commit = await headCommit(cwd);
@@ -93,6 +96,10 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
   const env = stageEnv(pipeline, options.sets ?? {}, { dir, round });
   const changes = await readChanges(cwd, since, env);
   const used = [...pipeline.when, ...pipeline.stages.flatMap((stage) => stage.gates)];
+  // A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request.
+  if (!changes.files && used.some((name) => pipeline.gates[name]!.changes)) {
+    throw new UsageError(`cannot read the changes: ${changes.error}. Check out with full history (fetch-depth: 0)`);
+  }
   const gates = await checkGates(pipeline.gates, used, { cwd, env, changes });
 
   note(`  Pipeline ${c.bold(pipeline.name)} ${c.dim("·")} round ${round} ${c.dim("·")} ${describeChanges(changes)}`);
@@ -394,9 +401,12 @@ function copyReport(run: RunContext, report: string): void {
   }
 }
 
-function splitDestinations(outputs: string[]): Reporting {
+// Checked before the first stage, like any task: a run that cannot post spends nothing.
+async function splitDestinations(outputs: string[]): Promise<Reporting> {
   const parsed = parseDestinations(outputs);
   if (typeof parsed === "string") throw new UsageError(parsed);
+  const unreachable = await preflight(parsed);
+  if (unreachable) throw new UsageError(unreachable);
   const reporting: Reporting = { passed: [], copies: [] };
   for (const output of outputs) {
     const kind = parseDestinations([output]);
