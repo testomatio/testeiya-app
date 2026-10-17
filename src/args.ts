@@ -5,6 +5,7 @@ export const WELCOME = `
 
   testeiya task "analyze this pr and find inconsistencies"
   testeiya ask "is this feature ready"
+  testeiya pipeline web-testing
 
   testeiya doctor    check your setup
   testeiya --help    options and environment
@@ -16,6 +17,7 @@ export const USAGE = `testeiya, an AI testing agent
 Usage:
   testeiya task "<task>"      run one task and write a report
   testeiya ask "<question>"   answer a question
+  testeiya pipeline <name>    run a multi-stage pipeline, or list them with no name
   testeiya doctor             check what a run would resolve
   testeiya models [pattern]   list the models your key can reach
   testeiya skills [pattern]   list the skills bundled with this package
@@ -37,8 +39,14 @@ Options:
       --header <text>        line added above the report
       --footer <text>        line added under the report
       --no-default-footer    do not sign the report
+      --no-thread            keep out of the comment thread: post nothing, read no comments
       --json                 machine-readable output
       --probe                doctor only: test the key with one request
+
+Pipeline options:
+      --dir <path>           the pipeline folder; keep it between runs for rounds
+      --dry-run              show gates and stages, spend no tokens
+      --set KEY=VALUE        set a variable for every stage, repeatable
   -h, --help                 show this
   -v, --version              show version
 
@@ -176,6 +184,21 @@ Skills
   loaded before the run, e.g. "/qa-thinking". A name we do not ship is left
   alone, so a stray "/word" in the task is just a word.
 
+Pipelines
+
+  A pipeline is several stages in one YAML file: agent tasks and shell commands,
+  run in order, passing files through one folder. "testeiya pipeline" lists the
+  bundled ones; pass a path to run your own.
+
+    testeiya pipeline web-testing -o gh:pr-comment
+    testeiya pipeline .github/testeiya/regression.yml --set TEST_COMMAND="npx playwright test"
+
+  A stage whose gate fails is skipped with the gate's message. A final summary
+  reads every stage and is the only thing posted. Keep --dir between runs, as a
+  CI cache per pull request, and a re-run on the same commit retries from the
+  stage that stopped, while a new commit starts a round told what changed.
+  --dry-run shows the plan and spends nothing.
+
 Testomat.io
 
   Set TESTOMATIO to a project API key and the agent reads and writes that
@@ -184,7 +207,7 @@ Testomat.io
   the Testomat.io tools. The MCP server needs the id: a token alone does not say
   which project to talk to.`;
 
-export const COMMANDS = ["task", "ask", "models", "skills", "doctor", "sessions", "help"] as const;
+export const COMMANDS = ["task", "ask", "pipeline", "models", "skills", "doctor", "sessions", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
@@ -210,6 +233,14 @@ export function parseCliArgs(argv: string[]): CliArgs {
   const text = parsed.positionals.join(" ").trim();
   if ((first === "task" || first === "ask") && text) args.prompt = text;
   if ((first === "models" || first === "skills") && text) args.pattern = text;
+  if (first === "pipeline" && text) args.pipeline = text;
+  if (typeof values.dir === "string") args.dir = values.dir;
+  if (values["dry-run"]) args.dryRun = true;
+  if (Array.isArray(values.set)) {
+    const sets = parseSets(values.set as string[]);
+    if (typeof sets === "string") return { error: sets };
+    args.sets = sets;
+  }
   if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
   if (values.probe) args.probe = true;
@@ -227,6 +258,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (typeof values.header === "string") args.header = values.header;
   if (typeof values.footer === "string") args.footer = values.footer;
   if (values["no-default-footer"]) args.noDefaultFooter = true;
+  if (values["no-thread"]) args.noThread = true;
   if (args.session && (args.continueLast || args.resume || args.name || args.noSession)) {
     return { error: "--session already names and continues a session" };
   }
@@ -256,18 +288,46 @@ const RUN_OPTIONS: ParseArgsConfig["options"] = {
   header: { type: "string" },
   footer: { type: "string" },
   "no-default-footer": { type: "boolean" },
+  "no-thread": { type: "boolean" },
+  help: HELP_FLAG,
+};
+
+const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
+  output: RUN_OPTIONS.output!,
+  json: JSON_FLAG,
+  model: { type: "string" },
+  project: { type: "string" },
+  thread: { type: "string" },
+  "exit-zero": { type: "boolean" },
+  header: { type: "string" },
+  footer: { type: "string" },
+  "no-default-footer": { type: "boolean" },
+  dir: { type: "string" },
+  "dry-run": { type: "boolean" },
+  set: { type: "string", multiple: true },
   help: HELP_FLAG,
 };
 
 const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
   task: RUN_OPTIONS,
   ask: RUN_OPTIONS,
+  pipeline: PIPELINE_OPTIONS,
   models: { json: JSON_FLAG, help: HELP_FLAG },
   skills: { json: JSON_FLAG, help: HELP_FLAG },
   doctor: { json: JSON_FLAG, probe: { type: "boolean" }, model: { type: "string" }, help: HELP_FLAG },
   sessions: { json: JSON_FLAG, help: HELP_FLAG },
   help: {},
 };
+
+function parseSets(values: string[]): Record<string, string> | string {
+  const sets: Record<string, string> = {};
+  for (const value of values) {
+    const equals = value.indexOf("=");
+    if (equals <= 0) return `--set takes KEY=VALUE, got "${value}"`;
+    sets[value.slice(0, equals)] = value.slice(equals + 1);
+  }
+  return sets;
+}
 
 function isCommand(value: string): value is Command {
   return (COMMANDS as readonly string[]).includes(value);
@@ -303,6 +363,11 @@ export interface CliArgs {
   header?: string;
   footer?: string;
   noDefaultFooter?: boolean;
+  noThread?: boolean;
+  pipeline?: string;
+  dir?: string;
+  dryRun?: boolean;
+  sets?: Record<string, string>;
   /** Set when argv was malformed; the caller prints the message and exits 2. */
   error?: string;
 }

@@ -1,0 +1,41 @@
+name: regression
+description: Run the tests a change can break, from the coverage map, then explain the failures.
+
+gates:
+  coverage:
+    file: [coverage.tests.yml]
+    message: No coverage.tests.yml. Create one with /qa-test-code-coverage to run only affected tests.
+  test-command:
+    env: [TEST_COMMAND]
+    message: No test command. Set TEST_COMMAND, e.g. "npx playwright test".
+  testomatio:
+    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
+    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
+
+when: [coverage]
+
+env:
+  BASE_BRANCH: ${BASE_BRANCH:-origin/main}
+
+stages:
+  - id: automated
+    gates: [test-command]
+    run: |
+      npx -y @testomatio/reporter run "$TEST_COMMAND" \
+        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH"
+    timeout: 30m
+
+  - id: manual
+    gates: [testomatio]
+    run: |
+      npx -y @testomatio/reporter run --kind manual \
+        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH"
+
+  - id: failures
+    gates: [test-command]
+    session: triage
+    task: |
+      Read the test run in automated.log. For each failure, say if this change caused it,
+      if it is flaky, or if the test is out of date. /debug-fix-failed-flaky-autotests
+      Do not edit any file. Fail the run if this change caused a failure.
+    inputs: [automated.log]

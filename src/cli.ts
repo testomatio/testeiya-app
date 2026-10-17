@@ -2,11 +2,13 @@
 import { HELP, parseCliArgs, USAGE, WELCOME, type CliArgs } from "./args.js";
 import { runDoctor } from "./doctor.js";
 import { loadEnvFiles, VERSION } from "./env.js";
-import { UsageError } from "./model.js";
+import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
 import { parseDestinations, preflight } from "./output.js";
+import { runPipeline, runPipelineList } from "./pipeline.js";
 import { runPrint } from "./run.js";
+import { createRuntime } from "./session.js";
 import { openSessionManager, runSessions } from "./sessions.js";
 
 main(process.argv.slice(2)).catch((err) => {
@@ -51,6 +53,7 @@ async function main(argv: string[]): Promise<void> {
       process.exit(await runDoctor({ envSources, json: args.json, probe: args.probe, model: args.model }));
     }
     if (args.command === "sessions") process.exit(await runSessions(process.cwd(), args.json));
+    if (args.command === "pipeline") process.exit(await pipeline(args));
     process.exit(await task(args));
   } catch (err) {
     if (!(err instanceof UsageError)) throw err;
@@ -99,6 +102,33 @@ async function task(args: CliArgs): Promise<number> {
     header: args.header,
     footer: args.footer,
     noDefaultFooter: args.noDefaultFooter,
+    noThread: args.noThread,
+  });
+}
+
+async function pipeline(args: CliArgs): Promise<number> {
+  if (!args.pipeline) return runPipelineList(args.json);
+  return runPipeline({
+    name: args.pipeline,
+    dir: args.dir,
+    dryRun: args.dryRun,
+    sets: args.sets,
+    outputs: args.outputs,
+    thread: args.thread,
+    header: args.header,
+    footer: args.footer,
+    noDefaultFooter: args.noDefaultFooter,
+    model: args.model,
+    exitZero: args.exitZero,
+    json: args.json,
+    checkAi: async (model) => {
+      try {
+        resolveModel(await createRuntime(), model);
+      } catch (err) {
+        if (!(err instanceof UsageError)) throw err;
+        throw new UsageError(`No AI provider: ${err.message}. Run testeiya doctor.`);
+      }
+    },
   });
 }
 

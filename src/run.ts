@@ -41,7 +41,9 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // read for a session with a next round to catch up, for a pull request to
   // comment on, and in a CI job whose thread rules apply.
   const pr = pullRequestNumber(options.destinations);
-  const host = threadHost(process.env);
+  // A pipeline stage that is not the one reporting keeps out of the thread, but
+  // still saves its checkpoint so the next round tells it what changed.
+  const host = options.noThread ? null : threadHost(process.env);
   const inThread = Boolean(pr) || Boolean(host);
   const wantsRepo = inThread || options.sessionManager.isPersisted();
   const repo = wantsRepo ? await readRepo(cwd) : { commit: null, branch: null, remote: null };
@@ -477,6 +479,8 @@ export interface PrintOptions {
   header?: string;
   footer?: string;
   noDefaultFooter?: boolean;
+  /** Leave the comment thread alone: no thread rules, no thread comments read. */
+  noThread?: boolean;
 }
 
 interface Summary {

@@ -1,0 +1,43 @@
+name: pr-review
+description: Review a pull request, propose test cases for it, and sync them to Testomat.io.
+
+gates:
+  code-changed:
+    changes:
+      min_files: 3
+      ignore: ["**/*.md", "**/*.lock", "docs/**"]
+    message: Fewer than 3 code files changed.
+  testomatio:
+    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
+    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
+
+when: [code-changed]
+
+stages:
+  - id: requirements
+    session: reviewer
+    task: |
+      Work out what this pull request is meant to do. /qa-pr-requirements-analyzer
+      Write the acceptance criteria to criteria.md.
+    outputs: [criteria.md]
+
+  - id: review
+    session: reviewer
+    task: |
+      Review this pull request as a QA engineer against criteria.md. /qa-review-pr
+    inputs: [criteria.md]
+
+  - id: test-cases
+    session: writer
+    task: |
+      Write test cases for this pull request from criteria.md and review.md. /qa-write-test-cases
+      Put them in test-cases/, one markdown file per suite.
+    inputs: [criteria.md, review.md]
+    outputs: [test-cases/]
+
+  - id: sync
+    gates: [testomatio]
+    each_file: test-cases/*.md
+    task: |
+      Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
+      Skip a case that already exists there.
