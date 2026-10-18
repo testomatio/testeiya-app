@@ -10,26 +10,6 @@ const require_ = createRequire(import.meta.url);
 export const SERVER = "testomatio";
 
 /**
- * Promoted to their own tools instead of going through the proxy: the reads the
- * skills reach for constantly. @testomatio/mcp exposes 90 tools and registering
- * them all would cost roughly 15k tokens of system prompt, which is the bloat
- * the proxy exists to avoid. Everything else stays reachable through `mcp`.
- */
-export const DIRECT_TOOLS = [
-  "tests_list",
-  "tests_get",
-  "tests_search",
-  "suites_list",
-  "suites_get",
-  "runs_list",
-  "runs_get",
-  "testruns_list",
-  "plans_list",
-  "plans_get",
-  "labels_list",
-];
-
-/**
  * The Testomat.io MCP server needs a project id as well as a token — a token on
  * its own does not identify a project to it. Without one the agent still reaches
  * the project through `check-tests` and REST, which need only the token, so the
@@ -64,6 +44,9 @@ export function mcpConfig(): McpConfig {
     process.env.TESTOMATIO ?? "",
     "--project",
     projectId(),
+    // Part of the cache key: drops tool lists cached from @testomatio/mcp 2.x.
+    "--tools",
+    "full",
   ];
   const env: Record<string, string> = {};
   if (process.env.TESTOMATIO_URL) env.TESTOMATIO_BASE_URL = process.env.TESTOMATIO_URL;
@@ -75,7 +58,7 @@ export function mcpConfig(): McpConfig {
         args,
         env,
         lifecycle: "lazy",
-        directTools: DIRECT_TOOLS,
+        directTools: true,
       },
     },
   };

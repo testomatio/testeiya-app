@@ -8,734 +8,315 @@
     }
   },
   {
-    "name": "tests_list",
-    "description": "List tests (/api/v2/{project_id}/tests). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter tests. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
+    "name": "tql_help",
+    "description": "Full TQL (Testomat.io Query Language) reference — syntax, filter variables (tests + runs), and examples. Call this before writing a `tql` or `q` filter.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "project_info",
+    "description": "Get configuration and metadata for the current project (/api/v2/{project_id}/info), including framework, language, environments, labels, tags, subscription features, artifact storage status, and CI profiles.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "tests",
+    "description": "Manage tests (/api/v2/{project_id}/tests). Filter tests with `tql` (TQL); call `tql_help` for the syntax and full field list. CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tql": {
+        "command": {
           "type": "string",
-          "description": "TQL filter for tests. Documented variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_get",
-    "description": "Get test by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "bulk_upsert",
+            "share",
+            "unshare",
+            "issues_list",
+            "issues_link",
+            "issues_unlink",
+            "attachments_list",
+            "attachments_upload",
+            "attachments_delete"
+          ],
+          "description": "CLI-style operation to perform. list: List tests (tql filter, pagination) | get: Get test by ID | create: Create test (title and suite_id required) | update: Update test by ID | delete: Delete test by ID | bulk_upsert: Bulk create/update tests from a testomat.io classical tests markdown document. Tests with an id (@T...) in their metadata are updated, tests without id are created. Suites are resolved by id (@S...) or title, and created when missing. Up to 100 tests and 25 suites per call, sent in batches of 50. tags/labels in the markdown are parsed but not applied. | share: Share tests into a suite of another project. Select by test_ids, labels, or both. Source project stays the single source of truth; shared copies are read-only until unlinked; re-sharing does not duplicate; processed asynchronously (\"queued\" = accepted); skipped shared copies are listed in skipped_test_ids; projects must be of the same type (Classic/BDD). | unshare: Remove a test's share, converting the shared copy back into a regular, editable test. Only the shared copy can be targeted — the original source test is untouched. Must be called against the project that holds the shared copy. | issues_list: List linked issues for a test | issues_link: Link issue to a test (url or jira_id) | issues_unlink: Unlink issue from a test | attachments_list: List attachments for a test | attachments_upload: Upload one attachment to a test | attachments_delete: Delete attachment from a test"
+        },
         "test_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_create",
-    "description": "Create test (/api/v2/{project_id}/tests)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(get|update|delete|unshare|issues_list|issues_link|issues_unlink|attachments_list|attachments_upload|attachments_delete) Test ID (for unshare: ID of the shared test copy to unlink)"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "suite_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update) Suite to place the test in"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "emoji": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "priority": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "important",
+            "high",
+            "critical"
+          ],
+          "description": "(create|update)"
         },
         "assigned_to": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "code": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "state": {
-          "type": "string"
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "title",
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_update",
-    "description": "Update test (/api/v2/{project_id}/tests/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "suite_id": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "emoji": {
-          "type": "string"
-        },
-        "priority": {
-          "type": "string"
-        },
-        "assigned_to": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string"
-        },
-        "sync": {
-          "type": "boolean"
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_delete",
-    "description": "Delete test",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_search",
-    "description": "Search tests using TQL (delegates to tests_list). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter tests. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tql": {
-          "type": "string",
-          "description": "TQL filter for tests. Documented variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_issues_list",
-    "description": "List linked issues for a test (/api/v2/{project_id}/issues?test_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        },
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "source": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_issues_link",
-    "description": "Link issue to a test (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "jira_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_issues_unlink",
-    "description": "Unlink issue from a test (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue_id": {
-          "type": "integer"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "issue",
-            "jira_issue"
-          ]
-        }
-      },
-      "required": [
-        "issue_id",
-        "type"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_list",
-    "description": "List suites as tree (/api/v2/{project_id}/suites)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "file_type": {
-          "type": "string",
-          "enum": [
-            "file",
-            "folder"
-          ]
-        },
-        "tag": {
-          "type": "string"
-        },
-        "labels": {
-          "type": "string"
-        },
-        "search_text": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_get",
-    "description": "Get suite by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_create",
-    "description": "Create suite (/api/v2/{project_id}/suites)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "emoji": {
-          "type": "string"
-        },
-        "parent_id": {
-          "type": "string"
-        },
-        "file_type": {
-          "type": "string"
-        },
-        "assigned_to": {
-          "type": "string"
-        },
-        "file": {
-          "type": "string"
-        },
-        "children": {
-          "type": "array",
-          "items": {}
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira",
-                  "requirement"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_update",
-    "description": "Update suite (/api/v2/{project_id}/suites/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "emoji": {
-          "type": "string"
-        },
-        "parent_id": {
-          "type": "string"
-        },
-        "file_type": {
-          "type": "string"
-        },
-        "assigned_to": {
-          "type": "string"
-        },
-        "file": {
-          "type": "string"
-        },
-        "children": {
-          "type": "array",
-          "items": {}
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira",
-                  "requirement"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_delete",
-    "description": "Delete suite",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_search",
-    "description": "Search suites by title (delegates to suites list with search_text)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "search_text": {
-          "type": "string"
-        },
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "file_type": {
-          "type": "string",
-          "enum": [
-            "file",
-            "folder"
-          ]
-        },
-        "tag": {
-          "type": "string"
-        },
-        "labels": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_issues_list",
-    "description": "List linked issues for a suite (/api/v2/{project_id}/issues?suite_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        },
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "source": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_issues_link",
-    "description": "Link issue to a suite (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "jira_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_issues_unlink",
-    "description": "Unlink issue from a suite (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue_id": {
-          "type": "integer"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "issue",
-            "jira_issue"
-          ]
-        }
-      },
-      "required": [
-        "issue_id",
-        "type"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_list",
-    "description": "List runs (/api/v2/{project_id}/runs). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter runs. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Runs also support boolean flags without comparison such as `failed`, `finished`, `automated`, or `with_defect`. Documented run variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Documented examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tql": {
-          "type": "string",
-          "description": "TQL filter for runs. Documented variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_get",
-    "description": "Get run by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_create",
-    "description": "Create run (/api/v2/{project_id}/runs)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "plan_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "kind": {
           "type": "string",
           "enum": [
             "manual",
-            "automated",
-            "mixed"
-          ]
+            "detached",
+            "automated"
+          ],
+          "description": "(create|update)"
         },
-        "rungroup_id": {
-          "type": "string"
+        "sync": {
+          "type": "boolean",
+          "description": "(update)"
         },
-        "env": {
-          "type": "string"
+        "link": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "label",
+                  "custom_field",
+                  "tag",
+                  "milestone",
+                  "issue",
+                  "jira"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "description": "(create|update)"
         },
-        "assigned_to": {
-          "type": "string"
+        "tql": {
+          "type": "string",
+          "description": "(list) TQL filter for tests. Fields: tag, label, priority, issue, jira, state, status, custom_status, created_at, updated_at, last_run_at, executed_at, created_by, assigned_to, suite, test, shared, milestone. Call `tql_help` for syntax. Examples: `priority == 'high'`, `state == 'automated'`, `suite % 'Checkout'`."
         },
-        "assign_strategy": {
+        "markdown": {
+          "type": "string",
+          "description": "(bulk_upsert) Required for bulk_upsert. Markdown document in the testomat.io classical tests format: suite blocks (<!-- suite ... -->) containing test blocks (<!-- test ... -->), each followed by a title heading and a description. See https://docs.testomat.io/project/import-export/export-tests/classical-tests-markdown-format/"
+        },
+        "dry_run": {
+          "type": "boolean",
+          "default": false,
+          "description": "(bulk_upsert) Parse the document and report the planned actions without writing anything"
+        },
+        "create_missing_suites": {
+          "type": "boolean",
+          "default": true,
+          "description": "(bulk_upsert) Create suites that cannot be resolved by id or title. When false, tests of unresolved suites are reported as errors"
+        },
+        "branch": {
+          "type": "string",
+          "description": "(list|get|create|update|delete|bulk_upsert) Branch slug to scope the request to (omit or main for the main branch). For tests and suites, a branch-local record is used when it exists, falling back to main; updating/deleting a main-only record forks an isolated copy into the branch. Runs are tagged with the branch (only reachable with the same branch afterwards). Requires the branches feature."
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list|issues_list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list|issues_list)"
+        },
+        "source": {
+          "type": "string",
+          "description": "(issues_list) Filter issues by source (e.g. jira)"
+        },
+        "url": {
+          "type": "string",
+          "description": "(issues_link) Issue URL to link"
+        },
+        "jira_id": {
+          "type": "string",
+          "description": "(issues_link) Jira issue key to link (alternative to url)"
+        },
+        "issue_id": {
+          "type": "integer",
+          "description": "(issues_unlink) ID of the linked issue to remove"
+        },
+        "type": {
           "type": "string",
           "enum": [
-            "test",
-            "random",
-            "none"
-          ]
+            "issue",
+            "jira_issue"
+          ],
+          "description": "(issues_unlink) Kind of the linked issue"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "(attachments_upload) Local path to the file that will be sent as multipart/form-data field \"files\"."
+        },
+        "attachment_id": {
+          "type": "string",
+          "description": "(attachments_delete) ID of the attachment to delete"
         },
         "test_ids": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(share) Test IDs to share. At least one of test_ids/labels is required. Max 1000 tests per request."
         },
-        "suite_ids": {
+        "labels": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(share) Label slugs or titles; every test carrying any of these labels is shared, in addition to test_ids."
         },
-        "envs": {
+        "target_project_id": {
+          "type": "string",
+          "description": "(share) Project ID (slug) of the destination project. Must be accessible to the current user."
+        },
+        "target_suite_id": {
+          "type": "string",
+          "description": "(share) Suite ID in the target project to place the shared tests into. Must be a file-type suite, not a folder."
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(attachments_list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(attachments_list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suites",
+    "description": "Manage suites as tree (/api/v2/{project_id}/suites) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "share",
+            "unshare",
+            "issues_list",
+            "issues_link",
+            "issues_unlink",
+            "attachments_list",
+            "attachments_upload",
+            "attachments_delete"
+          ],
+          "description": "CLI-style operation to perform. list: List suites as tree (filters: file_type, tag, labels, search_text) | get: Get suite by ID | create: Create suite (title required) | update: Update suite by ID | delete: Delete suite by ID | share: Share suites (with their tests) into one or more other projects. Select by suite_ids, labels, or both. File-type suites are linked (read-only copies that stay in sync); folder suites are deep-copied as editable copies; re-sharing a linked suite into a project that already has it does not duplicate; suites that are themselves shared copies link to their original source; omit destination_folder_id to share into the root; processed asynchronously; projects must be of the same type (Classic/BDD). | unshare: Remove a suite's share, converting the shared copy back into a regular, editable suite. Only the shared (linked) copy can be targeted — the original source suite is untouched. Must be called against the project that holds the shared copy. | issues_list: List linked issues for a suite | issues_link: Link issue to a suite (url or jira_id) | issues_unlink: Unlink issue from a suite | attachments_list: List attachments for a suite | attachments_upload: Upload one attachment to a suite | attachments_delete: Delete attachment from a suite"
+        },
+        "suite_id": {
+          "type": "string",
+          "description": "(get|update|delete|unshare|issues_list|issues_link|issues_unlink|attachments_list|attachments_upload|attachments_delete) Suite ID (for unshare: ID of the shared suite copy to unlink)"
+        },
+        "title": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "description": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "emoji": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "parent_id": {
+          "type": "string",
+          "description": "(create|update) Parent suite ID"
+        },
+        "file_type": {
+          "type": "string",
+          "enum": [
+            "file",
+            "folder"
+          ],
+          "description": "(list|create|update) list: filter by type; create/update: the type of suite"
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "file": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "children": {
+          "type": "array",
+          "items": {},
+          "description": "(create|update)"
         },
         "link": {
           "type": "array",
@@ -757,7 +338,8 @@
                   "tag",
                   "milestone",
                   "issue",
-                  "jira"
+                  "jira",
+                  "requirement"
                 ]
               },
               "value": {
@@ -770,29 +352,181 @@
               "value"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "(create|update)"
+        },
+        "tag": {
+          "type": "string",
+          "description": "(list) Filter by tag title"
+        },
+        "labels": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "(list|share) list: filter by label slugs/titles; share: every suite carrying any of these labels is shared, in addition to suite_ids."
+        },
+        "search_text": {
+          "type": "string",
+          "description": "(list)"
+        },
+        "branch": {
+          "type": "string",
+          "description": "(list|get|create|update|delete) Branch slug to scope the request to (omit or main for the main branch). For tests and suites, a branch-local record is used when it exists, falling back to main; updating/deleting a main-only record forks an isolated copy into the branch. Runs are tagged with the branch (only reachable with the same branch afterwards). Requires the branches feature."
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list|issues_list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list|issues_list)"
+        },
+        "source": {
+          "type": "string",
+          "description": "(issues_list) Filter issues by source (e.g. jira)"
+        },
+        "url": {
+          "type": "string",
+          "description": "(issues_link) Issue URL to link"
+        },
+        "jira_id": {
+          "type": "string",
+          "description": "(issues_link) Jira issue key to link (alternative to url)"
+        },
+        "issue_id": {
+          "type": "integer",
+          "description": "(issues_unlink) ID of the linked issue to remove"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "jira_issue"
+          ],
+          "description": "(issues_unlink) Kind of the linked issue"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "(attachments_upload) Local path to the file that will be sent as multipart/form-data field \"files\"."
+        },
+        "attachment_id": {
+          "type": "string",
+          "description": "(attachments_delete) ID of the attachment to delete"
+        },
+        "suite_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(share) Suite IDs to share. At least one of suite_ids/labels is required. Max 200 suites per request."
+        },
+        "target_project_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(share) Project IDs (slugs) of the destination projects. Must be accessible to the current user."
+        },
+        "destination_folder_id": {
+          "type": "string",
+          "description": "(share) Folder suite ID in the target project to place the shared suites into. Only allowed when sharing to a single target project."
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(attachments_list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(attachments_list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "title"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "runs_update",
-    "description": "Update run (/api/v2/{project_id}/runs/{id})",
+    "name": "runs",
+    "description": "Manage runs (/api/v2/{project_id}/runs). Filter runs with `tql` (TQL); runs also accept boolean flags. Call `tql_help` for the syntax and full field list. CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "stats",
+            "issues_list",
+            "issues_link",
+            "issues_unlink"
+          ],
+          "description": "CLI-style operation to perform. list: List runs (tql filter, pagination) | get: Get run by ID | create: Create run (title required) | update: Update run by ID | delete: Delete run by ID | stats: Break down one run's testruns by suite, tag, label, assignee, or priority (/api/v2/{project_id}/runs/{id}/stats/{dimension}). Each row has passed_count, failed_count, skipped_count, pending_count for its group — answers \"which areas/owners are affected by this run's failures\". Paginated with a fixed page size; meta uses page/perPage/totalCount/totalPages | issues_list: List linked issues for a run | issues_link: Link issue to a run (url or jira_id) | issues_unlink: Unlink issue from a run"
+        },
         "run_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(get|update|delete|stats|issues_list|issues_link)"
+        },
+        "dimension": {
+          "type": "string",
+          "enum": [
+            "suites",
+            "tags",
+            "labels",
+            "assignees",
+            "priorities"
+          ],
+          "description": "(stats)"
+        },
+        "sort_field": {
+          "type": "string",
+          "description": "(stats) Column to sort by, e.g. failed_count."
+        },
+        "sort_direction": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "description": "(stats)"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "plan_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(create)"
         },
         "kind": {
           "type": "string",
@@ -800,13 +534,16 @@
             "manual",
             "automated",
             "mixed"
-          ]
+          ],
+          "description": "(create|update)"
         },
         "rungroup_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "env": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "status_event": {
           "type": "string",
@@ -817,10 +554,12 @@
             "rerun",
             "scheduled",
             "terminate"
-          ]
+          ],
+          "description": "(update)"
         },
         "assigned_to": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "assign_strategy": {
           "type": "string",
@@ -828,19 +567,29 @@
             "test",
             "random",
             "none"
-          ]
+          ],
+          "description": "(create|update)"
         },
         "test_ids": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(create|update)"
         },
         "suite_ids": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(create|update)"
+        },
+        "envs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(create)"
         },
         "link": {
           "type": "array",
@@ -875,145 +624,113 @@
               "value"
             ],
             "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_delete",
-    "description": "Delete run (/api/v2/{project_id}/runs/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_search",
-    "description": "Search runs using TQL (delegates to runs_list). TQL (Testomat.io Query Language) is a string expression passed in `tql` to filter runs. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Runs also support boolean flags without comparison such as `failed`, `finished`, `automated`, or `with_defect`. Documented run variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Documented examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          },
+          "description": "(create|update)"
         },
         "tql": {
           "type": "string",
-          "description": "TQL filter for runs. Documented variables: `title`, `plan`, `rungroup`, `env`, `tag`, `label`, `jira`, `duration`, `passed_count`, `failed_count`, `skipped_count`, `automated`, `manual`, `mixed`, `finished`, `unfinished`, `passed`, `failed`, `terminated`, `published`, `private`, `archived`, `unarchived`, `with_defect`, `has_defect`, `has_test`, `has_test_tag`, `has_test_label`, `has_suite`, `has_message`, `has_custom_status`, `has_assigned_to`, `has_retries`, `has_test_duration`, `has_priority`, `created_at`, `updated_at`, `launched_at`, `finished_at`, `milestone`. Examples: `title % 'Manual tests'`, `plan == '{PLAN_ID}'`, `env in ['Windows', 'Linux']`, `failed and has_test_tag == 'regression'`, `finished and with_defect`, `has_retries > 2`, `automated and env == 'Production' and has_message % 'Server Error'`, `finished_at >= '2025-07-01' and finished_at <= '2025-07-31' and failed`."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_issues_list",
-    "description": "List linked issues for a run (/api/v2/{project_id}/issues?run_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
+          "description": "(list) TQL filter for runs. Fields: title, plan, rungroup, env, tag, label, jira, duration, passed_count, failed_count, skipped_count, automated, manual, mixed, finished, unfinished, passed, failed, terminated, published, private, archived, unarchived, with_defect, has_defect, has_test, has_test_tag, has_test_label, has_suite, has_message, has_custom_status, has_assigned_to, has_retries, has_test_duration, has_priority, created_at, updated_at, launched_at, finished_at, milestone. Call `tql_help` for syntax. Examples: `finished and with_defect`, `env in ['Windows', 'Linux']`, `has_retries > 2`."
+        },
+        "branch": {
+          "type": "string",
+          "description": "(list|get|create|update|delete) Branch slug to scope the request to (omit or main for the main branch). For tests and suites, a branch-local record is used when it exists, falling back to main; updating/deleting a main-only record forks an isolated copy into the branch. Runs are tagged with the branch (only reachable with the same branch afterwards). Requires the branches feature."
         },
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list|issues_list|stats)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "(list|issues_list)"
         },
         "source": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_issues_link",
-    "description": "Link issue to a run (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(issues_list) Filter issues by source (e.g. jira)"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "(issues_link) Issue URL to link"
         },
         "jira_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "runs_issues_unlink",
-    "description": "Unlink issue from a run (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(issues_link) Jira issue key to link (alternative to url)"
+        },
         "issue_id": {
-          "type": "integer"
+          "type": "integer",
+          "description": "(issues_unlink) ID of the linked issue to remove"
         },
         "type": {
           "type": "string",
           "enum": [
             "issue",
             "jira_issue"
-          ]
+          ],
+          "description": "(issues_unlink) Kind of the linked issue"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(issues_list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(issues_list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "issue_id",
-        "type"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "testruns_list",
-    "description": "List testruns (/api/v2/{project_id}/testruns)",
+    "name": "testruns",
+    "description": "Manage individual test runs (/api/v2/{project_id}/testruns) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "issues_list",
+            "issues_link",
+            "issues_unlink",
+            "attachments_list",
+            "attachments_upload",
+            "attachments_delete"
+          ],
+          "description": "CLI-style operation to perform. list: List testruns (rich filters: filter_status, filter_kind, tags, labels, envs, rungroups, defects, ...) | get: Get testrun by ID | create: Create testrun in a run (run_id required) | update: Update testrun by ID | delete: Delete testrun by ID | issues_list: List linked issues for a testrun | issues_link: Link issue to a testrun (url or jira_id) | issues_unlink: Unlink issue from a testrun | attachments_list: List attachments for a testrun | attachments_upload: Upload one attachment to a testrun | attachments_delete: Delete attachment from a testrun"
         },
-        "per_page": {
+        "testrun_id": {
           "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          "description": "(get|update|delete|issues_list|issues_link|attachments_list|attachments_upload|attachments_delete)"
         },
         "run_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list|create|update) list: filter by run; create/update: the run the testrun belongs to"
+        },
+        "test_id": {
+          "type": "string",
+          "description": "(create|update)"
         },
         "test_ids": {
           "type": [
@@ -1022,7 +739,56 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "created_at",
+            "suite",
+            "testcase",
+            "failure"
+          ],
+          "description": "(list) Sort field. Default order is oldest-first — use created_at with order=desc to get the most recent executions first."
+        },
+        "order": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "description": "(list) Sort direction. Defaults to asc."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "pending"
+          ],
+          "description": "(create|update)"
+        },
+        "message": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "run_time": {
+          "type": "number",
+          "description": "(create|update)"
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "test_title": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "automated": {
+          "type": "boolean",
+          "description": "(create|update)"
         },
         "filter_status": {
           "type": "string",
@@ -1031,20 +797,23 @@
             "failed",
             "skipped",
             "pending"
-          ]
+          ],
+          "description": "(list)"
         },
         "filter_kind": {
           "type": "string",
           "enum": [
             "manual",
             "automated"
-          ]
+          ],
+          "description": "(list)"
         },
         "filter_user": {
           "type": [
             "integer",
             "string"
-          ]
+          ],
+          "description": "(list)"
         },
         "filter_priority": {
           "type": "string",
@@ -1054,22 +823,28 @@
             "important",
             "high",
             "critical"
-          ]
+          ],
+          "description": "(list)"
         },
         "filter_substatus": {
-          "type": "string"
+          "type": "string",
+          "description": "(list)"
         },
         "filter_search": {
-          "type": "string"
+          "type": "string",
+          "description": "(list)"
         },
         "filter_message": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "(list)"
         },
         "filter_link": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "(list)"
         },
         "filter_finished_at_date_range": {
-          "type": "string"
+          "type": "string",
+          "description": "(list)"
         },
         "tags": {
           "type": [
@@ -1078,7 +853,8 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
         },
         "labels": {
           "type": [
@@ -1087,7 +863,8 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
         },
         "envs": {
           "type": [
@@ -1096,7 +873,8 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
         },
         "rungroups": {
           "type": [
@@ -1105,499 +883,207 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
         },
         "defects": {
           "type": "string",
           "enum": [
             "has_defects",
             "without_defects"
-          ]
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_get",
-    "description": "Get testrun by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_create",
-    "description": "Create testrun (/api/v2/{project_id}/testruns)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
-        },
-        "test_id": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "run_time": {
-          "type": "number"
-        },
-        "assigned_to": {
-          "type": "string"
-        },
-        "test_title": {
-          "type": "string"
-        },
-        "automated": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "run_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_update",
-    "description": "Update testrun (/api/v2/{project_id}/testruns/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        },
-        "run_id": {
-          "type": "string"
-        },
-        "test_id": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "run_time": {
-          "type": "number"
-        },
-        "assigned_to": {
-          "type": "string"
-        },
-        "test_title": {
-          "type": "string"
-        },
-        "automated": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_delete",
-    "description": "Delete testrun (/api/v2/{project_id}/testruns/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_search",
-    "description": "Search testruns (delegates to testruns list; docs has no dedicated search parameter)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string"
-        },
-        "test_ids": {
-          "type": [
-            "array",
-            "string"
           ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "filter_status": {
-          "type": "string",
-          "enum": [
-            "passed",
-            "failed",
-            "skipped",
-            "pending"
-          ]
-        },
-        "filter_kind": {
-          "type": "string",
-          "enum": [
-            "manual",
-            "automated"
-          ]
-        },
-        "filter_user": {
-          "type": [
-            "integer",
-            "string"
-          ]
-        },
-        "filter_priority": {
-          "type": "string",
-          "enum": [
-            "low",
-            "normal",
-            "important",
-            "high",
-            "critical"
-          ]
-        },
-        "filter_substatus": {
-          "type": "string"
-        },
-        "filter_search": {
-          "type": "string"
+          "description": "(list)"
         },
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list|issues_list)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
-        },
-        "filter_message": {
-          "type": "boolean"
-        },
-        "filter_link": {
-          "type": "boolean"
-        },
-        "filter_finished_at_date_range": {
-          "type": "string"
-        },
-        "tags": {
-          "type": [
-            "array",
-            "string"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "labels": {
-          "type": [
-            "array",
-            "string"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "envs": {
-          "type": [
-            "array",
-            "string"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "rungroups": {
-          "type": [
-            "array",
-            "string"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "defects": {
-          "type": "string",
-          "enum": [
-            "has_defects",
-            "without_defects"
-          ]
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_issues_list",
-    "description": "List linked issues for a testrun (/api/v2/{project_id}/issues?testrun_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        },
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "(list|issues_list)"
         },
         "source": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_issues_link",
-    "description": "Link issue to a testrun (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
+          "type": "string",
+          "description": "(issues_list) Filter issues by source (e.g. jira)"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "(issues_link) Issue URL to link"
         },
         "jira_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_issues_unlink",
-    "description": "Unlink issue from a testrun (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(issues_link) Jira issue key to link (alternative to url)"
+        },
         "issue_id": {
-          "type": "integer"
+          "type": "integer",
+          "description": "(issues_unlink) ID of the linked issue to remove"
         },
         "type": {
           "type": "string",
           "enum": [
             "issue",
             "jira_issue"
-          ]
-        }
-      },
-      "required": [
-        "issue_id",
-        "type"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "rungroups_list",
-    "description": "List run groups as tree (/api/v2/{project_id}/rungroups)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
+          ],
+          "description": "(issues_unlink) Kind of the linked issue"
         },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "rungroups_get",
-    "description": "Get run group by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "rungroup_id": {
-          "type": "string"
+        "file_path": {
+          "type": "string",
+          "description": "(attachments_upload) Local path to the file that will be sent as multipart/form-data field \"files\"."
+        },
+        "attachment_id": {
+          "type": "string",
+          "description": "(attachments_delete) ID of the attachment to delete"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(attachments_list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(attachments_list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "rungroup_id"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "rungroups_create",
-    "description": "Create run group (/api/v2/{project_id}/rungroups)",
+    "name": "rungroups",
+    "description": "Manage run groups as tree (/api/v2/{project_id}/rungroups) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List run groups as tree | get: Get run group by ID | create: Create run group (title required) | update: Update run group by ID | delete: Delete run group by ID"
+        },
+        "rungroup_id": {
+          "type": "string",
+          "description": "(get|update|delete)"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "emoji": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "pin": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "(create|update)"
         },
         "status": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "parent_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "children": {
           "type": "array",
-          "items": {}
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "rungroups_update",
-    "description": "Update run group (/api/v2/{project_id}/rungroups/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "rungroup_id": {
-          "type": "string"
+          "items": {},
+          "description": "(create|update)"
         },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "emoji": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "pin": {
-          "type": "boolean"
-        },
-        "status": {
-          "type": "string"
-        },
-        "parent_id": {
-          "type": "string"
-        },
-        "children": {
-          "type": "array",
-          "items": {}
-        }
-      },
-      "required": [
-        "rungroup_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "rungroups_delete",
-    "description": "Delete run group (/api/v2/{project_id}/rungroups/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "rungroup_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "rungroup_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "steps_list",
-    "description": "List steps (/api/v2/{project_id}/steps)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "steps_get",
-    "description": "Get step by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "step_id": {
-          "type": "integer"
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "step_id"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "steps_create",
-    "description": "Create step (/api/v2/{project_id}/steps)",
+    "name": "steps",
+    "description": "Manage test steps (/api/v2/{project_id}/steps) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List steps | get: Get step by ID | create: Create step (title required) | update: Update step by ID | delete: Delete step by ID"
+        },
+        "step_id": {
+          "type": "integer",
+          "description": "(get|update|delete)"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "link": {
           "type": "array",
@@ -1632,134 +1118,75 @@
               "value"
             ],
             "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "steps_update",
-    "description": "Update step (/api/v2/{project_id}/steps/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "step_id": {
-          "type": "integer"
+          },
+          "description": "(create|update)"
         },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "step_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "steps_delete",
-    "description": "Delete step (/api/v2/{project_id}/steps/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "step_id": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "step_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "snippets_list",
-    "description": "List snippets (/api/v2/{project_id}/snippets)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "snippets_get",
-    "description": "Get snippet by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "snippet_id": {
-          "type": "integer"
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "snippet_id"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "snippets_create",
-    "description": "Create snippet (/api/v2/{project_id}/snippets)",
+    "name": "snippets",
+    "description": "Manage code snippets (/api/v2/{project_id}/snippets) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List snippets | get: Get snippet by ID | create: Create snippet (title required) | update: Update snippet by ID | delete: Delete snippet by ID"
+        },
+        "snippet_id": {
+          "type": "integer",
+          "description": "(get|update|delete)"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "link": {
           "type": "array",
@@ -1794,134 +1221,75 @@
               "value"
             ],
             "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "snippets_update",
-    "description": "Update snippet (/api/v2/{project_id}/snippets/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "snippet_id": {
-          "type": "integer"
+          },
+          "description": "(create|update)"
         },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "snippet_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "snippets_delete",
-    "description": "Delete snippet (/api/v2/{project_id}/snippets/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "snippet_id": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "snippet_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "labels_list",
-    "description": "List labels (/api/v2/{project_id}/labels)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
+      "required": [
+        "command"
+      ],
       "additionalProperties": false
     }
   },
   {
-    "name": "labels_get",
-    "description": "Get label by slug",
+    "name": "labels",
+    "description": "Manage labels (/api/v2/{project_id}/labels) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List labels | get: Get label by slug | create: Create label (title required) | update: Update label by slug | delete: Delete label by slug"
+        },
         "label_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "label_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "labels_create",
-    "description": "Create label (/api/v2/{project_id}/labels)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(get|update|delete) Label slug"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "color": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "visibility": {
           "type": "array",
@@ -1931,7 +1299,8 @@
               "filter",
               "list"
             ]
-          }
+          },
+          "description": "(create|update)"
         },
         "scope": {
           "type": "array",
@@ -1945,142 +1314,122 @@
               "steps",
               "templates"
             ]
-          }
+          },
+          "description": "(create|update)"
         },
         "field": {
-          "type": "object"
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "labels_update",
-    "description": "Update label (/api/v2/{project_id}/labels/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "label_id": {
-          "type": "string"
+          "type": "object",
+          "description": "(create|update)"
         },
-        "title": {
-          "type": "string"
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list)"
         },
-        "color": {
-          "type": "string"
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list)"
         },
-        "visibility": {
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
           "type": "array",
           "items": {
-            "type": "string",
-            "enum": [
-              "filter",
-              "list"
-            ]
-          }
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
         },
-        "scope": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "tests",
-              "suites",
-              "runs",
-              "plans",
-              "steps",
-              "templates"
-            ]
-          }
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
         },
-        "field": {
-          "type": "object"
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "label_id"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "labels_delete",
-    "description": "Delete label (/api/v2/{project_id}/labels/{id})",
+    "name": "tags",
+    "description": "Tags: list with counts and get tests by tag (/api/v2/{project_id}/tags) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "label_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "label_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tags_list",
-    "description": "List tags with counts (/api/v2/{project_id}/tags)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tags_get",
-    "description": "Get tests by tag title (/api/v2/{project_id}/tags/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "search"
+          ],
+          "description": "CLI-style operation to perform. list: List tags with counts | get: Get tests by tag title (tag_id) | search: Search by tag title (delegates to get)"
+        },
         "tag_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "tag_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tags_search",
-    "description": "Search by tag title (delegates to tags_get)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "tag_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(get|search) Tag title to look up"
         },
         "query": {
-          "type": "string"
+          "type": "string",
+          "description": "(search)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
+      "required": [
+        "command"
+      ],
       "additionalProperties": false
     }
   },
   {
-    "name": "milestones_list",
-    "description": "List milestones (/api/v2/{project_id}/milestones)",
+    "name": "milestones",
+    "description": "Milestones: list and get (/api/v2/{project_id}/milestones) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get"
+          ],
+          "description": "CLI-style operation to perform. list: List milestones (type, status filters) | get: Get milestone by ID"
         },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+        "milestone_id": {
+          "type": "string",
+          "description": "(get)"
         },
         "type": {
           "type": "string",
-          "description": "Filter by milestone type (title), e.g. Sprint or Release."
+          "description": "(list) Filter by milestone type (title), e.g. Sprint or Release."
         },
         "status": {
           "type": "string",
@@ -2088,342 +1437,175 @@
             "created",
             "active",
             "closed"
-          ]
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "milestones_get",
-    "description": "Get milestone by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "milestone_id": {
-          "type": "string"
+          ],
+          "description": "(list)"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "milestone_id"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "issues_list",
-    "description": "List linked issues (/api/v2/{project_id}/issues)",
+    "name": "issues",
+    "description": "Linked issues across resources (/api/v2/{project_id}/issues) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "create",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List linked issues (scope by test_id/suite_id/run_id/testrun_id/plan_id, filter by source) | create: Link issue to a resource (url or jira_id + one scope id) | delete: Unlink issue"
         },
         "test_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list|create)"
         },
         "suite_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list|create)"
         },
         "run_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list|create)"
         },
         "testrun_id": {
-          "type": "integer"
+          "type": "integer",
+          "description": "(list|create)"
         },
         "plan_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list|create)"
         },
         "source": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "issues_create",
-    "description": "Link issue to resource (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        },
-        "suite_id": {
-          "type": "string"
-        },
-        "run_id": {
-          "type": "string"
-        },
-        "testrun_id": {
-          "type": "integer"
-        },
-        "plan_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(list) Filter issues by source (e.g. jira)"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "(create) Issue URL to link"
         },
         "jira_id": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "issues_delete",
-    "description": "Unlink issue (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(create) Jira issue key to link (alternative to url)"
+        },
         "issue_id": {
-          "type": "integer"
+          "type": "integer",
+          "description": "(delete) ID of the linked issue to remove"
         },
         "type": {
           "type": "string",
           "enum": [
             "issue",
             "jira_issue"
-          ]
+          ],
+          "description": "(delete) Kind of the linked issue"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "issue_id",
-        "type"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "issues_search",
-    "description": "Search issues (delegates to issues_list filters)",
+    "name": "plans",
+    "description": "Manage test plans (/api/v2/{project_id}/plans). Select tests for the plan with `tql` (TQL); the API resolves matching tests. Call `tql_help` for the syntax and full field list. CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "test_id": {
-          "type": "string"
-        },
-        "suite_id": {
-          "type": "string"
-        },
-        "run_id": {
-          "type": "string"
-        },
-        "testrun_id": {
-          "type": "integer"
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "issues_list",
+            "issues_link",
+            "issues_unlink"
+          ],
+          "description": "CLI-style operation to perform. list: List plans (kind, hidden, labels, search_text filters) | get: Get plan by ID | create: Create plan (title required; select tests via test_ids/suite_ids/tql) | update: Update plan by ID | delete: Delete plan by ID | issues_list: List linked issues for a plan | issues_link: Link issue to a plan (url or jira_id) | issues_unlink: Unlink issue from a plan"
         },
         "plan_id": {
-          "type": "string"
-        },
-        "source": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_attachments_list",
-    "description": "List attachments for a test (/api/v2/{project_id}/attachments?test_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_attachments_upload",
-    "description": "Upload one attachment to a test (/api/v2/{project_id}/attachments?test_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
-        },
-        "file_path": {
           "type": "string",
-          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
-        }
-      },
-      "required": [
-        "test_id",
-        "file_path"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "tests_attachments_delete",
-    "description": "Delete attachment from a test (/api/v2/{project_id}/attachments/{id}?test_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "test_id": {
-          "type": "string"
+          "description": "(get|update|delete|issues_list|issues_link)"
         },
-        "attachment_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "test_id",
-        "attachment_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_attachments_list",
-    "description": "List attachments for a suite (/api/v2/{project_id}/attachments?suite_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_attachments_upload",
-    "description": "Upload one attachment to a suite (/api/v2/{project_id}/attachments?suite_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
-        },
-        "file_path": {
+        "title": {
           "type": "string",
-          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
-        }
-      },
-      "required": [
-        "suite_id",
-        "file_path"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suites_attachments_delete",
-    "description": "Delete attachment from a suite (/api/v2/{project_id}/attachments/{id}?suite_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suite_id": {
-          "type": "string"
+          "description": "(create|update)"
         },
-        "attachment_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "suite_id",
-        "attachment_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_attachments_list",
-    "description": "List attachments for a testrun (/api/v2/{project_id}/attachments?testrun_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "testrun_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_attachments_upload",
-    "description": "Upload one attachment to a testrun (/api/v2/{project_id}/attachments?testrun_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        },
-        "file_path": {
+        "description": {
           "type": "string",
-          "description": "Local path to the file that will be sent as multipart/form-data field \"file\"."
-        }
-      },
-      "required": [
-        "testrun_id",
-        "file_path"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "testruns_attachments_delete",
-    "description": "Delete attachment from a testrun (/api/v2/{project_id}/attachments/{id}?testrun_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "testrun_id": {
-          "type": "integer"
-        },
-        "attachment_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "testrun_id",
-        "attachment_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_list",
-    "description": "List plans (/api/v2/{project_id}/plans)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          "description": "(create|update)"
         },
         "kind": {
           "type": "string",
@@ -2431,83 +1613,45 @@
             "manual",
             "automated",
             "mixed"
-          ]
+          ],
+          "description": "(list|create|update) list: filter by kind; create/update: the plan kind"
         },
         "hidden": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "(list|create|update) list: include hidden plans; create/update: set hidden flag"
+        },
+        "as_manual": {
+          "type": "boolean",
+          "description": "(create|update)"
         },
         "labels": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "(list)"
         },
         "search_text": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_get",
-    "description": "Get plan by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "plan_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "plan_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_create",
-    "description": "Create plan (/api/v2/{project_id}/plans). TQL (Testomat.io Query Language) is a string expression passed in `tql` to select tests included in a plan. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Plan TQL uses documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Use `tql` when you want the API to resolve matching tests automatically instead of sending explicit `test_ids`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "kind": {
           "type": "string",
-          "enum": [
-            "manual",
-            "automated",
-            "mixed"
-          ]
+          "description": "(list)"
         },
-        "hidden": {
-          "type": "boolean"
-        },
-        "as_manual": {
-          "type": "boolean"
+        "tql": {
+          "type": "string",
+          "description": "(create|update) TQL to select tests for the plan. Fields: tag, label, priority, issue, jira, state, status, custom_status, created_at, updated_at, last_run_at, executed_at, created_by, assigned_to, suite, test, shared, milestone. Call `tql_help` for syntax. Examples: `priority == 'high'`, `tag in ['smoke', 'stage1']`."
         },
         "test_ids": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "List of test IDs (8-char) to include in the plan. If omitted, all tests matching the plan kind are included."
+          "description": "(create|update) List of test IDs (8-char) to include in the plan. If omitted, all tests matching the plan kind are included."
         },
         "suite_ids": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "List of suite IDs (8-char) to include in the plan. If omitted, all suites are considered."
-        },
-        "tql": {
-          "type": "string",
-          "description": "TQL filter for selecting tests included in the plan. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
+          "description": "(create|update) List of suite IDs (8-char) to include in the plan. If omitted, all suites are considered."
         },
         "link": {
           "type": "array",
@@ -2542,294 +1686,95 @@
               "value"
             ],
             "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_update",
-    "description": "Update plan (/api/v2/{project_id}/plans/{id}). TQL (Testomat.io Query Language) is a string expression passed in `tql` to select tests included in a plan. Supported syntax includes logical operators `and`, `or`, `not`, equality operators `==` and `!=`, list membership `in [...]`, `%` for partial text match on supported text fields, and parentheses for grouping. Ordered comparisons `>`, `<`, `>=`, `<=` are for ordered fields such as `priority`, dates, and numeric counters/durations. Use quotes for string values, for example `state == 'automated'`. Plan TQL uses documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Documented examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`. Use `tql` when you want the API to resolve matching tests automatically instead of sending explicit `test_ids`. Do not invent undocumented fields or syntax. If a query fails, simplify it to one documented predicate.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "plan_id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "manual",
-            "automated",
-            "mixed"
-          ]
-        },
-        "hidden": {
-          "type": "boolean"
-        },
-        "as_manual": {
-          "type": "boolean"
-        },
-        "test_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
           },
-          "description": "List of test IDs (8-char) to include in the plan. If omitted, all tests matching the plan kind are included."
-        },
-        "suite_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of suite IDs (8-char) to include in the plan. If omitted, all suites are considered."
-        },
-        "tql": {
-          "type": "string",
-          "description": "TQL filter for selecting tests included in the plan. Documented test variables: `tag`, `label`, `priority`, `issue`, `jira`, `state`, `status`, `custom_status`, `created_at`, `updated_at`, `last_run_at`, `executed_at`, `created_by`, `assigned_to`, `suite`, `test`, `shared`, `milestone`. Examples: `priority == 'high'`, `priority >= 'normal'`, `state == 'automated'`, `tag in ['smoke', 'stage1'] and status == 'failed'`, `suite % 'Checkout'`, `test % 'User login'`, `custom_status % 'issue'`, `created_at < 1.month_ago`, `jira in ['JST-1', 'JST-2']`, `milestone == 'Sprint 1'`."
-        },
-        "link": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "remove"
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "label",
-                  "custom_field",
-                  "tag",
-                  "milestone",
-                  "issue",
-                  "jira"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type",
-              "value"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "plan_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_delete",
-    "description": "Delete plan",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "plan_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "plan_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_search",
-    "description": "Search plans (delegates to plans list; docs has no dedicated search parameter)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "search_text": {
-          "type": "string"
+          "description": "(create|update)"
         },
         "page": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "(list|issues_list)"
         },
         "per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "manual",
-            "automated",
-            "mixed"
-          ]
-        },
-        "hidden": {
-          "type": "boolean"
-        },
-        "labels": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_issues_list",
-    "description": "List linked issues for a plan (/api/v2/{project_id}/issues?plan_id=...)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "plan_id": {
-          "type": "string"
-        },
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "(list|issues_list)"
         },
         "source": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "plan_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_issues_link",
-    "description": "Link issue to a plan (/api/v2/{project_id}/issues)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "plan_id": {
-          "type": "string"
+          "type": "string",
+          "description": "(issues_list) Filter issues by source (e.g. jira)"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "(issues_link) Issue URL to link"
         },
         "jira_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "plan_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "plans_issues_unlink",
-    "description": "Unlink issue from a plan (/api/v2/{project_id}/issues/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(issues_link) Jira issue key to link (alternative to url)"
+        },
         "issue_id": {
-          "type": "integer"
+          "type": "integer",
+          "description": "(issues_unlink) ID of the linked issue to remove"
         },
         "type": {
           "type": "string",
           "enum": [
             "issue",
             "jira_issue"
-          ]
+          ],
+          "description": "(issues_unlink) Kind of the linked issue"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(issues_list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(issues_list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
       "required": [
-        "issue_id",
-        "type"
+        "command"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "requirements_list",
-    "description": "List requirements (/api/v2/{project_id}/requirements)",
+    "name": "requirements",
+    "description": "Manage requirements (/api/v2/{project_id}/requirements) CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "source": {
+        "command": {
           "type": "string",
           "enum": [
-            "jira",
-            "confluence",
-            "file",
-            "text"
-          ]
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List requirements (source, scope filters) | get: Get requirement by ID | create: Create requirement (title and source_type required) | update: Update requirement by ID | delete: Delete requirement by ID"
         },
-        "scope": {
-          "type": "string",
-          "enum": [
-            "global",
-            "attached",
-            "detached",
-            "without_suites"
-          ]
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "requirements_get",
-    "description": "Get requirement by ID",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
         "requirement_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "requirement_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "requirements_create",
-    "description": "Create requirement (/api/v2/{project_id}/requirements)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
+          "type": "string",
+          "description": "(get|update|delete)"
+        },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "(create|update)"
         },
         "source_type": {
           "type": "string",
@@ -2838,109 +1783,8 @@
             "confluence",
             "file",
             "text"
-          ]
-        },
-        "description": {
-          "type": "string",
-          "description": "Required for text requirements. Must be at least 500 characters."
-        },
-        "details": {
-          "type": "string"
-        },
-        "active": {
-          "type": "boolean"
-        },
-        "global": {
-          "type": "boolean"
-        },
-        "confluence_url": {
-          "type": "string",
-          "description": "Required for confluence requirements."
-        },
-        "files": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Local file paths to upload for file requirements."
-        }
-      },
-      "required": [
-        "title",
-        "source_type"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "requirements_update",
-    "description": "Update requirement (/api/v2/{project_id}/requirements/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "requirement_id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string",
-          "description": "Only applied for text requirements."
-        },
-        "details": {
-          "type": "string"
-        },
-        "active": {
-          "type": "boolean"
-        },
-        "global": {
-          "type": "boolean"
-        },
-        "files": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Local file paths to upload for file requirements."
-        }
-      },
-      "required": [
-        "requirement_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "requirements_delete",
-    "description": "Delete requirement (/api/v2/{project_id}/requirements/{id})",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "requirement_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "requirement_id"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "requirements_search",
-    "description": "Search requirements (delegates to requirements list with filters)",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
+          ],
+          "description": "(create)"
         },
         "source": {
           "type": "string",
@@ -2949,7 +1793,8 @@
             "confluence",
             "file",
             "text"
-          ]
+          ],
+          "description": "(list)"
         },
         "scope": {
           "type": "string",
@@ -2958,9 +1803,146 @@
             "attached",
             "detached",
             "without_suites"
-          ]
+          ],
+          "description": "(list)"
+        },
+        "description": {
+          "type": "string",
+          "description": "(create|update) Required for text requirements (min 500 chars on create); only applied for text requirements on update."
+        },
+        "details": {
+          "type": "string",
+          "description": "(create|update)"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "(create|update)"
+        },
+        "global": {
+          "type": "boolean",
+          "description": "(create|update)"
+        },
+        "confluence_url": {
+          "type": "string",
+          "description": "(create) Required for confluence requirements."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(create|update) Local file paths to upload for file requirements."
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
         }
       },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "branches",
+    "description": "Manage project branches (/api/v2/{project_id}/branches). Requires the branches feature (enterprise plan). CLI-style: pass \"command\" plus the params it needs; each param description lists the commands it applies to.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete"
+          ],
+          "description": "CLI-style operation to perform. list: List project branches (filter_state / filter_title to narrow down) | get: Get branch by slug | create: Create branch (title required; slug is generated from it) | update: Update branch title | delete: Delete branch by slug"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "(get|update|delete) Branch slug"
+        },
+        "title": {
+          "type": "string",
+          "description": "(create|update) Branch title; a slug is generated from it"
+        },
+        "filter_state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "merged"
+          ],
+          "description": "(list) Filter by branch state"
+        },
+        "filter_title": {
+          "type": "string",
+          "description": "(list) Filter by title (partial substring match)"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "(list)"
+        },
+        "per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "(list)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "(list) Return full response bodies. Default strips entity-specific heavy fields and null values; set true when you need those."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "(list) Fields to keep per item (e.g. [\"id\",\"title\",\"status\",\"message\"]). Ignored when verbose is true."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "(list) Return only metadata with total counts instead of the entity list. Pair with group_by for an aggregated breakdown."
+        },
+        "group_by": {
+          "type": "string",
+          "description": "(list) Aggregate counts by this field, e.g. status, state, priority, created_by (use with count=true). The backend validates supported fields per resource. For created_by, counts are keyed by user email, not ID."
+        }
+      },
+      "required": [
+        "command"
+      ],
       "additionalProperties": false
     }
   }
