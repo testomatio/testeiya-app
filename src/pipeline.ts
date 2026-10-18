@@ -59,7 +59,6 @@ export function runPipelineList(json?: boolean): number {
 export async function runPipeline(options: PipelineOptions): Promise<number> {
   const cwd = process.cwd();
   const source = resolvePipelinePath(options.name);
-  const reporting = await splitDestinations(options.outputs ?? []);
   const named = parsePipeline(readFileSync(source, "utf8"), source);
   const dir = folder(options, named.name);
   if (dir === cwd || cwd.startsWith(dir + sep)) {
@@ -82,6 +81,8 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
       throw new UsageError(`${dir} holds a run of "${pipeline.name}", not "${named.name}"`);
     }
   }
+
+  pipeline = withJobGates(pipeline, options.gates ?? {});
 
   let round = history.length + 1;
   let since = history.at(-1)?.commit ?? null;
@@ -115,6 +116,8 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
     return 0;
   }
 
+  // After the skip: a job gated on a pull request may name one that only exists when the gate passes.
+  const reporting = await splitDestinations(options.outputs ?? []);
   if (options.dryRun) return dryRun(pipeline, gates, aiProblem);
 
   mkdirSync(dir, { recursive: true });
@@ -401,6 +404,18 @@ function copyReport(run: RunContext, report: string): void {
   }
 }
 
+/** Gates passed with --gate join `when`: the CI job decides if the run happens at all. */
+function withJobGates(pipeline: Pipeline, extra: Record<string, string>): Pipeline {
+  const gates = { ...pipeline.gates };
+  const when = [...pipeline.when];
+  for (const [name, run] of Object.entries(extra)) {
+    if (gates[name]) throw new UsageError(`--gate ${name}: the pipeline already defines this gate`);
+    gates[name] = { run, message: `The ${name} gate did not pass.` };
+    when.push(name);
+  }
+  return { ...pipeline, gates, when };
+}
+
 // Checked before the first stage, like any task: a run that cannot post spends nothing.
 async function splitDestinations(outputs: string[]): Promise<Reporting> {
   const parsed = parseDestinations(outputs);
@@ -675,6 +690,8 @@ export interface PipelineOptions {
   dir?: string;
   dryRun?: boolean;
   sets?: Record<string, string>;
+  /** Gate name to a shell check, from --gate. */
+  gates?: Record<string, string>;
   outputs?: string[];
   thread?: string;
   header?: string;

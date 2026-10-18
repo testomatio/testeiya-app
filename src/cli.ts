@@ -113,6 +113,7 @@ async function pipeline(args: CliArgs): Promise<number> {
     dir: args.dir,
     dryRun: args.dryRun,
     sets: args.sets,
+    gates: args.gates,
     outputs: args.outputs,
     thread: args.thread,
     header: args.header,

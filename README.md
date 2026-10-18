@@ -284,7 +284,10 @@ with a session are told what changed, and the summary updates its comment.
 Stages ignore `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE`:
 those belong to a single task. Use `--thread` on the pipeline instead.
 
-`--set KEY=VALUE` sets a variable for every stage. `--dry-run` prints every
+`--set KEY=VALUE` sets a variable for every stage. `--gate NAME:COMMAND` adds a
+check from the CI job: when the command fails, the whole run is skipped and exits
+0, before any output is checked. Use it for what only the job knows, like
+whether this push belongs to a pull request. `--dry-run` prints every
 gate and stage and spends nothing. `pipeline.json` in the folder holds each
 stage's status; `--json` prints it.
 

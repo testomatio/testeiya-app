@@ -47,6 +47,7 @@ Pipeline options:
       --dir <path>           the pipeline folder; keep it between runs for rounds
       --dry-run              show gates and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
+      --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
   -h, --help                 show this
   -v, --version              show version
 
@@ -193,6 +194,9 @@ Pipelines
     testeiya pipeline web-testing -o gh:pr-comment
     testeiya pipeline .github/testeiya/regression.yml --set TEST_COMMAND="npx playwright test"
 
+  --gate adds a check from the CI job, e.g. --gate 'pr:test -n "$PR_NUMBER"'.
+  When it fails the whole run is skipped and exits 0.
+
   A stage whose gate fails is skipped with the gate's message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a
   CI cache per pull request, and a re-run on the same commit retries from the
@@ -240,6 +244,11 @@ export function parseCliArgs(argv: string[]): CliArgs {
     const sets = parseSets(values.set as string[]);
     if (typeof sets === "string") return { error: sets };
     args.sets = sets;
+  }
+  if (Array.isArray(values.gate)) {
+    const gates = parseGates(values.gate as string[]);
+    if (typeof gates === "string") return { error: gates };
+    args.gates = gates;
   }
   if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
@@ -305,6 +314,7 @@ const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
   dir: { type: "string" },
   "dry-run": { type: "boolean" },
   set: { type: "string", multiple: true },
+  gate: { type: "string", multiple: true },
   help: HELP_FLAG,
 };
 
@@ -327,6 +337,16 @@ function parseSets(values: string[]): Record<string, string> | string {
     sets[value.slice(0, equals)] = value.slice(equals + 1);
   }
   return sets;
+}
+
+function parseGates(values: string[]): Record<string, string> | string {
+  const gates: Record<string, string> = {};
+  for (const value of values) {
+    const colon = value.indexOf(":");
+    if (colon <= 0 || !value.slice(colon + 1).trim()) return `--gate takes NAME:COMMAND, got "${value}"`;
+    gates[value.slice(0, colon)] = value.slice(colon + 1);
+  }
+  return gates;
 }
 
 function isCommand(value: string): value is Command {
@@ -368,6 +388,7 @@ export interface CliArgs {
   dir?: string;
   dryRun?: boolean;
   sets?: Record<string, string>;
+  gates?: Record<string, string>;
   /** Set when argv was malformed; the caller prints the message and exits 2. */
   error?: string;
 }

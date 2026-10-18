@@ -194,6 +194,19 @@ stages:
   assert.equal(calledWith(log).length, 0);
 });
 
+test("a --gate from the job skips the run before outputs are checked", async () => {
+  const { repo, log, cli } = setup();
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    task: One.\n");
+  const dir = join(repo, ".qa");
+  const options = { name: file, dir, cli, outputs: ["gh:pr#"], gates: { pr: "test -n \"$PR\"" } };
+  assert.equal(await inRepo(repo, () => runPipeline(options)), 0);
+  assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
+  assert.equal(calledWith(log).length, 0);
+  await assert.rejects(inRepo(repo, () => runPipeline({ ...options, sets: { PR: "1" } })), /gh:pr#/);
+  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    gates: [pr]\n    task: One.\n");
+  await assert.rejects(inRepo(repo, () => runPipeline({ name: gated, dir, cli, gates: { pr: "true" } })), /already defines/);
+});
+
 test("stopOn fail stops the stages after it, the summary still runs", async () => {
   const { repo, log, cli } = setup();
   const file = write(repo, "pipe.yml", `
