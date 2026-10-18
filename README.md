@@ -498,7 +498,8 @@ testeiya task "<task>" --output report.md --output run.json --output gh:pr-comme
 | `gh:pr#123` | posted on that pull request |
 
 Posting uses the GitHub CLI and resolves the PR number from `GITHUB_EVENT_PATH`,
-`GITHUB_REF`, or `gh pr view` — so inside Actions it just works. Every
+`GITHUB_REF`, or `gh pr view`. On a push with no PR of its own, like a merge to
+main, it posts on the PR that brought the commit in. Inside Actions it just works. Every
 destination is checked before the run starts, so a missing `gh` costs no tokens.
 
 `--footer "<text>"` adds a line under the report and `--header "<text>"` adds
