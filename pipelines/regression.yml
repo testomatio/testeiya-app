@@ -5,12 +5,15 @@ gates:
   coverage:
     file: [coverage.tests.yml]
     message: No coverage.tests.yml. Create one with /qa-test-code-coverage to run only affected tests.
+  testomatio:
+    env: [TESTOMATIO]
+    message: No Testomat.io project. Set TESTOMATIO to the project's API key.
+  local:
+    run: test -z "$REMOTE"
+    message: Tests run on the Testomat.io CI profile. No local log to read.
   test-command:
     env: [TEST_COMMAND]
     message: No test command. Set TEST_COMMAND, e.g. "npx playwright test".
-  testomatio:
-    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
-    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
 
 when: [coverage]
 
@@ -18,24 +21,19 @@ env:
   BASE_BRANCH: ${BASE_BRANCH:-origin/main}
 
 stages:
-  - id: automated
-    gates: [test-command]
-    run: |
-      npx -y @testomatio/reporter run "$TEST_COMMAND" \
-        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH"
-    timeout: 30m
-
-  - id: manual
+  - id: tests
     gates: [testomatio]
     run: |
-      npx -y @testomatio/reporter run --kind manual \
-        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH"
+      npx -y @testomatio/reporter run --kind detect --warn \
+        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
+        ${REMOTE:+--remote "$REMOTE"} ${TEST_COMMAND:+"$TEST_COMMAND"}
+    timeout: 30m
 
   - id: failures
-    gates: [test-command]
+    gates: [local, test-command]
     session: triage
     task: |
-      Read the test run in automated.log. For each failure, say if this change caused it,
+      Read the test run in tests.log. For each failure, say if this change caused it,
       if it is flaky, or if the test is out of date. /debug-fix-failed-flaky-autotests
       Do not edit any file. Fail the run if this change caused a failure.
-    inputs: [automated.log]
+    inputs: [tests.log]
