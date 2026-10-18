@@ -132,7 +132,7 @@ function parseStage(value: unknown, index: number, fail: Fail): Stage {
     id,
     inputs: stringList(value.inputs, `${where} inputs`, fail),
     outputs: stringList(value.outputs, `${where} outputs`, fail),
-    gates: stringList(value.gates, `${where} gates`, fail),
+    when: stringList(value.when, `${where} when`, fail),
     stopOn: stringList(value.stopOn, `${where} stopOn`, fail) as StopOn[],
   };
   for (const reason of stage.stopOn) {
@@ -167,8 +167,8 @@ function checkReferences(pipeline: Pipeline, fail: Fail): void {
     if (!pipeline.gates[name]) fail(`when names gate "${name}", which gates does not define`);
   }
   for (const stage of pipeline.stages) {
-    for (const name of stage.gates) {
-      if (!pipeline.gates[name]) fail(`stage "${stage.id}" names gate "${name}", which gates does not define`);
+    for (const name of stage.when) {
+      if (!pipeline.gates[name]) fail(`stage "${stage.id}" when names gate "${name}", which gates does not define`);
     }
     for (const output of stage.outputs) {
       const owner = taken.get(output);
@@ -189,7 +189,7 @@ function optionalString(value: unknown, what: string, fail: Fail): string | unde
   return value;
 }
 
-// A single value is a list of one, so `stopOn: fail` and `gates: staging` read naturally.
+// A single value is a list of one, so `stopOn: fail` and `when: staging` read naturally.
 function stringList(value: unknown, what: string, fail: Fail): string[] {
   if (value === undefined || value === null) return [];
   if (typeof value === "string") return [value];
@@ -235,7 +235,7 @@ const STAGE_KEYS = [
   "session",
   "inputs",
   "outputs",
-  "gates",
+  "when",
   "stopOn",
   "timeout",
   "each_line",
@@ -278,7 +278,7 @@ export interface Stage {
   session?: string;
   inputs: string[];
   outputs: string[];
-  gates: string[];
+  when: string[];
   stopOn: StopOn[];
   timeout?: number;
   eachLine?: string;

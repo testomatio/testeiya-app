@@ -23,7 +23,7 @@ stages:
     outputs: [endpoints.txt]
 
   - id: explore
-    gates: [api, explorbot-ai]
+    when: [api, explorbot-ai]
     each_line: endpoints.txt
     run: npx -y explorbot api explore "$ITEM" --style psycho
     outputs: [explorbot/]
@@ -31,7 +31,7 @@ stages:
 
   - id: results
     session: qa
-    gates: [api, explorbot-ai]
+    when: [api, explorbot-ai]
     task: |
       Explorbot results are under explorbot/: plans, request logs, and a session report. Read them.
       Say which failures are real defects in this change: a broken contract, missing validation, a wrong status.

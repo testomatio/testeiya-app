@@ -96,7 +96,7 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
 
   const env = stageEnv(pipeline, options.sets ?? {}, { dir, round });
   const changes = await readChanges(cwd, since, env);
-  const used = [...pipeline.when, ...pipeline.stages.flatMap((stage) => stage.gates)];
+  const used = [...pipeline.when, ...pipeline.stages.flatMap((stage) => stage.when)];
   // A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request.
   if (!changes.files && used.some((name) => pipeline.gates[name]!.changes)) {
     throw new UsageError(`cannot read the changes: ${changes.error}. Check out with full history (fetch-depth: 0)`);
@@ -175,7 +175,7 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
       continue;
     }
 
-    const closed = stage.gates.find((name) => !gates.get(name));
+    const closed = stage.when.find((name) => !gates.get(name));
     if (closed) {
       skip(record, pipeline.gates[closed]!.message);
       stopped = stage.stopOn.includes("gate");
@@ -380,7 +380,7 @@ function summaryStage(pipeline: Pipeline, state: PipelineState): Stage {
     session: "summary",
     inputs: [STATE],
     outputs: [],
-    gates: [],
+    when: [],
     stopOn: [],
   };
 }
@@ -599,7 +599,7 @@ function dryRun(pipeline: Pipeline, gates: Map<string, boolean>, aiProblem: stri
       note(`  ${c.dim("·")} ${stage.id.padEnd(14)} ${c.dim("not run")}`);
       continue;
     }
-    const closed = stage.gates.find((name) => !gates.get(name));
+    const closed = stage.when.find((name) => !gates.get(name));
     if (closed) {
       note(`  ${c.yellow("⨯")} ${stage.id.padEnd(14)} ${c.dim(`skipped: ${pipeline.gates[closed]!.message}`)}`);
       stopped = stage.stopOn.includes("gate");

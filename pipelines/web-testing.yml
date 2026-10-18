@@ -26,7 +26,7 @@ stages:
 
   - id: write-plan
     session: qa
-    gates: [staging]
+    when: [staging]
     task: |
       Turn scenarios.md into an Explorbot test plan for ${EXPLORBOT_URL}. /explorbot-plan
       Write the plan to plan.md. Keep only scenarios a browser can check.
@@ -34,7 +34,7 @@ stages:
     outputs: [plan.md]
 
   - id: explore
-    gates: [staging, browser, explorbot-ai]
+    when: [staging, browser, explorbot-ai]
     run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
@@ -42,7 +42,7 @@ stages:
 
   - id: results
     session: qa
-    gates: [staging, browser, explorbot-ai]
+    when: [staging, browser, explorbot-ai]
     task: |
       Explorbot results are under explorbot/. Find its session report and read it.
       Say which failed scenarios are real defects in this change and which are test noise.

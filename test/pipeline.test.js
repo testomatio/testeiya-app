@@ -36,7 +36,7 @@ test("every bundled pipeline loads", () => {
 });
 
 test("a stage naming an undefined gate is bad usage", () => {
-  const text = "stages:\n  - id: a\n    run: echo\n    gates: [staging]\n";
+  const text = "stages:\n  - id: a\n    run: echo\n    when: [staging]\n";
   assert.throws(() => parsePipeline(text, "p.yml"), /names gate "staging"/);
 });
 
@@ -112,7 +112,7 @@ stages:
     each_line: endpoints.txt
     run: echo "checking $ITEM"
   - id: explore
-    gates: [staging]
+    when: [staging]
     task: Explore it.
   - id: results
     session: qa
@@ -203,7 +203,7 @@ test("a --gate from the job skips the run before outputs are checked", async () 
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
   await assert.rejects(inRepo(repo, () => runPipeline({ ...options, sets: { PR: "1" } })), /gh:pr#/);
-  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    gates: [pr]\n    task: One.\n");
+  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    when: [pr]\n    task: One.\n");
   await assert.rejects(inRepo(repo, () => runPipeline({ name: gated, dir, cli, gates: { pr: "true" } })), /already defines/);
 });
 

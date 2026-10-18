@@ -22,7 +22,7 @@ env:
 
 stages:
   - id: tests
-    gates: [testomatio]
+    when: [testomatio]
     run: |
       npx -y @testomatio/reporter run --kind detect --warn \
         --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
@@ -30,7 +30,7 @@ stages:
     timeout: 30m
 
   - id: failures
-    gates: [local, test-command]
+    when: [local, test-command]
     session: triage
     task: |
       Read the test run in tests.log. For each failure, say if this change caused it,

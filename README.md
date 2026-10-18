@@ -233,7 +233,7 @@ stages:
     task: Review this pull request. Write browser scenarios to plan.md. /explorbot-plan
     outputs: [plan.md]
   - id: explore
-    gates: [staging, browser]
+    when: [staging, browser]
     run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
     timeout: 30m
   - id: results
@@ -247,14 +247,17 @@ stages:
   `<id>.md` and `<id>.json`, a command writes `<id>.log`. `inputs` and
   `outputs` name the rest.
 - `gates` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
-  `ignore`, `min_files`). A stage whose gate fails is skipped with its message.
-  A failed gate in the top-level `when:` skips the whole run.
+  `ignore`, `min_files`). `when:` names the gates a stage needs. One fails and
+  the stage is skipped with its message. In the top-level `when:` it skips the
+  whole run.
 - `session: <name>` keeps a conversation. Stages with the same name share it.
   No `session` is a fresh one.
 - `each_line: file.txt` and `each_file: cases/*.md` run a stage once per item,
   as `$ITEM`.
 - `stopOn: fail` stops the pipeline when the stage fails, `stopOn: gate` when it
   was skipped. A broken or timed-out stage always stops it.
+
+The full format is in [PIPELINES.md](PIPELINES.md).
 
 A pipeline with more than one stage ends with a summary written by the
 `pipeline-report` skill. It is the only thing posted to `--output`. Every other

@@ -36,7 +36,7 @@ stages:
     outputs: [test-cases/]
 
   - id: sync
-    gates: [testomatio]
+    when: [testomatio]
     each_file: test-cases/*.md
     task: |
       Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
