@@ -36,7 +36,7 @@ for (let i = 0; i < args.length; i++) {
 
 test("every bundled pipeline loads", () => {
   const names = PipelineFile.bundled().map((pipeline) => pipeline.name);
-  assert.deepEqual(names, ["api-testing", "pr-review", "regression", "web-testing"]);
+  assert.deepEqual(names, ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
 });
 
 test("a stage naming an undefined gate is bad usage", () => {

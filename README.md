@@ -203,6 +203,7 @@ testeiya pipeline .github/testeiya/my-flow.yml --dry-run
 | Pipeline | What it does |
 |---|---|
 | `pr-review` | requirements, QA review, test cases, sync to Testomat.io |
+| `issue-test-cases` | an issue or epic, with its sub-issues, becomes test cases; set `ISSUE_URL` |
 | `web-testing` | review, an Explorbot plan, `explorbot test`, what broke |
 | `api-testing` | review lists changed endpoints, Explorbot tests each one |
 | `regression` | runs the tests `coverage.tests.yml` maps to the change, explains failures |
