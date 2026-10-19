@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { Git } from "../dist/src/changes.js";
+import { Git } from "../dist/src/git.js";
 import { expand, matchChanges } from "../dist/src/gates.js";
 import { listBundled, parseDuration, parsePipeline } from "../dist/src/pipeline-file.js";
 import { runPipeline } from "../dist/src/pipeline.js";

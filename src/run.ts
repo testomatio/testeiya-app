@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { describeUpdate, lastCheckpoint, readCheckpoint, readRepo, saveCheckpoint } from "./checkpoint.js";
+import { describeUpdate, lastCheckpoint, readCheckpoint, saveCheckpoint } from "./checkpoint.js";
+import { Git } from "./git.js";
 import { VERSION } from "./env.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
@@ -46,7 +47,7 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const host = options.noThread ? null : threadHost(process.env);
   const inThread = Boolean(pr) || Boolean(host);
   const wantsRepo = inThread || options.sessionManager.isPersisted();
-  const repo = wantsRepo ? await readRepo(cwd) : { commit: null, branch: null, remote: null };
+  const repo = wantsRepo ? await new Git(cwd).repo() : { commit: null, branch: null, remote: null };
 
   let checkpoint = null;
   if (options.sessionManager.isPersisted()) checkpoint = readCheckpoint(repo, pr);

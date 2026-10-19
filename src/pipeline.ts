@@ -16,7 +16,7 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chalkStderr as c } from "chalk";
 
-import { Git, type Changes } from "./changes.js";
+import { Git, type Changes } from "./git.js";
 import { checkGates, expand } from "./gates.js";
 import { UsageError } from "./model.js";
 import { parseDestinations, preflight } from "./output.js";

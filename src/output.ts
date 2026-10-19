@@ -1,6 +1,7 @@
 import { access, constants, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { run } from "./exec.js";
+import { Git } from "./git.js";
 import { threadMarker } from "../prompt/thread.js";
 
 const GH_SCHEME = "gh:";
@@ -251,7 +252,7 @@ async function resolvePullRequest(explicit?: number): Promise<number | null> {
 // A push to the main branch has no pull request of its own: ask which one brought the commit in.
 async function pullRequestFromCommit(): Promise<number | null> {
   let sha = process.env.GITHUB_SHA;
-  if (!sha) sha = (await run("git", ["rev-parse", "HEAD"])).stdout.trim();
+  if (!sha) sha = (await new Git(process.cwd()).headCommit()) ?? undefined;
   if (!sha) return null;
   const pulls = await run("gh", ["api", `repos/{owner}/{repo}/commits/${sha}/pulls`, "--jq", ".[0].number // empty"]);
   if (pulls.code !== 0) return null;

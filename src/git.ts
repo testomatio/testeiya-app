@@ -1,13 +1,23 @@
 import { run } from "./exec.js";
 
-/** The git questions a pipeline asks about its checkout. */
+/** The git questions the CLI asks about its checkout. */
 export class Git {
   constructor(private readonly cwd: string) {}
 
-  async headCommit(): Promise<string | null> {
-    const head = await this.git("rev-parse", "HEAD");
-    if (head.code !== 0) return null;
-    return head.stdout.trim();
+  headCommit(): Promise<string | null> {
+    return this.read("rev-parse", "HEAD");
+  }
+
+  /**
+   * Where the checkout stands, read once. The marker stamps the commit on a
+   * comment, the pull request section picks its host from the remote, and the
+   * checkpoint keeps both for the next round — one set of git calls for all three.
+   */
+  async repo(): Promise<Repo> {
+    const commit = await this.headCommit();
+    const branch = await this.read("rev-parse", "--abbrev-ref", "HEAD");
+    const remote = await this.read("remote", "get-url", "origin");
+    return { commit, branch, remote };
   }
 
   /**
@@ -45,12 +55,25 @@ export class Git {
     return found.code === 0;
   }
 
+  /** Trimmed stdout, or null when git fails or says nothing. */
+  private async read(...args: string[]): Promise<string | null> {
+    const result = await this.git(...args);
+    if (result.code !== 0) return null;
+    return result.stdout.trim() || null;
+  }
+
   private git(...args: string[]) {
     return run("git", args, { cwd: this.cwd });
   }
 }
 
 type Env = Record<string, string | undefined>;
+
+export interface Repo {
+  commit: string | null;
+  branch: string | null;
+  remote: string | null;
+}
 
 export interface Changes {
   /** Null when git could not say. */

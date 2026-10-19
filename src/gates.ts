@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { matchesGlob, resolve } from "node:path";
 
-import type { Changes } from "./changes.js";
+import type { Changes } from "./git.js";
 import type { ChangesRule, Gate } from "./pipeline-file.js";
 
 const RUN_LIMIT_MS = 30_000;
