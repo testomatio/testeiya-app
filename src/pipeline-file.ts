@@ -32,38 +32,7 @@ export function listBundled(): Array<{ name: string; description: string }> {
 
 /** Parse and validate. Every mistake is bad usage, found before a token is spent. */
 export function parsePipeline(text: string, source: string): Pipeline {
-  let raw: unknown;
-  try {
-    raw = parse(text);
-  } catch (err) {
-    throw new UsageError(`${source}: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  const fail = (message: string): never => {
-    throw new UsageError(`${source}: ${message}`);
-  };
-  if (!isRecord(raw)) return fail("a pipeline is a YAML mapping");
-  unknownKeys(raw, TOP_KEYS, "pipeline", fail);
-
-  const gates: Record<string, Gate> = {};
-  const rawGates = raw.gates ?? {};
-  if (!isRecord(rawGates)) return fail("gates must be a mapping of name to checks");
-  for (const [name, value] of Object.entries(rawGates)) gates[name] = parseGate(name, value, fail);
-
-  const rawStages = raw.stages;
-  if (!Array.isArray(rawStages) || rawStages.length === 0) return fail("stages must be a non-empty list");
-  const stages = rawStages.map((value, index) => parseStage(value, index, fail));
-
-  const pipeline: Pipeline = {
-    name: optionalString(raw.name, "name", fail) ?? basename(source).replace(/\.ya?ml$/, ""),
-    description: optionalString(raw.description, "description", fail) ?? "",
-    summary: optionalString(raw.summary, "summary", fail),
-    env: stringMap(raw.env, "env", fail),
-    gates,
-    when: stringList(raw.when, "when", fail),
-    stages,
-  };
-  checkReferences(pipeline, fail);
-  return pipeline;
+  return new PipelineParser(source).parse(text);
 }
 
 /** The files a stage leaves in the pipeline folder on its own. */
@@ -83,133 +52,174 @@ export function parseDuration(value: unknown): number | null {
   return amount * (scale ?? 1000);
 }
 
-function parseGate(name: string, value: unknown, fail: Fail): Gate {
-  if (!isRecord(value)) return fail(`gate "${name}" must be a mapping`);
-  unknownKeys(value, GATE_KEYS, `gate "${name}"`, fail);
-  const message = optionalString(value.message, `gate "${name}" message`, fail);
-  if (!message) return fail(`gate "${name}" needs a message`);
-  const gate: Gate = { message };
-  if (value.env !== undefined) gate.env = stringList(value.env, `gate "${name}" env`, fail);
-  if (value.file !== undefined) gate.file = stringList(value.file, `gate "${name}" file`, fail);
-  if (value.run !== undefined) gate.run = optionalString(value.run, `gate "${name}" run`, fail);
-  if (value.changes !== undefined) gate.changes = parseChanges(name, value.changes, fail);
-  if (!gate.env && !gate.file && !gate.run && !gate.changes) {
-    return fail(`gate "${name}" needs a check: env, file, run or changes`);
-  }
-  return gate;
-}
+/** Reads one pipeline file. Every message names the file. */
+class PipelineParser {
+  constructor(private readonly source: string) {}
 
-function parseChanges(name: string, value: unknown, fail: Fail): ChangesRule {
-  if (!isRecord(value)) return fail(`gate "${name}" changes must be a mapping`);
-  unknownKeys(value, CHANGES_KEYS, `gate "${name}" changes`, fail);
-  const rule: ChangesRule = {};
-  if (value.paths !== undefined) rule.paths = stringList(value.paths, `gate "${name}" paths`, fail);
-  if (value.ignore !== undefined) rule.ignore = stringList(value.ignore, `gate "${name}" ignore`, fail);
-  if (value.min_files !== undefined) {
-    if (!Number.isInteger(value.min_files) || (value.min_files as number) < 1) {
-      return fail(`gate "${name}" min_files must be a whole number above 0`);
+  parse(text: string): Pipeline {
+    let raw: unknown;
+    try {
+      raw = parse(text);
+    } catch (err) {
+      return this.fail(err instanceof Error ? err.message : String(err));
     }
-    rule.minFiles = value.min_files as number;
-  }
-  return rule;
-}
+    if (!isRecord(raw)) return this.fail("a pipeline is a YAML mapping");
+    this.unknownKeys(raw, TOP_KEYS, "pipeline");
 
-function parseStage(value: unknown, index: number, fail: Fail): Stage {
-  if (!isRecord(value)) return fail(`stage ${index + 1} must be a mapping`);
-  const id = value.id;
-  if (typeof id !== "string" || !isSlug(id)) {
-    return fail(`stage ${index + 1} needs an id of lowercase words joined by dashes`);
-  }
-  const where = `stage "${id}"`;
-  unknownKeys(value, STAGE_KEYS, where, fail);
-  if (RESERVED_IDS.includes(id)) fail(`${where}: "${id}" is reserved`);
-  if ((value.task === undefined) === (value.run === undefined)) fail(`${where} needs exactly one of task or run`);
-  if (value.each_line !== undefined && value.each_file !== undefined) {
-    fail(`${where} can loop over each_line or each_file, not both`);
+    const gates: Record<string, Gate> = {};
+    const rawGates = raw.gates ?? {};
+    if (!isRecord(rawGates)) return this.fail("gates must be a mapping of name to checks");
+    for (const [name, value] of Object.entries(rawGates)) gates[name] = this.gate(name, value);
+
+    const rawStages = raw.stages;
+    if (!Array.isArray(rawStages) || rawStages.length === 0) return this.fail("stages must be a non-empty list");
+    const stages = rawStages.map((value, index) => this.stage(value, index));
+
+    const pipeline: Pipeline = {
+      name: this.string(raw.name, "name") ?? basename(this.source).replace(/\.ya?ml$/, ""),
+      description: this.string(raw.description, "description") ?? "",
+      summary: this.string(raw.summary, "summary"),
+      env: this.map(raw.env, "env"),
+      gates,
+      when: this.list(raw.when, "when"),
+      stages,
+    };
+    this.checkReferences(pipeline);
+    return pipeline;
   }
 
-  const stage: Stage = {
-    id,
-    inputs: stringList(value.inputs, `${where} inputs`, fail),
-    outputs: stringList(value.outputs, `${where} outputs`, fail),
-    when: stringList(value.when, `${where} when`, fail),
-    stopOn: stringList(value.stopOn, `${where} stopOn`, fail) as StopOn[],
-  };
-  for (const reason of stage.stopOn) {
-    if (reason !== "fail" && reason !== "gate") fail(`${where} stopOn takes fail or gate, got "${reason}"`);
-  }
-  if (value.task !== undefined) stage.task = optionalString(value.task, `${where} task`, fail);
-  if (value.run !== undefined) stage.run = optionalString(value.run, `${where} run`, fail);
-  if (value.session !== undefined) {
-    const session = optionalString(value.session, `${where} session`, fail);
-    if (!session || !isSlug(session)) fail(`${where} session must be lowercase words joined by dashes`);
-    stage.session = session;
-  }
-  if (value.each_line !== undefined) stage.eachLine = optionalString(value.each_line, `${where} each_line`, fail);
-  if (value.each_file !== undefined) stage.eachFile = optionalString(value.each_file, `${where} each_file`, fail);
-  if (value.timeout !== undefined) {
-    const timeout = parseDuration(value.timeout);
-    if (!timeout) fail(`${where} timeout must look like 90s, 30m or 1h`);
-    stage.timeout = timeout ?? undefined;
-  }
-  return stage;
-}
-
-function checkReferences(pipeline: Pipeline, fail: Fail): void {
-  const ids = new Set<string>();
-  const taken = new Map<string, string>();
-  for (const stage of pipeline.stages) {
-    if (ids.has(stage.id)) fail(`two stages are called "${stage.id}"`);
-    ids.add(stage.id);
-    for (const file of stageFiles(stage)) taken.set(file, stage.id);
-  }
-  for (const name of pipeline.when) {
-    if (!pipeline.gates[name]) fail(`when names gate "${name}", which gates does not define`);
-  }
-  for (const stage of pipeline.stages) {
-    for (const name of stage.when) {
-      if (!pipeline.gates[name]) fail(`stage "${stage.id}" when names gate "${name}", which gates does not define`);
+  private gate(name: string, value: unknown): Gate {
+    if (!isRecord(value)) return this.fail(`gate "${name}" must be a mapping`);
+    this.unknownKeys(value, GATE_KEYS, `gate "${name}"`);
+    const message = this.string(value.message, `gate "${name}" message`);
+    if (!message) return this.fail(`gate "${name}" needs a message`);
+    const gate: Gate = { message };
+    if (value.env !== undefined) gate.env = this.list(value.env, `gate "${name}" env`);
+    if (value.file !== undefined) gate.file = this.list(value.file, `gate "${name}" file`);
+    if (value.run !== undefined) gate.run = this.string(value.run, `gate "${name}" run`);
+    if (value.changes !== undefined) gate.changes = this.changes(name, value.changes);
+    if (!gate.env && !gate.file && !gate.run && !gate.changes) {
+      return this.fail(`gate "${name}" needs a check: env, file, run or changes`);
     }
-    for (const output of stage.outputs) {
-      const owner = taken.get(output);
-      if (owner) fail(`stage "${stage.id}" output ${output} is a file stage "${owner}" writes itself`);
+    return gate;
+  }
+
+  private changes(name: string, value: unknown): ChangesRule {
+    if (!isRecord(value)) return this.fail(`gate "${name}" changes must be a mapping`);
+    this.unknownKeys(value, CHANGES_KEYS, `gate "${name}" changes`);
+    const rule: ChangesRule = {};
+    if (value.paths !== undefined) rule.paths = this.list(value.paths, `gate "${name}" paths`);
+    if (value.ignore !== undefined) rule.ignore = this.list(value.ignore, `gate "${name}" ignore`);
+    if (value.min_files !== undefined) {
+      if (!Number.isInteger(value.min_files) || (value.min_files as number) < 1) {
+        return this.fail(`gate "${name}" min_files must be a whole number above 0`);
+      }
+      rule.minFiles = value.min_files as number;
+    }
+    return rule;
+  }
+
+  private stage(value: unknown, index: number): Stage {
+    if (!isRecord(value)) return this.fail(`stage ${index + 1} must be a mapping`);
+    const id = value.id;
+    if (typeof id !== "string" || !isSlug(id)) {
+      return this.fail(`stage ${index + 1} needs an id of lowercase words joined by dashes`);
+    }
+    const where = `stage "${id}"`;
+    this.unknownKeys(value, STAGE_KEYS, where);
+    if (RESERVED_IDS.includes(id)) this.fail(`${where}: "${id}" is reserved`);
+    if ((value.task === undefined) === (value.run === undefined)) this.fail(`${where} needs exactly one of task or run`);
+    if (value.each_line !== undefined && value.each_file !== undefined) {
+      this.fail(`${where} can loop over each_line or each_file, not both`);
+    }
+
+    const stage: Stage = {
+      id,
+      inputs: this.list(value.inputs, `${where} inputs`),
+      outputs: this.list(value.outputs, `${where} outputs`),
+      when: this.list(value.when, `${where} when`),
+      stopOn: this.list(value.stopOn, `${where} stopOn`) as StopOn[],
+    };
+    for (const reason of stage.stopOn) {
+      if (reason !== "fail" && reason !== "gate") this.fail(`${where} stopOn takes fail or gate, got "${reason}"`);
+    }
+    if (value.task !== undefined) stage.task = this.string(value.task, `${where} task`);
+    if (value.run !== undefined) stage.run = this.string(value.run, `${where} run`);
+    if (value.session !== undefined) {
+      const session = this.string(value.session, `${where} session`);
+      if (!session || !isSlug(session)) this.fail(`${where} session must be lowercase words joined by dashes`);
+      stage.session = session;
+    }
+    if (value.each_line !== undefined) stage.eachLine = this.string(value.each_line, `${where} each_line`);
+    if (value.each_file !== undefined) stage.eachFile = this.string(value.each_file, `${where} each_file`);
+    if (value.timeout !== undefined) {
+      const timeout = parseDuration(value.timeout);
+      if (!timeout) this.fail(`${where} timeout must look like 90s, 30m or 1h`);
+      stage.timeout = timeout ?? undefined;
+    }
+    return stage;
+  }
+
+  private checkReferences(pipeline: Pipeline): void {
+    const ids = new Set<string>();
+    const taken = new Map<string, string>();
+    for (const stage of pipeline.stages) {
+      if (ids.has(stage.id)) this.fail(`two stages are called "${stage.id}"`);
+      ids.add(stage.id);
+      for (const file of stageFiles(stage)) taken.set(file, stage.id);
+    }
+    for (const name of pipeline.when) {
+      if (!pipeline.gates[name]) this.fail(`when names gate "${name}", which gates does not define`);
+    }
+    for (const stage of pipeline.stages) {
+      for (const name of stage.when) {
+        if (!pipeline.gates[name]) this.fail(`stage "${stage.id}" when names gate "${name}", which gates does not define`);
+      }
+      for (const output of stage.outputs) {
+        const owner = taken.get(output);
+        if (owner) this.fail(`stage "${stage.id}" output ${output} is a file stage "${owner}" writes itself`);
+      }
     }
   }
-}
 
-function unknownKeys(value: Record<string, unknown>, known: string[], where: string, fail: Fail): void {
-  for (const key of Object.keys(value)) {
-    if (!known.includes(key)) fail(`${where} has an unknown key "${key}"`);
-  }
-}
-
-function optionalString(value: unknown, what: string, fail: Fail): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") return fail(`${what} must be text`);
-  return value;
-}
-
-// A single value is a list of one, so `stopOn: fail` and `when: staging` read naturally.
-function stringList(value: unknown, what: string, fail: Fail): string[] {
-  if (value === undefined || value === null) return [];
-  if (typeof value === "string") return [value];
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    return fail(`${what} must be a list of text`);
-  }
-  return value as string[];
-}
-
-function stringMap(value: unknown, what: string, fail: Fail): Record<string, string> {
-  if (value === undefined || value === null) return {};
-  if (!isRecord(value)) return fail(`${what} must be a mapping`);
-  const map: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
-      fail(`${what}.${key} must be text`);
+  private unknownKeys(value: Record<string, unknown>, known: string[], where: string): void {
+    for (const key of Object.keys(value)) {
+      if (!known.includes(key)) this.fail(`${where} has an unknown key "${key}"`);
     }
-    map[key] = String(item);
   }
-  return map;
+
+  private string(value: unknown, what: string): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== "string") return this.fail(`${what} must be text`);
+    return value;
+  }
+
+  // A single value is a list of one, so `stopOn: fail` and `when: staging` read naturally.
+  private list(value: unknown, what: string): string[] {
+    if (value === undefined || value === null) return [];
+    if (typeof value === "string") return [value];
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+      return this.fail(`${what} must be a list of text`);
+    }
+    return value as string[];
+  }
+
+  private map(value: unknown, what: string): Record<string, string> {
+    if (value === undefined || value === null) return {};
+    if (!isRecord(value)) return this.fail(`${what} must be a mapping`);
+    const map: Record<string, string> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
+        this.fail(`${what}.${key} must be text`);
+      }
+      map[key] = String(item);
+    }
+    return map;
+  }
+
+  private fail(message: string): never {
+    throw new UsageError(`${this.source}: ${message}`);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -242,8 +252,6 @@ const STAGE_KEYS = [
   "each_file",
 ];
 const UNITS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
-
-type Fail = (message: string) => never;
 
 export type StopOn = "fail" | "gate";
 
