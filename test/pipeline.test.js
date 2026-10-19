@@ -6,9 +6,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { Git } from "../dist/src/git.js";
-import { expand, matchChanges } from "../dist/src/gates.js";
-import { listBundled, parseDuration, parsePipeline } from "../dist/src/pipeline-file.js";
-import { Pipeline } from "../dist/src/pipeline.js";
+import { Gate } from "../dist/src/pipeline/gate.js";
+import { Pipeline } from "../dist/src/pipeline/pipeline.js";
+import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
+import { Stage } from "../dist/src/pipeline/stage.js";
+import { Variables } from "../dist/src/pipeline/variables.js";
+
+const parse = (text) => new PipelineFile("p.yml").parse(text);
 
 // Stands in for `testeiya task`: logs its argv, writes the report, the envelope
 // and every file the task asks for. "FAIL" in a task is a negative verdict.
@@ -31,52 +35,56 @@ for (let i = 0; i < args.length; i++) {
 `;
 
 test("every bundled pipeline loads", () => {
-  const names = listBundled().map((pipeline) => pipeline.name);
+  const names = PipelineFile.bundled().map((pipeline) => pipeline.name);
   assert.deepEqual(names, ["api-testing", "pr-review", "regression", "web-testing"]);
 });
 
 test("a stage naming an undefined gate is bad usage", () => {
   const text = "stages:\n  - id: a\n    run: echo\n    when: [staging]\n";
-  assert.throws(() => parsePipeline(text, "p.yml"), /names gate "staging"/);
+  assert.throws(() => parse(text), /names gate "staging"/);
 });
 
 test("a stage needs exactly one of task or run", () => {
-  assert.throws(() => parsePipeline("stages:\n  - id: a\n", "p.yml"), /exactly one of task or run/);
+  assert.throws(() => parse("stages:\n  - id: a\n"), /exactly one of task or run/);
   const both = "stages:\n  - id: a\n    run: echo\n    task: hi\n";
-  assert.throws(() => parsePipeline(both, "p.yml"), /exactly one of task or run/);
+  assert.throws(() => parse(both), /exactly one of task or run/);
 });
 
 test("reserved ids, unknown keys and stray stopOn are rejected", () => {
-  assert.throws(() => parsePipeline("stages:\n  - id: summary\n    run: echo\n", "p.yml"), /reserved/);
-  assert.throws(() => parsePipeline("stages:\n  - id: a\n    run: echo\n    model: x\n", "p.yml"), /unknown key "model"/);
-  assert.throws(() => parsePipeline("stages:\n  - id: a\n    run: echo\n    stopOn: always\n", "p.yml"), /stopOn/);
+  assert.throws(() => parse("stages:\n  - id: summary\n    run: echo\n"), /reserved/);
+  assert.throws(() => parse("stages:\n  - id: a\n    run: echo\n    model: x\n"), /unknown key "model"/);
+  assert.throws(() => parse("stages:\n  - id: a\n    run: echo\n    stopOn: always\n"), /stopOn/);
 });
 
-test("an output may not reuse a stage's own file name", () => {
-  const text = "stages:\n  - id: plan\n    task: hi\n  - id: b\n    task: hi\n    outputs: [plan.md]\n";
-  assert.throws(() => parsePipeline(text, "p.yml"), /plan.md is a file stage "plan" writes/);
+test("an output may not reuse a stage's own file name", async () => {
+  const { repo, cli } = setup();
+  const file = write(repo, "pipe.yml", "stages:\n  - id: plan\n    task: hi\n  - id: b\n    task: hi\n    outputs: [plan.md]\n");
+  const run = () => new Pipeline({ name: file, dir: join(repo, ".qa"), cli, dryRun: true }).run();
+  await assert.rejects(inRepo(repo, run), /plan.md is a file stage "plan" writes/);
 });
 
 test("durations read seconds, minutes and hours", () => {
-  assert.equal(parseDuration("90s"), 90_000);
-  assert.equal(parseDuration("30m"), 1_800_000);
-  assert.equal(parseDuration("1h"), 3_600_000);
-  assert.equal(parseDuration(5), 5_000);
-  assert.equal(parseDuration("soon"), null);
+  assert.equal(Stage.duration("90s"), 90_000);
+  assert.equal(Stage.duration("30m"), 1_800_000);
+  assert.equal(Stage.duration("1h"), 3_600_000);
+  assert.equal(Stage.duration(5), 5_000);
+  assert.equal(Stage.duration("soon"), null);
 });
 
 test("variables expand the shell's way", () => {
-  assert.equal(expand("${A}/x", { A: "a" }), "a/x");
-  assert.equal(expand("${B:-origin/main}", {}), "origin/main");
-  assert.equal(expand("[${MISSING}]", {}), "[]");
+  assert.equal(new Variables({ A: "a" }).expand("${A}/x"), "a/x");
+  assert.equal(new Variables({}).expand("${B:-origin/main}"), "origin/main");
+  assert.equal(new Variables({}).expand("[${MISSING}]"), "[]");
 });
 
-test("a changes check counts what is not ignored", () => {
+test("a changes check counts what is not ignored", async () => {
   const files = ["src/api/users.ts", "README.md", "docs/a.md"];
-  assert.equal(matchChanges(files, { minFiles: 2, ignore: ["**/*.md", "*.md"] }), false);
-  assert.equal(matchChanges(files, { paths: ["src/api/**"] }), true);
-  assert.equal(matchChanges(files, { paths: ["src/ui/**"] }), false);
-  assert.equal(matchChanges(["README.md"], { ignore: ["*.md"] }), false);
+  const passes = (changes, filesChanged = files) =>
+    new Gate("g", { changes, message: "m" }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" } });
+  assert.equal(await passes({ min_files: 2, ignore: ["**/*.md", "*.md"] }), false);
+  assert.equal(await passes({ paths: ["src/api/**"] }), true);
+  assert.equal(await passes({ paths: ["src/ui/**"] }), false);
+  assert.equal(await passes({ ignore: ["*.md"] }, ["README.md"]), false);
 });
 
 test("changes count from the merge base, then from the last round", async () => {

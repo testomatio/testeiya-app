@@ -6,7 +6,7 @@ import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
 import { parseDestinations, preflight } from "./output.js";
-import { Pipeline } from "./pipeline.js";
+import { Pipeline } from "./pipeline/pipeline.js";
 import { runPrint } from "./run.js";
 import { createRuntime } from "./session.js";
 import { openSessionManager, runSessions } from "./sessions.js";
