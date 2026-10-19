@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { matchChanges, readChanges } from "../dist/src/changes.js";
-import { expand } from "../dist/src/gates.js";
+import { Git } from "../dist/src/changes.js";
+import { expand, matchChanges } from "../dist/src/gates.js";
 import { listBundled, parseDuration, parsePipeline } from "../dist/src/pipeline-file.js";
 import { runPipeline } from "../dist/src/pipeline.js";
 
@@ -84,12 +84,12 @@ test("changes count from the merge base, then from the last round", async () => 
   git(repo, "checkout", "-q", "-b", "feature");
   commit(repo, "src/a.ts");
   commit(repo, "src/b.ts");
-  const first = await readChanges(repo, null, { BASE_BRANCH: "main" });
+  const first = await new Git(repo).changes(null, { BASE_BRANCH: "main" });
   assert.deepEqual(first.files, ["src/a.ts", "src/b.ts"]);
 
   const since = git(repo, "rev-parse", "HEAD");
   commit(repo, "src/c.ts");
-  const later = await readChanges(repo, since, { BASE_BRANCH: "main" });
+  const later = await new Git(repo).changes(since, { BASE_BRANCH: "main" });
   assert.deepEqual(later.files, ["src/c.ts"]);
 });
 

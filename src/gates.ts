@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { matchesGlob, resolve } from "node:path";
 
-import { matchChanges, type Changes } from "./changes.js";
-import type { Gate } from "./pipeline-file.js";
+import type { Changes } from "./changes.js";
+import type { ChangesRule, Gate } from "./pipeline-file.js";
 
 const RUN_LIMIT_MS = 30_000;
 
@@ -28,6 +28,14 @@ export function expand(text: string, env: Env): string {
     if (value) return value;
     return fallback ?? "";
   });
+}
+
+/** Whether the changed files satisfy a `changes` check. */
+export function matchChanges(files: string[], rule: ChangesRule): boolean {
+  const counted = files.filter((file) => !(rule.ignore ?? []).some((mask) => matchesGlob(file, mask)));
+  if (rule.minFiles && counted.length < rule.minFiles) return false;
+  if (rule.paths && !counted.some((file) => rule.paths!.some((mask) => matchesGlob(file, mask)))) return false;
+  return counted.length > 0;
 }
 
 async function passes(gate: Gate, context: GateContext): Promise<boolean> {

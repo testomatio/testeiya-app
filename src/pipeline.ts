@@ -16,7 +16,7 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chalkStderr as c } from "chalk";
 
-import { headCommit, readChanges, type Changes } from "./changes.js";
+import { Git, type Changes } from "./changes.js";
 import { checkGates, expand } from "./gates.js";
 import { UsageError } from "./model.js";
 import { parseDestinations, preflight } from "./output.js";
@@ -66,7 +66,8 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
   }
 
   const previous = readState(dir);
-  const commit = await headCommit(cwd);
+  const git = new Git(cwd);
+  const commit = await git.headCommit();
   const history = previous?.rounds ?? [];
   const retry = Boolean(previous && previous.commit === commit && STOPPED.includes(previous.status));
   const again = Boolean(previous && !retry && previous.status !== "skipped" && previous.commit === commit);
@@ -95,7 +96,7 @@ export async function runPipeline(options: PipelineOptions): Promise<number> {
   if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
   const env = stageEnv(pipeline, options.sets ?? {}, { dir, round });
-  const changes = await readChanges(cwd, since, env);
+  const changes = await git.changes(since, env);
   const used = [...pipeline.when, ...pipeline.stages.flatMap((stage) => stage.when)];
   // A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request.
   if (!changes.files && used.some((name) => pipeline.gates[name]!.changes)) {
