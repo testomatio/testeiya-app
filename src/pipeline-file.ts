@@ -31,7 +31,7 @@ export function listBundled(): Array<{ name: string; description: string }> {
 }
 
 /** Parse and validate. Every mistake is bad usage, found before a token is spent. */
-export function parsePipeline(text: string, source: string): Pipeline {
+export function parsePipeline(text: string, source: string): PipelineConfig {
   return new PipelineParser(source).parse(text);
 }
 
@@ -56,7 +56,7 @@ export function parseDuration(value: unknown): number | null {
 class PipelineParser {
   constructor(private readonly source: string) {}
 
-  parse(text: string): Pipeline {
+  parse(text: string): PipelineConfig {
     let raw: unknown;
     try {
       raw = parse(text);
@@ -75,7 +75,7 @@ class PipelineParser {
     if (!Array.isArray(rawStages) || rawStages.length === 0) return this.fail("stages must be a non-empty list");
     const stages = rawStages.map((value, index) => this.stage(value, index));
 
-    const pipeline: Pipeline = {
+    const pipeline: PipelineConfig = {
       name: this.string(raw.name, "name") ?? basename(this.source).replace(/\.ya?ml$/, ""),
       description: this.string(raw.description, "description") ?? "",
       summary: this.string(raw.summary, "summary"),
@@ -160,7 +160,7 @@ class PipelineParser {
     return stage;
   }
 
-  private checkReferences(pipeline: Pipeline): void {
+  private checkReferences(pipeline: PipelineConfig): void {
     const ids = new Set<string>();
     const taken = new Map<string, string>();
     for (const stage of pipeline.stages) {
@@ -255,7 +255,7 @@ const UNITS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
 
 export type StopOn = "fail" | "gate";
 
-export interface Pipeline {
+export interface PipelineConfig {
   name: string;
   description: string;
   summary?: string;

@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { Git } from "../dist/src/git.js";
 import { expand, matchChanges } from "../dist/src/gates.js";
 import { listBundled, parseDuration, parsePipeline } from "../dist/src/pipeline-file.js";
-import { runPipeline } from "../dist/src/pipeline.js";
+import { Pipeline } from "../dist/src/pipeline.js";
 
 // Stands in for `testeiya task`: logs its argv, writes the report, the envelope
 // and every file the task asks for. "FAIL" in a task is a negative verdict.
@@ -121,7 +121,7 @@ stages:
 `);
   const dir = join(repo, ".qa");
   mkdirSync(join(repo, "out"));
-  const code = await inRepo(repo, () => runPipeline({ name: file, dir, cli, outputs: ["gh:pr#7", "out/final.md"], thread: "demo" }));
+  const code = await inRepo(repo, () => new Pipeline({ name: file, dir, cli, outputs: ["gh:pr#7", "out/final.md"], thread: "demo" }).run());
   assert.equal(code, 0);
 
   const state = readJson(join(dir, "pipeline.json"));
@@ -162,7 +162,7 @@ stages:
     run: echo one
 `);
   await assert.rejects(
-    inRepo(repo, () => runPipeline({ name: file, dir: join(repo, ".qa"), cli, sets: { BASE_BRANCH: "nope" } })),
+    inRepo(repo, () => new Pipeline({ name: file, dir: join(repo, ".qa"), cli, sets: { BASE_BRANCH: "nope" } }).run()),
     /fetch-depth: 0/
   );
 });
@@ -170,7 +170,7 @@ stages:
 test("the checkout itself is not a pipeline folder", async () => {
   const { repo, cli } = setup();
   const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    run: echo one\n");
-  await assert.rejects(inRepo(repo, () => runPipeline({ name: file, dir: repo, cli })), /folder of its own/);
+  await assert.rejects(inRepo(repo, () => new Pipeline({ name: file, dir: repo, cli }).run()), /folder of its own/);
 });
 
 test("a failed gate in when skips the whole run", async () => {
@@ -188,7 +188,7 @@ stages:
     task: Two.
 `);
   const dir = join(repo, ".qa");
-  const code = await inRepo(repo, () => runPipeline({ name: file, dir, cli }));
+  const code = await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run());
   assert.equal(code, 0);
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
@@ -199,12 +199,12 @@ test("a --gate from the job skips the run before outputs are checked", async () 
   const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    task: One.\n");
   const dir = join(repo, ".qa");
   const options = { name: file, dir, cli, outputs: ["gh:pr#"], gates: { pr: "test -n \"$PR\"" } };
-  assert.equal(await inRepo(repo, () => runPipeline(options)), 0);
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
-  await assert.rejects(inRepo(repo, () => runPipeline({ ...options, sets: { PR: "1" } })), /gh:pr#/);
+  await assert.rejects(inRepo(repo, () => new Pipeline({ ...options, sets: { PR: "1" } }).run()), /gh:pr#/);
   const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    when: [pr]\n    task: One.\n");
-  await assert.rejects(inRepo(repo, () => runPipeline({ name: gated, dir, cli, gates: { pr: "true" } })), /already defines/);
+  await assert.rejects(inRepo(repo, () => new Pipeline({ name: gated, dir, cli, gates: { pr: "true" } }).run()), /already defines/);
 });
 
 test("stopOn fail stops the stages after it, the summary still runs", async () => {
@@ -218,12 +218,12 @@ stages:
     task: Two.
 `);
   const dir = join(repo, ".qa");
-  const code = await inRepo(repo, () => runPipeline({ name: file, dir, cli }));
+  const code = await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run());
   assert.equal(code, 1);
   const state = readJson(join(dir, "pipeline.json"));
   assert.deepEqual(state.stages.map((stage) => stage.status), ["fail", "not-run", "pass"]);
   assert.equal(calledWith(log).length, 2);
-  assert.equal(await inRepo(repo, () => runPipeline({ name: file, dir: join(repo, ".qb"), cli, exitZero: true })), 0);
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir: join(repo, ".qb"), cli, exitZero: true }).run()), 0);
 });
 
 test("a timed-out round retries from the stage that stopped", async () => {
@@ -242,14 +242,14 @@ stages:
 `);
   const dir = join(repo, ".qa");
   process.env.FAKE_SLOW = "1";
-  const first = await inRepo(repo, () => runPipeline({ name: file, dir, cli }));
+  const first = await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run());
   delete process.env.FAKE_SLOW;
   assert.equal(first, 1);
   const stopped = readJson(join(dir, "pipeline.json"));
   assert.deepEqual(stopped.stages.map((stage) => stage.status), ["pass", "timeout", "not-run", "pass"]);
 
   rmSync(log);
-  const second = await inRepo(repo, () => runPipeline({ name: file, dir, cli }));
+  const second = await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run());
   assert.equal(second, 0);
   const calls = calledWith(log);
   assert.deepEqual(calls.map((args) => args.at(-1).split("\n")[0]), ["SLOW two.", "Three.", "/pipeline-report"]);
@@ -268,11 +268,11 @@ stages:
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "pipeline");
   const dir = join(repo, ".qa");
-  await inRepo(repo, () => runPipeline({ name: file, dir, cli, sets: { BASE_BRANCH: "main" } }));
+  await inRepo(repo, () => new Pipeline({ name: file, dir, cli, sets: { BASE_BRANCH: "main" } }).run());
   const firstCommit = git(repo, "rev-parse", "HEAD");
 
   commit(repo, "src/new.ts");
-  await inRepo(repo, () => runPipeline({ name: file, dir, cli, sets: { BASE_BRANCH: "main" } }));
+  await inRepo(repo, () => new Pipeline({ name: file, dir, cli, sets: { BASE_BRANCH: "main" } }).run());
   const state = readJson(join(dir, "pipeline.json"));
   assert.equal(state.round, 2);
   assert.equal(state.since, firstCommit);

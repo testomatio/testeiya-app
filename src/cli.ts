@@ -6,7 +6,7 @@ import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
 import { parseDestinations, preflight } from "./output.js";
-import { runPipeline, runPipelineList } from "./pipeline.js";
+import { Pipeline } from "./pipeline.js";
 import { runPrint } from "./run.js";
 import { createRuntime } from "./session.js";
 import { openSessionManager, runSessions } from "./sessions.js";
@@ -107,8 +107,8 @@ async function task(args: CliArgs): Promise<number> {
 }
 
 async function pipeline(args: CliArgs): Promise<number> {
-  if (!args.pipeline) return runPipelineList(args.json);
-  return runPipeline({
+  if (!args.pipeline) return Pipeline.list(args.json);
+  return new Pipeline({
     name: args.pipeline,
     dir: args.dir,
     dryRun: args.dryRun,
@@ -130,7 +130,7 @@ async function pipeline(args: CliArgs): Promise<number> {
         throw new UsageError(`No AI provider: ${err.message}. Run testeiya doctor.`);
       }
     },
-  });
+  }).run();
 }
 
 async function readStdin(): Promise<string> {

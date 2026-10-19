@@ -1,6 +1,18 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { copyFileSync, createWriteStream, existsSync, globSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, resolve, sep } from "node:path";
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  globSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chalkStderr as c } from "chalk";
 
@@ -9,24 +21,19 @@ import { Git, type Changes } from "./git.js";
 import { UsageError } from "./model.js";
 import { parseDestinations, preflight } from "./output.js";
 import {
-  CHANGES,
-  PipelineFolder,
-  STATE,
-  readJson,
-  type PipelineState,
-  type StageRecord,
-  type StageResult,
-  type Status,
-} from "./pipeline-folder.js";
-import {
   listBundled,
   parsePipeline,
   resolvePipelinePath,
   stageFiles,
-  type Pipeline,
+  type PipelineConfig,
   type Stage,
 } from "./pipeline-file.js";
 
+const STATE = "pipeline.json";
+const COPY = "pipeline.yml";
+const SESSIONS = ".sessions";
+const CHANGES = "changes.txt";
+const OWN = [STATE, COPY, SESSIONS];
 const STOPPED: Status[] = ["broken", "timeout", "interrupted", "running"];
 const KILL_GRACE_MS = 5_000;
 // A job-level reply, thread or session file belongs to a single task, never to
@@ -35,41 +42,37 @@ const JOB_ONLY = ["TESTEIYA_FOLLOW_UP", "TESTEIYA_THREAD", "TESTEIYA_SESSION_FIL
 const RETRY_NOTE =
   "This stage stopped before it finished. Go on from where you stopped. Files you already wrote are in the pipeline folder.";
 
-export function runPipelineList(json?: boolean): number {
-  const pipelines = listBundled();
-  if (json) {
-    process.stdout.write(`${JSON.stringify({ pipelines }, null, 2)}\n`);
-    return 0;
-  }
-  process.stdout.write("\n");
-  for (const pipeline of pipelines) {
-    process.stdout.write(`  ${pipeline.name.padEnd(14)} ${c.dim(pipeline.description)}\n`);
-  }
-  process.stdout.write('\n  Run one with:  testeiya pipeline <name>, or pass your own .yml\n\n');
-  return 0;
-}
-
-export function runPipeline(options: PipelineOptions): Promise<number> {
-  return new PipelineRun(options).run();
-}
-
-/** Plans a run: which file, which round, which gates pass, and whether anything runs at all. */
-class PipelineRun {
+/** One pipeline run: picks the round, checks the gates, then runs the stages. */
+export class Pipeline {
   private readonly cwd = process.cwd();
   private readonly git = new Git(this.cwd);
 
   constructor(private readonly options: PipelineOptions) {}
 
+  static list(json?: boolean): number {
+    const pipelines = listBundled();
+    if (json) {
+      process.stdout.write(`${JSON.stringify({ pipelines }, null, 2)}\n`);
+      return 0;
+    }
+    process.stdout.write("\n");
+    for (const pipeline of pipelines) {
+      process.stdout.write(`  ${pipeline.name.padEnd(14)} ${c.dim(pipeline.description)}\n`);
+    }
+    process.stdout.write('\n  Run one with:  testeiya pipeline <name>, or pass your own .yml\n\n');
+    return 0;
+  }
+
   async run(): Promise<number> {
     const { options, cwd } = this;
     const source = resolvePipelinePath(options.name);
     const named = parsePipeline(readFileSync(source, "utf8"), source);
-    const folder = new PipelineFolder(options.dir, named.name, options.dryRun);
-    if (folder.dir === cwd || cwd.startsWith(folder.dir + sep)) {
+    const dir = this.folder(named.name);
+    if (dir === cwd || cwd.startsWith(dir + sep)) {
       throw new UsageError("--dir must be a folder of its own, not the checkout or a folder above it");
     }
 
-    const previous = folder.readState();
+    const previous = readJson<PipelineState>(join(dir, STATE));
     const commit = await this.git.headCommit();
     const history = previous?.rounds ?? [];
     const retry = Boolean(previous && previous.commit === commit && STOPPED.includes(previous.status));
@@ -78,12 +81,11 @@ class PipelineRun {
     // A retry finishes the round it started, so a file edited since cannot
     // reorder the stages half-way through.
     let pipeline = named;
-    const copy = folder.readCopy();
-    if (retry && copy) {
+    if (retry && existsSync(join(dir, COPY))) {
       // Parsed under the original path, so a pipeline without a name keeps its own.
-      pipeline = parsePipeline(copy, source);
+      pipeline = parsePipeline(readFileSync(join(dir, COPY), "utf8"), source);
       if (pipeline.name !== named.name) {
-        throw new UsageError(`${folder.dir} holds a run of "${pipeline.name}", not "${named.name}"`);
+        throw new UsageError(`${dir} holds a run of "${pipeline.name}", not "${named.name}"`);
       }
     }
     pipeline = this.withJobGates(pipeline);
@@ -98,7 +100,7 @@ class PipelineRun {
     const aiProblem = needsAi(pipeline) ? await this.aiProblem() : null;
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
-    const env = this.stageEnv(pipeline, folder.dir, round);
+    const env = this.stageEnv(pipeline, dir, round);
     const changes = await this.git.changes(since, env);
     const used = [...pipeline.when, ...pipeline.stages.flatMap((stage) => stage.when)];
     // A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request.
@@ -108,15 +110,15 @@ class PipelineRun {
     const gates = await new Gates(pipeline.gates, { cwd, env, changes }).check(used);
 
     note(`  Pipeline ${c.bold(pipeline.name)} ${c.dim("·")} round ${round} ${c.dim("·")} ${describeChanges(changes)}`);
-    note(c.dim(`  ${folder.dir}`));
+    note(c.dim(`  ${dir}`));
 
     const blocked = pipeline.when.find((name) => !gates.get(name));
     if (blocked) {
       const reason = pipeline.gates[blocked]!.message;
       note(`  ${c.yellow("⨯")} skipped: ${reason}`);
       if (options.dryRun) return 0;
-      folder.saveState({ name: pipeline.name, round, commit, since, status: "skipped", reason, stages: [], rounds: history });
-      if (options.json) process.stdout.write(`${JSON.stringify(folder.readState(), null, 2)}\n`);
+      saveState(dir, { name: pipeline.name, round, commit, since, status: "skipped", reason, stages: [], rounds: history });
+      if (options.json) process.stdout.write(`${JSON.stringify(readJson(join(dir, STATE)), null, 2)}\n`);
       return 0;
     }
 
@@ -124,14 +126,16 @@ class PipelineRun {
     const reporting = await this.destinations();
     if (options.dryRun) return this.dryRun(pipeline, gates, aiProblem);
 
+    mkdirSync(dir, { recursive: true });
     let created = previous?.created ?? [];
     if (!retry) {
-      folder.startRound(created, readFileSync(source, "utf8"));
+      // A new round clears what the last one wrote and keeps the sessions.
+      for (const name of created) rmSync(join(dir, name), { recursive: true, force: true });
       created = [];
+      writeFileSync(join(dir, COPY), readFileSync(source, "utf8"));
     }
-    if (changes.files) folder.writeChanges(changes.files);
-    this.checkInputs(pipeline, folder);
-    folder.snapshot();
+    if (changes.files) writeFileSync(join(dir, CHANGES), `${changes.files.join("\n")}\n`);
+    this.checkInputs(pipeline, dir);
 
     const state: PipelineState = {
       name: pipeline.name,
@@ -143,12 +147,18 @@ class PipelineRun {
       rounds: history,
       created,
     };
-    const runner = new StageRunner({ pipeline, folder, state, gates, env, reporting, options, cwd });
+    const runner = new StageRunner({ pipeline, dir, state, gates, env, reporting, options, cwd });
     return runner.run();
   }
 
+  private folder(name: string): string {
+    if (this.options.dir) return resolve(this.options.dir);
+    if (this.options.dryRun) return join(tmpdir(), `testeiya-${name}`);
+    return mkdtempSync(join(tmpdir(), `testeiya-${name}-`));
+  }
+
   /** Gates passed with --gate join `when`: the CI job decides if the run happens at all. */
-  private withJobGates(pipeline: Pipeline): Pipeline {
+  private withJobGates(pipeline: PipelineConfig): PipelineConfig {
     const gates = { ...pipeline.gates };
     const when = [...pipeline.when];
     for (const [name, run] of Object.entries(this.options.gates ?? {})) {
@@ -159,7 +169,7 @@ class PipelineRun {
     return { ...pipeline, gates, when };
   }
 
-  private stageEnv(pipeline: Pipeline, dir: string, round: number): Env {
+  private stageEnv(pipeline: PipelineConfig, dir: string, round: number): Env {
     const sets = this.options.sets ?? {};
     const env: Env = {
       ...process.env,
@@ -202,17 +212,17 @@ class PipelineRun {
   }
 
   /** Every input comes from an earlier stage, the runner, or the folder itself. */
-  private checkInputs(pipeline: Pipeline, folder: PipelineFolder): void {
+  private checkInputs(pipeline: PipelineConfig, dir: string): void {
     for (const [index, stage] of pipeline.stages.entries()) {
       for (const input of stageInputs(stage)) {
-        if (input === CHANGES || folder.has(input)) continue;
+        if (input === CHANGES || existsSync(join(dir, input))) continue;
         if (pipeline.stages.slice(0, index).some((earlier) => produces(earlier, input))) continue;
         throw new UsageError(`stage "${stage.id}" reads ${input}, which no earlier stage writes`);
       }
     }
   }
 
-  private dryRun(pipeline: Pipeline, gates: Map<string, boolean>, aiProblem: string | null): number {
+  private dryRun(pipeline: PipelineConfig, gates: Map<string, boolean>, aiProblem: string | null): number {
     if (needsAi(pipeline)) note(`  ${aiProblem ? c.red("✗") : c.green("✓")} gate ai${c.dim(aiProblem ? `  ${aiProblem}` : "")}`);
     for (const [name, passed] of gates) {
       const mark = passed ? c.green("✓") : c.yellow("✗");
@@ -240,8 +250,8 @@ class PipelineRun {
 
 /** Runs the planned stages one after another, then the summary, and owns the child process. */
 class StageRunner {
-  private readonly pipeline: Pipeline;
-  private readonly folder: PipelineFolder;
+  private readonly pipeline: PipelineConfig;
+  private readonly dir: string;
   private readonly state: PipelineState;
   private readonly gates: Map<string, boolean>;
   private readonly env: Env;
@@ -250,12 +260,13 @@ class StageRunner {
   private readonly cwd: string;
   private readonly cli: string;
   private readonly created: string[];
+  private readonly existing: Set<string>;
   private current: ChildProcess | null = null;
   private interrupted = false;
 
   constructor(plan: Plan) {
     this.pipeline = plan.pipeline;
-    this.folder = plan.folder;
+    this.dir = plan.dir;
     this.state = plan.state;
     this.gates = plan.gates;
     this.env = plan.env;
@@ -264,6 +275,7 @@ class StageRunner {
     this.cwd = plan.cwd;
     this.cli = plan.options.cli ?? fileURLToPath(new URL("./cli.js", import.meta.url));
     this.created = plan.state.created ?? [];
+    this.existing = new Set(readdirSync(plan.dir));
   }
 
   async run(): Promise<number> {
@@ -372,7 +384,7 @@ class StageRunner {
     record.seconds = Math.round((Date.now() - started) / 1000);
 
     if (record.status === "pass" || record.status === "fail") {
-      const missing = stage.outputs.filter((output) => !this.folder.has(output));
+      const missing = stage.outputs.filter((output) => !this.has(output));
       if (missing.length > 0) {
         record.status = "broken";
         record.reason = `did not write ${missing.join(", ")}`;
@@ -394,20 +406,20 @@ class StageRunner {
     if (stage.run !== undefined) {
       const log = `${base}.log`;
       note(c.dim(`  $ ${stage.run.trim().split("\n")[0]}`));
-      const done = await this.launch(stage.run, null, env, this.folder.path(log), stage.timeout);
+      const done = await this.launch(stage.run, null, env, this.path(log), stage.timeout);
       return { ...outcome(done, done.code === 0 ? "pass" : "fail", `exit ${done.code}`), log };
     }
 
     const report = `${base}.md`;
     const envelope = `${base}.json`;
-    rmSync(this.folder.path(report), { force: true });
-    rmSync(this.folder.path(envelope), { force: true });
+    rmSync(this.path(report), { force: true });
+    rmSync(this.path(envelope), { force: true });
 
     const args = [this.cli, "task"];
     if (!once.reporter) args.push("--no-thread");
-    args.push("-o", this.folder.path(report), "-o", this.folder.path(envelope));
+    args.push("-o", this.path(report), "-o", this.path(envelope));
     if (once.reporter) args.push(...this.reporterArgs());
-    if (stage.session) args.push("--session-file", this.folder.session(stage.session));
+    if (stage.session) args.push("--session-file", join(this.dir, SESSIONS, `${stage.session}.jsonl`));
     if (!stage.session) args.push("--no-session");
     if (this.options.model) args.push("--model", this.options.model);
     if (once.resumed && stage.session) args.push("--followup", RETRY_NOTE);
@@ -416,8 +428,8 @@ class StageRunner {
     note(c.dim(`  $ testeiya ${args.slice(1, -1).join(" ")} "${task.split("\n")[0]}…"`));
 
     const done = await this.launch(process.execPath, args, env, null, stage.timeout);
-    const result = readJson<{ status?: string; reason?: string | null }>(this.folder.path(envelope));
-    if (once.reporter) this.copyReport(this.folder.path(report));
+    const result = readJson<{ status?: string; reason?: string | null }>(this.path(envelope));
+    if (once.reporter) this.copyReport(this.path(report));
     if (done.code === 2) return { ...outcome(done, "broken", "bad usage, see the log above"), report };
     if (!result) return { ...outcome(done, "broken", "it wrote no result"), report };
     return { ...outcome(done, result.status === "fail" ? "fail" : "pass", result.reason), report };
@@ -425,9 +437,9 @@ class StageRunner {
 
   /** The task, then where its files are, so the model never guesses a path. */
   private composeTask(stage: Stage, env: Env): string {
-    const lines = [`Pipeline folder: ${this.folder.dir}`];
+    const lines = [`Pipeline folder: ${this.dir}`];
     const wanted = stageInputs(stage);
-    const present = wanted.filter((input) => this.folder.has(input));
+    const present = wanted.filter((input) => this.has(input));
     const absent = wanted.filter((input) => !present.includes(input));
     if (present.length > 0) lines.push(`Read these first: ${present.join(", ")}`);
     if (stage.outputs.length > 0) lines.push(`Write these files: ${stage.outputs.map((output) => expand(output, env)).join(", ")}`);
@@ -512,13 +524,13 @@ class StageRunner {
 
   private loopItems(stage: Stage): string[] | null {
     if (stage.eachLine) {
-      if (!this.folder.has(stage.eachLine)) return [];
-      return readFileSync(this.folder.path(stage.eachLine), "utf8")
+      if (!this.has(stage.eachLine)) return [];
+      return readFileSync(this.path(stage.eachLine), "utf8")
         .split("\n")
         .map((item) => item.trim())
         .filter(Boolean);
     }
-    if (stage.eachFile) return globSync(stage.eachFile, { cwd: this.folder.dir }).sort();
+    if (stage.eachFile) return globSync(stage.eachFile, { cwd: this.dir }).sort();
     return null;
   }
 
@@ -527,10 +539,10 @@ class StageRunner {
     const items = record.items ?? [];
     const field = stage.run !== undefined ? "log" : "report";
     const parts = items
-      .filter((item) => item[field] && this.folder.has(item[field]!))
-      .map((item) => `## ${item.item}\n\n${readFileSync(this.folder.path(item[field]!), "utf8").trim()}\n`);
+      .filter((item) => item[field] && this.has(item[field]!))
+      .map((item) => `## ${item.item}\n\n${readFileSync(this.path(item[field]!), "utf8").trim()}\n`);
     const file = `${stage.id}.${field === "log" ? "log" : "md"}`;
-    writeFileSync(this.folder.path(file), parts.join("\n"));
+    writeFileSync(this.path(file), parts.join("\n"));
     record[field] = file;
   }
 
@@ -574,8 +586,18 @@ class StageRunner {
   }
 
   private save(): void {
-    this.state.created = this.folder.created(this.created);
-    this.folder.saveState(this.state);
+    // What this round wrote, for the next round to clear.
+    const made = readdirSync(this.dir).filter((name) => !this.existing.has(name) && !OWN.includes(name));
+    this.state.created = [...new Set([...this.created, ...made, CHANGES])];
+    saveState(this.dir, this.state);
+  }
+
+  private path(name: string): string {
+    return join(this.dir, name);
+  }
+
+  private has(name: string): boolean {
+    return existsSync(this.path(name));
   }
 }
 
@@ -617,7 +639,7 @@ function keptRecord(stage: Stage, previous: PipelineState | null): StageRecord {
   return { id: stage.id, status: record.status, items: record.items };
 }
 
-function needsAi(pipeline: Pipeline): boolean {
+function needsAi(pipeline: PipelineConfig): boolean {
   return pipeline.stages.length > 1 || pipeline.stages.some((stage) => stage.task !== undefined);
 }
 
@@ -663,11 +685,27 @@ function exitCode(status: Status, exitZero?: boolean): number {
   return 1;
 }
 
+function readJson<T>(path: string): T | null {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function saveState(dir: string, state: PipelineState): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, STATE), `${JSON.stringify(state, null, 2)}\n`);
+}
+
 function note(message: string): void {
   process.stderr.write(`${message}\n`);
 }
 
 type Env = Record<string, string | undefined>;
+
+export type Status = "pass" | "fail" | "broken" | "timeout" | "skipped" | "interrupted" | "not-run" | "running";
 
 export interface PipelineOptions {
   name: string;
@@ -690,9 +728,36 @@ export interface PipelineOptions {
   checkAi?: (model?: string) => Promise<void>;
 }
 
+/** What `pipeline.json` holds: the round, each stage's result, and the rounds before. */
+export interface PipelineState {
+  name: string;
+  round: number;
+  commit: string | null;
+  since: string | null;
+  status: Status;
+  reason?: string;
+  stages: StageRecord[];
+  rounds: Array<{ round: number; commit: string | null; status: Status }>;
+  /** What this round wrote into the folder, cleared when the next round starts. */
+  created?: string[];
+}
+
+export interface StageRecord extends StageResult {
+  id: string;
+  seconds?: number;
+  items?: Array<StageResult & { item: string }>;
+}
+
+interface StageResult {
+  status: Status;
+  reason?: string;
+  report?: string;
+  log?: string;
+}
+
 interface Plan {
-  pipeline: Pipeline;
-  folder: PipelineFolder;
+  pipeline: PipelineConfig;
+  dir: string;
   state: PipelineState;
   gates: Map<string, boolean>;
   env: Env;
