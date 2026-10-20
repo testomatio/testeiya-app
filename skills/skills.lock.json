@@ -3,7 +3,7 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "0d4a8add8c39301979a171dd42804823d38e11de",
+      "sha": "f971b5264682260d0257e2e21f1dfa20836fe8d3",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
@@ -76,7 +76,7 @@
     {
       "source": "microsoft/playwright-cli/tree/main/skills/playwright-cli",
       "ref": null,
-      "sha": "b85c7a736bb473bf55b584e54a09ffa698d6d871",
+      "sha": "b1a5903c5b633b8c9f843ad7b629c2a78437040c",
       "folder": "playwright",
       "skills": [
         "playwright-cli"
