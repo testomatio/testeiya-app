@@ -133,6 +133,22 @@ testeiya pipeline regression --gate 'pr:test -n "$PR_NUMBER"'
   number only exists when the gate passes.
 - A name the file already defines is an error.
 
+### Checking a pipeline
+
+```bash
+testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
+```
+
+- Validates the file the way a run does, then checks every gate it declares,
+  used or not, plus `ai` and any `--gate`.
+- Prints each gate as passed or not, with its `message` when it does not pass.
+- Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--dir`, `--model`
+  and `--json`.
+- Exit code: `0` every gate passes, `1` one does not, `2` the file is invalid.
+- `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
+  chart of the stages in order, the files they pass on (dotted), and the gates
+  each one needs, green when it passes and red when it does not.
+
 ### Changes
 
 ```yaml

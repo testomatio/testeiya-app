@@ -20,6 +20,16 @@ export class PipelineLog {
     this.note(c.dim(`  ${dir}`));
   }
 
+  valid(name: string, path: string): void {
+    this.note(`  ${c.green("✓")} Pipeline ${c.bold(name)} is valid ${c.dim(`· ${path}`)}`);
+  }
+
+  checked(failed: number): void {
+    if (!failed) return this.note("\n  All gates pass.");
+    if (failed === 1) return this.note("\n  1 gate does not pass.");
+    this.note(`\n  ${failed} gates do not pass.`);
+  }
+
   skipped(reason: string): void {
     this.note(`  ${c.yellow("⨯")} skipped: ${reason}`);
   }

@@ -7,6 +7,7 @@ import { chalkStderr as c } from "chalk";
 import { Git, type Changes } from "../git.js";
 import { UsageError } from "../model.js";
 import { CommandStage } from "./command-stage.js";
+import { Diagram } from "./diagram.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
@@ -133,6 +134,42 @@ export class Pipeline {
     });
     state.trackFiles();
     return this.runStages({ spec, stages, gates, results, state, vars, report, dir });
+  }
+
+  /** Validates the file, then checks every gate it declares. Runs no stage. */
+  async check(): Promise<number> {
+    const file = PipelineFile.find(this.options.name);
+    const named = file.read();
+    const dir = this.folder(named.name, false);
+    const spec = this.spec(file, named, dir, false);
+    const gates = this.gates(spec);
+    const stages = this.stages(spec.stages);
+    this.checkInputs(stages, dir);
+    log.valid(spec.name, file.path);
+
+    let aiProblem: string | null = null;
+    if (this.needsAi(stages)) aiProblem = await this.aiProblem();
+    const vars = this.variables(spec, dir, 1);
+    const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
+    const changes = await this.git.changes(since, vars.toEnv());
+    const results = await this.checkGates(gates, [...gates.keys()], vars, changes);
+
+    const checked = [...results].map(([name, passed]) => ({ name, passed, message: gates.get(name)!.message }));
+    if (this.needsAi(stages)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
+    const failed = checked.filter((gate) => !gate.passed).length;
+    if (this.options.json) {
+      process.stdout.write(`${JSON.stringify({ name: spec.name, file: file.path, gates: checked }, null, 2)}\n`);
+    }
+    for (const gate of checked) log.gate(gate.name, gate.passed, gate.message);
+    if (this.options.diagram) {
+      const passed = new Map(checked.map((gate) => [gate.name, gate.passed]));
+      const path = resolve(`${spec.name}.diagram.md`);
+      writeFileSync(path, new Diagram(spec, stages, passed).toMarkdown());
+      log.note(c.dim(`\n  Diagram: ${path}`));
+    }
+    log.checked(failed);
+    if (failed) return 1;
+    return 0;
   }
 
   private async runStages(run: Run): Promise<number> {
@@ -353,9 +390,9 @@ export class Pipeline {
     }
   }
 
-  private folder(name: string): string {
+  private folder(name: string, create = !this.options.dryRun): string {
     if (this.options.dir) return resolve(this.options.dir);
-    if (this.options.dryRun) return join(tmpdir(), `testeiya-${name}`);
+    if (!create) return join(tmpdir(), `testeiya-${name}`);
     return mkdtempSync(join(tmpdir(), `testeiya-${name}-`));
   }
 
@@ -386,6 +423,8 @@ export interface PipelineOptions {
   name: string;
   dir?: string;
   dryRun?: boolean;
+  /** pipeline-check also writes a Mermaid diagram to the current folder. */
+  diagram?: boolean;
   sets?: Record<string, string>;
   /** Gate name to a shell check, from --gate. */
   gates?: Record<string, string>;

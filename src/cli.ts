@@ -54,6 +54,7 @@ async function main(argv: string[]): Promise<void> {
     }
     if (args.command === "sessions") process.exit(await runSessions(process.cwd(), args.json));
     if (args.command === "pipeline") process.exit(await pipeline(args));
+    if (args.command === "pipeline-check") process.exit(await pipelineCheck(args));
     process.exit(await task(args));
   } catch (err) {
     if (!(err instanceof UsageError)) throw err;
@@ -122,15 +123,22 @@ async function pipeline(args: CliArgs): Promise<number> {
     model: args.model,
     exitZero: args.exitZero,
     json: args.json,
-    checkAi: async (model) => {
-      try {
-        resolveModel(await createRuntime(), model);
-      } catch (err) {
-        if (!(err instanceof UsageError)) throw err;
-        throw new UsageError(`No AI provider: ${err.message}. Run testeiya doctor.`);
-      }
-    },
+    checkAi,
   }).run();
+}
+
+async function pipelineCheck(args: CliArgs): Promise<number> {
+  const { dir, sets, gates, model, json, diagram } = args;
+  return new Pipeline({ name: args.pipeline!, dir, sets, gates, model, json, diagram, checkAi }).check();
+}
+
+async function checkAi(model?: string): Promise<void> {
+  try {
+    resolveModel(await createRuntime(), model);
+  } catch (err) {
+    if (!(err instanceof UsageError)) throw err;
+    throw new UsageError(`No AI provider: ${err.message}. Run testeiya doctor.`);
+  }
 }
 
 async function readStdin(): Promise<string> {

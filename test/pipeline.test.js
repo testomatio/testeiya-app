@@ -6,10 +6,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { Git } from "../dist/src/git.js";
+import { Diagram } from "../dist/src/pipeline/diagram.js";
 import { Gate } from "../dist/src/pipeline/gate.js";
 import { Pipeline } from "../dist/src/pipeline/pipeline.js";
 import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
+import { CommandStage } from "../dist/src/pipeline/command-stage.js";
 import { Stage } from "../dist/src/pipeline/stage.js";
+import { TaskStage } from "../dist/src/pipeline/task-stage.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
 
 const parse = (text) => new PipelineFile("p.yml").parse(text);
@@ -200,6 +203,62 @@ stages:
   assert.equal(code, 0);
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
+});
+
+test("pipeline-check reports every declared gate and runs nothing", async () => {
+  const { repo, log, cli } = setup();
+  const file = write(repo, "pipe.yml", `
+gates:
+  staging:
+    env: [CHECK_STAGING_URL]
+    message: No staging URL.
+  coverage:
+    file: [pipe.yml]
+    message: No coverage map.
+  unused:
+    run: "false"
+    message: Never used.
+stages:
+  - id: one
+    when: [staging]
+    run: echo one
+`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).check()), 1);
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, cli, sets: { CHECK_STAGING_URL: "x" }, gates: { pr: "true" } }).check()), 1);
+  const fixed = write(repo, "fixed.yml", readFileSync(file, "utf8").replace('"false"', '"true"'));
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: fixed, dir, cli, sets: { CHECK_STAGING_URL: "x" } }).check()), 0);
+  assert.equal(existsSync(dir), false);
+  assert.equal(calledWith(log).length, 0);
+  const broken = write(repo, "broken.yml", "stages:\n  - id: one\n    run: echo\n    inputs: [nope.md]\n");
+  await assert.rejects(inRepo(repo, () => new Pipeline({ name: broken, dir, cli }).check()), /reads nope.md/);
+});
+
+test("a diagram draws stages, the files they pass on, and gates by result", () => {
+  const spec = parse(`
+gates:
+  staging: { env: [X], message: m }
+  map: { file: [a], message: m }
+when: [map]
+stages:
+  - id: review
+    task: Review.
+    outputs: [plan.md]
+  - id: explore
+    when: [staging]
+    run: echo
+    inputs: [plan.md, seed.txt]
+`);
+  const stages = [new TaskStage(spec.stages[0]), new CommandStage(spec.stages[1])];
+  const chart = new Diagram(spec, stages, new Map([["map", true], ["staging", false], ["ai", true]])).toMermaid();
+  assert.match(chart, /s0\("review<br\/>agent"\)/);
+  assert.match(chart, /s1\["explore<br\/>command"\]/);
+  assert.match(chart, /s0 -\.->\|"plan.md"\| s1/);
+  assert.match(chart, /f_1_1\[\("seed.txt"\)\]/);
+  assert.match(chart, /s1 --> summary/);
+  assert.match(chart, /g0\{\{"map"\}\}\n  class g0 pass\n  g0 --o start/);
+  assert.match(chart, /class g1 fail\n  g1 --o s1/);
+  assert.match(chart, /g2\{\{"ai"\}\}/);
 });
 
 test("a --gate from the job skips the run before outputs are checked", async () => {
