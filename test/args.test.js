@@ -86,3 +86,9 @@ test("ask takes the same options as task", () => {
   assert.equal(args.prompt, "is this feature ready");
   assert.equal(args.continueLast, true);
 });
+
+test("pipeline gates split on the first colon", () => {
+  const args = parseCliArgs(["pipeline", "regression", "--gate", "pr:test -n \"$X\" && echo a:b"]);
+  assert.deepEqual(args.gates, { pr: "test -n \"$X\" && echo a:b" });
+  assert.match(parseCliArgs(["pipeline", "regression", "--gate", "pr"]).error, /NAME:COMMAND/);
+});

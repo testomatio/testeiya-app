@@ -1,5 +1,5 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
-import { run } from "./exec.js";
+import type { Repo } from "./git.js";
 
 const CHECKPOINT = "testeiya:checkpoint";
 
@@ -16,18 +16,6 @@ export function readCheckpoint(repo: Repo, pr?: number): Checkpoint | null {
   if (repo.remote) checkpoint.remote = repo.remote;
   if (pr) checkpoint.pr = pr;
   return checkpoint;
-}
-
-/**
- * Where the checkout stands, read once. The marker stamps the commit on a
- * comment, the pull request section picks its host from the remote, and the
- * checkpoint keeps both for the next round — one set of git calls for all three.
- */
-export async function readRepo(cwd: string): Promise<Repo> {
-  const commit = await git(cwd, ["rev-parse", "HEAD"]);
-  const branch = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
-  const remote = await git(cwd, ["remote", "get-url", "origin"]);
-  return { commit, branch, remote };
 }
 
 /** The checkpoint the last round left behind, if this session has one. */
@@ -78,22 +66,8 @@ export function describeUpdate(previous: Checkpoint | null, current: Checkpoint 
   return `Since your last round:\n\n${lines.join("\n")}`;
 }
 
-async function git(cwd: string, args: string[]): Promise<string | null> {
-  const result = await run("git", args, { cwd });
-  if (result.code !== 0) return null;
-  const value = result.stdout.trim();
-  if (!value) return null;
-  return value;
-}
-
 function short(commit: string): string {
   return commit.slice(0, 7);
-}
-
-export interface Repo {
-  commit: string | null;
-  branch: string | null;
-  remote: string | null;
 }
 
 export interface Checkpoint {

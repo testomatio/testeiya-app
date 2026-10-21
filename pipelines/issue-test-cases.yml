@@ -1,0 +1,41 @@
+name: issue-test-cases
+description: Turn an issue or epic into test cases, and sync them to Testomat.io.
+
+gates:
+  issue:
+    env: [ISSUE_URL]
+    message: No issue. Set ISSUE_URL to the issue or epic to cover.
+  testomatio:
+    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
+    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
+
+when: [issue]
+
+stages:
+  - id: requirements
+    session: analyst
+    task: |
+      Read the issue at ${ISSUE_URL}: its body, its comments, and every linked issue.
+      An epic has sub-issues. Read each one. On GitHub, `gh issue view <url> --comments`
+      reads an issue and `gh api repos/<owner>/<repo>/issues/<number>/sub_issues` lists sub-issues.
+      Review the requirements as a QA engineer. /qa-requirement-reviewer
+      Write the acceptance criteria to criteria.md, one section per sub-issue or feature area.
+      End it with the open questions and gaps you found.
+      The code here may not implement the issue yet. Read it only to use the real names of screens and terms.
+    outputs: [criteria.md]
+
+  - id: test-cases
+    session: writer
+    task: |
+      Write test cases from criteria.md. /qa-write-test-cases
+      Put them in test-cases/, one markdown file per suite, one suite per sub-issue or feature area.
+      Cover every criterion. A case that depends on an open question says so in its description.
+    inputs: [criteria.md]
+    outputs: [test-cases/]
+
+  - id: sync
+    when: [testomatio]
+    each_file: test-cases/*.md
+    task: |
+      Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
+      Skip a case that already exists there.

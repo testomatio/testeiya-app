@@ -1,0 +1,39 @@
+name: api-testing
+description: Find the API endpoints a pull request changed, test each with Explorbot, explain what broke.
+
+gates:
+  api:
+    env: [EXPLORBOT_URL, EXPLORBOT_API_SPEC]
+    message: No API to test. Set EXPLORBOT_URL to the API base and EXPLORBOT_API_SPEC to its OpenAPI spec.
+  explorbot-ai:
+    env: [EXPLORBOT_AI_PROVIDER]
+    message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
+
+env:
+  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
+  EXPLORBOT_NO_BANNER: "1"
+
+stages:
+  - id: review
+    session: qa
+    task: |
+      Review this pull request as a QA engineer. /qa-review-pr
+      List every API endpoint it adds or changes in endpoints.txt, one path per line, like /users/{id}.
+      Leave the file empty when no endpoint changed.
+    outputs: [endpoints.txt]
+
+  - id: explore
+    when: [api, explorbot-ai]
+    each_line: endpoints.txt
+    run: npx -y explorbot api explore "$ITEM" --style psycho
+    outputs: [explorbot/]
+    timeout: 10m
+
+  - id: results
+    session: qa
+    when: [api, explorbot-ai]
+    task: |
+      Explorbot results are under explorbot/: plans, request logs, and a session report. Read them.
+      Say which failures are real defects in this change: a broken contract, missing validation, a wrong status.
+      Fail the run if any is a real defect.
+    inputs: [endpoints.txt, explorbot/]
