@@ -18,6 +18,7 @@ Usage:
   testeiya task "<task>"      run one task and write a report
   testeiya ask "<question>"   answer a question
   testeiya pipeline <name>    run a multi-stage pipeline, or list them with no name
+  testeiya pipeline-check <name>  check a pipeline file and its gates, run nothing
   testeiya doctor             check what a run would resolve
   testeiya models [pattern]   list the models your key can reach
   testeiya skills [pattern]   list the skills bundled with this package
@@ -201,7 +202,9 @@ Pipelines
   reads every stage and is the only thing posted. Keep --dir between runs, as a
   CI cache per pull request, and a re-run on the same commit retries from the
   stage that stopped, while a new commit starts a round told what changed.
-  --dry-run shows the plan and spends nothing.
+  --dry-run shows the plan and spends nothing. "testeiya pipeline-check" checks
+  the file and every gate it declares, and prints the message of each gate that
+  does not pass. It exits 1 when one does not, 2 when the file is invalid.
 
 Testomat.io
 
@@ -211,7 +214,7 @@ Testomat.io
   the Testomat.io tools. The MCP server needs the id: a token alone does not say
   which project to talk to.`;
 
-export const COMMANDS = ["task", "ask", "pipeline", "models", "skills", "doctor", "sessions", "help"] as const;
+export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
@@ -237,7 +240,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
   const text = parsed.positionals.join(" ").trim();
   if ((first === "task" || first === "ask") && text) args.prompt = text;
   if ((first === "models" || first === "skills") && text) args.pattern = text;
-  if (first === "pipeline" && text) args.pipeline = text;
+  if ((first === "pipeline" || first === "pipeline-check") && text) args.pipeline = text;
+  if (first === "pipeline-check" && !text) return { error: "pipeline-check needs a pipeline name or a .yml path" };
   if (typeof values.dir === "string") args.dir = values.dir;
   if (values["dry-run"]) args.dryRun = true;
   if (Array.isArray(values.set)) {
@@ -322,6 +326,14 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
   task: RUN_OPTIONS,
   ask: RUN_OPTIONS,
   pipeline: PIPELINE_OPTIONS,
+  "pipeline-check": {
+    json: JSON_FLAG,
+    model: { type: "string" },
+    dir: PIPELINE_OPTIONS.dir!,
+    set: PIPELINE_OPTIONS.set!,
+    gate: PIPELINE_OPTIONS.gate!,
+    help: HELP_FLAG,
+  },
   models: { json: JSON_FLAG, help: HELP_FLAG },
   skills: { json: JSON_FLAG, help: HELP_FLAG },
   doctor: { json: JSON_FLAG, probe: { type: "boolean" }, model: { type: "string" }, help: HELP_FLAG },

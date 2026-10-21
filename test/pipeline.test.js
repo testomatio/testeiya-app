@@ -202,6 +202,35 @@ stages:
   assert.equal(calledWith(log).length, 0);
 });
 
+test("pipeline-check reports every declared gate and runs nothing", async () => {
+  const { repo, log, cli } = setup();
+  const file = write(repo, "pipe.yml", `
+gates:
+  staging:
+    env: [CHECK_STAGING_URL]
+    message: No staging URL.
+  coverage:
+    file: [pipe.yml]
+    message: No coverage map.
+  unused:
+    run: "false"
+    message: Never used.
+stages:
+  - id: one
+    when: [staging]
+    run: echo one
+`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).check()), 1);
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, cli, sets: { CHECK_STAGING_URL: "x" }, gates: { pr: "true" } }).check()), 1);
+  const fixed = write(repo, "fixed.yml", readFileSync(file, "utf8").replace('"false"', '"true"'));
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: fixed, dir, cli, sets: { CHECK_STAGING_URL: "x" } }).check()), 0);
+  assert.equal(existsSync(dir), false);
+  assert.equal(calledWith(log).length, 0);
+  const broken = write(repo, "broken.yml", "stages:\n  - id: one\n    run: echo\n    inputs: [nope.md]\n");
+  await assert.rejects(inRepo(repo, () => new Pipeline({ name: broken, dir, cli }).check()), /reads nope.md/);
+});
+
 test("a --gate from the job skips the run before outputs are checked", async () => {
   const { repo, log, cli } = setup();
   const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    task: One.\n");

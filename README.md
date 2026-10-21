@@ -198,6 +198,7 @@ pipeline is that flow in one YAML file, run by one command.
 testeiya pipeline                     # list the bundled pipelines
 testeiya pipeline web-testing -o gh:pr-comment
 testeiya pipeline .github/testeiya/my-flow.yml --dry-run
+testeiya pipeline-check .github/testeiya/my-flow.yml   # check the file and every gate
 ```
 
 | Pipeline | What it does |
@@ -292,7 +293,9 @@ those belong to a single task. Use `--thread` on the pipeline instead.
 check from the CI job: when the command fails, the whole run is skipped and exits
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--dry-run` prints every
-gate and stage and spends nothing. `pipeline.json` in the folder holds each
+gate and stage and spends nothing. `testeiya pipeline-check` checks the file and
+every gate it declares, used or not, and prints the message of each one that
+does not pass. `pipeline.json` in the folder holds each
 stage's status; `--json` prints it.
 
 ## CI setup

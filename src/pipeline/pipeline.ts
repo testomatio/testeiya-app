@@ -135,6 +135,36 @@ export class Pipeline {
     return this.runStages({ spec, stages, gates, results, state, vars, report, dir });
   }
 
+  /** Validates the file, then checks every gate it declares. Runs no stage. */
+  async check(): Promise<number> {
+    const file = PipelineFile.find(this.options.name);
+    const named = file.read();
+    const dir = this.folder(named.name, false);
+    const spec = this.spec(file, named, dir, false);
+    const gates = this.gates(spec);
+    const stages = this.stages(spec.stages);
+    this.checkInputs(stages, dir);
+    log.valid(spec.name, file.path);
+
+    let aiProblem: string | null = null;
+    if (this.needsAi(stages)) aiProblem = await this.aiProblem();
+    const vars = this.variables(spec, dir, 1);
+    const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
+    const changes = await this.git.changes(since, vars.toEnv());
+    const results = await this.checkGates(gates, [...gates.keys()], vars, changes);
+
+    const checked = [...results].map(([name, passed]) => ({ name, passed, message: gates.get(name)!.message }));
+    if (this.needsAi(stages)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
+    const failed = checked.filter((gate) => !gate.passed).length;
+    if (this.options.json) {
+      process.stdout.write(`${JSON.stringify({ name: spec.name, file: file.path, gates: checked }, null, 2)}\n`);
+    }
+    for (const gate of checked) log.gate(gate.name, gate.passed, gate.message);
+    log.checked(failed);
+    if (failed) return 1;
+    return 0;
+  }
+
   private async runStages(run: Run): Promise<number> {
     const { stages, state, results, gates } = run;
     this.launcher.watchInterrupt();
@@ -353,9 +383,9 @@ export class Pipeline {
     }
   }
 
-  private folder(name: string): string {
+  private folder(name: string, create = !this.options.dryRun): string {
     if (this.options.dir) return resolve(this.options.dir);
-    if (this.options.dryRun) return join(tmpdir(), `testeiya-${name}`);
+    if (!create) return join(tmpdir(), `testeiya-${name}`);
     return mkdtempSync(join(tmpdir(), `testeiya-${name}-`));
   }
 
