@@ -81,6 +81,7 @@ testeiya models anthropic   # list what your key can reach
 ```bash
 testeiya task "<task>"     # run one task, deliver a report, exit
 testeiya ask "<question>"  # answer a question, no report
+testeiya pipeline <name>   # run several stages in a row, see Pipelines
 testeiya skills            # list the skills bundled with this package
 testeiya sessions          # list saved sessions for this folder
 ```
@@ -186,6 +187,113 @@ TESTOMATIO=tstmt_xxx testeiya task \
   "Audit this project: which suites have no automated tests, and which manual cases look automatable?" \
   --output audits/$(date +%F).md
 ```
+
+## Pipelines
+
+Some QA flows take more than one run, and not every step is the agent: review a
+pull request, run Explorbot against staging, then explain what broke. A
+pipeline is that flow in one YAML file, run by one command.
+
+```bash
+testeiya pipeline                     # list the bundled pipelines
+testeiya pipeline web-testing -o gh:pr-comment
+testeiya pipeline .github/testeiya/my-flow.yml --dry-run
+```
+
+| Pipeline | What it does |
+|---|---|
+| `pr-review` | requirements, QA review, test cases, sync to Testomat.io |
+| `issue-test-cases` | an issue or epic, with its sub-issues, becomes test cases; set `ISSUE_URL` |
+| `web-testing` | review, an Explorbot plan, `explorbot test`, what broke |
+| `api-testing` | review lists changed endpoints, Explorbot tests each one |
+| `regression` | runs the tests `coverage.tests.yml` maps to the change, explains failures |
+
+To change one, copy it from `pipelines/` into your repo, edit it, and pass the
+path.
+
+### The file
+
+```yaml
+name: web-testing
+description: Review a pull request, test it in a browser, explain what broke.
+
+gates:
+  staging:
+    env: [EXPLORBOT_URL]
+    message: No staging URL. Set EXPLORBOT_URL to test in a browser.
+  browser:
+    run: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
+    message: No browser. Run npx playwright install --with-deps chromium.
+
+env:
+  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
+
+stages:
+  - id: review
+    session: qa
+    task: Review this pull request. Write browser scenarios to plan.md. /explorbot-plan
+    outputs: [plan.md]
+  - id: explore
+    when: [staging, browser]
+    run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
+    timeout: 30m
+  - id: results
+    session: qa
+    task: Read the Explorbot report under explorbot/ and say what broke.
+    inputs: [explorbot/]
+```
+
+- A stage is a `task` for the agent or a `run` shell command.
+- Stages pass files through one folder, `$PIPELINE_DIR`. An agent stage writes
+  `<id>.md` and `<id>.json`, a command writes `<id>.log`. `inputs` and
+  `outputs` name the rest.
+- `gates` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
+  `ignore`, `min_files`). `when:` names the gates a stage needs. One fails and
+  the stage is skipped with its message. In the top-level `when:` it skips the
+  whole run.
+- `session: <name>` keeps a conversation. Stages with the same name share it.
+  No `session` is a fresh one.
+- `each_line: file.txt` and `each_file: cases/*.md` run a stage once per item,
+  as `$ITEM`.
+- `stopOn: fail` stops the pipeline when the stage fails, `stopOn: gate` when it
+  was skipped. A broken or timed-out stage always stops it.
+
+The full format is in [PIPELINES.md](PIPELINES.md).
+
+A pipeline with more than one stage ends with a summary written by the
+`pipeline-report` skill. It is the only thing posted to `--output`. Every other
+stage runs with `--no-thread`, so nothing else touches the pull request.
+
+### Rounds
+
+Keep `--dir` between runs, as a CI cache per pull request, and each run is a
+round. A re-run on the same commit retries from the stage that stopped. A new
+commit starts a new round: `changes` count from the last round's commit, stages
+with a session are told what changed, and the summary updates its comment.
+
+```yaml
+- uses: actions/cache/restore@v4
+  with:
+    path: ${{ runner.temp }}/qa
+    key: qa-pr-${{ github.event.number }}-${{ github.run_id }}
+    restore-keys: qa-pr-${{ github.event.number }}-
+- run: npx testeiya@latest pipeline pr-review --dir ${{ runner.temp }}/qa -o gh:pr-comment --exit-zero
+- uses: actions/cache/save@v4
+  if: always()
+  with:
+    path: ${{ runner.temp }}/qa
+    key: qa-pr-${{ github.event.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+```
+
+Stages ignore `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE`:
+those belong to a single task. Use `--thread` on the pipeline instead.
+
+`--set KEY=VALUE` sets a variable for every stage. `--gate NAME:COMMAND` adds a
+check from the CI job: when the command fails, the whole run is skipped and exits
+0, before any output is checked. Use it for what only the job knows, like
+whether this push belongs to a pull request. `--dry-run` prints every
+gate and stage and spends nothing. `pipeline.json` in the folder holds each
+stage's status; `--json` prints it.
 
 ## CI setup
 
@@ -394,7 +502,8 @@ testeiya task "<task>" --output report.md --output run.json --output gh:pr-comme
 | `gh:pr#123` | posted on that pull request |
 
 Posting uses the GitHub CLI and resolves the PR number from `GITHUB_EVENT_PATH`,
-`GITHUB_REF`, or `gh pr view` — so inside Actions it just works. Every
+`GITHUB_REF`, or `gh pr view`. On a push with no PR of its own, like a merge to
+main, it posts on the PR that brought the commit in. Inside Actions it just works. Every
 destination is checked before the run starts, so a missing `gh` costs no tokens.
 
 `--footer "<text>"` adds a line under the report and `--header "<text>"` adds

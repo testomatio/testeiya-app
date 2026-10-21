@@ -1,0 +1,50 @@
+name: web-testing
+description: Review a pull request, test the change in a browser with Explorbot, explain what broke.
+
+gates:
+  staging:
+    env: [EXPLORBOT_URL]
+    message: No staging URL. Set EXPLORBOT_URL to test in a browser.
+  browser:
+    run: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
+    message: No browser. Run npx playwright install --with-deps chromium.
+  explorbot-ai:
+    env: [EXPLORBOT_AI_PROVIDER]
+    message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
+
+env:
+  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
+  EXPLORBOT_NO_BANNER: "1"
+
+stages:
+  - id: review
+    session: qa
+    task: |
+      Review this pull request as a QA engineer. /qa-review-pr
+      Write the user-facing scenarios worth checking in a browser to scenarios.md.
+    outputs: [scenarios.md]
+
+  - id: write-plan
+    session: qa
+    when: [staging]
+    task: |
+      Turn scenarios.md into an Explorbot test plan for ${EXPLORBOT_URL}. /explorbot-plan
+      Write the plan to plan.md. Keep only scenarios a browser can check.
+    inputs: [scenarios.md]
+    outputs: [plan.md]
+
+  - id: explore
+    when: [staging, browser, explorbot-ai]
+    run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
+    inputs: [plan.md]
+    outputs: [explorbot/]
+    timeout: 30m
+
+  - id: results
+    session: qa
+    when: [staging, browser, explorbot-ai]
+    task: |
+      Explorbot results are under explorbot/. Find its session report and read it.
+      Say which failed scenarios are real defects in this change and which are test noise.
+      Fail the run if any is a real defect.
+    inputs: [plan.md, explorbot/]

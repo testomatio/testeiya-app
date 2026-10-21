@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { chalkStderr as c } from "chalk";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { describeUpdate, lastCheckpoint, readCheckpoint, readRepo, saveCheckpoint } from "./checkpoint.js";
+import { describeUpdate, lastCheckpoint, readCheckpoint, saveCheckpoint } from "./checkpoint.js";
+import { Git } from "./git.js";
 import { VERSION } from "./env.js";
 import { hasTestomatio } from "./mcp.js";
 import { UsageError } from "./model.js";
@@ -41,10 +42,12 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // read for a session with a next round to catch up, for a pull request to
   // comment on, and in a CI job whose thread rules apply.
   const pr = pullRequestNumber(options.destinations);
-  const host = threadHost(process.env);
+  // A pipeline stage that is not the one reporting keeps out of the thread, but
+  // still saves its checkpoint so the next round tells it what changed.
+  const host = options.noThread ? null : threadHost(process.env);
   const inThread = Boolean(pr) || Boolean(host);
   const wantsRepo = inThread || options.sessionManager.isPersisted();
-  const repo = wantsRepo ? await readRepo(cwd) : { commit: null, branch: null, remote: null };
+  const repo = wantsRepo ? await new Git(cwd).repo() : { commit: null, branch: null, remote: null };
 
   let checkpoint = null;
   if (options.sessionManager.isPersisted()) checkpoint = readCheckpoint(repo, pr);
@@ -477,6 +480,8 @@ export interface PrintOptions {
   header?: string;
   footer?: string;
   noDefaultFooter?: boolean;
+  /** Leave the comment thread alone: no thread rules, no thread comments read. */
+  noThread?: boolean;
 }
 
 interface Summary {
