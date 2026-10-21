@@ -199,6 +199,7 @@ testeiya pipeline                     # list the bundled pipelines
 testeiya pipeline web-testing -o gh:pr-comment
 testeiya pipeline .github/testeiya/my-flow.yml --dry-run
 testeiya pipeline-check .github/testeiya/my-flow.yml   # check the file and every gate
+testeiya pipeline-check regression --diagram           # also draw it as a Mermaid chart
 ```
 
 | Pipeline | What it does |
@@ -295,8 +296,8 @@ check from the CI job: when the command fails, the whole run is skipped and exit
 whether this push belongs to a pull request. `--dry-run` prints every
 gate and stage and spends nothing. `testeiya pipeline-check` checks the file and
 every gate it declares, used or not, and prints the message of each one that
-does not pass. `pipeline.json` in the folder holds each
-stage's status; `--json` prints it.
+does not pass. `--diagram` also writes the pipeline as a Mermaid chart.
+`pipeline.json` in the folder holds each stage's status; `--json` prints it.
 
 ## CI setup
 

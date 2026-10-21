@@ -145,6 +145,9 @@ testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
 - Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--dir`, `--model`
   and `--json`.
 - Exit code: `0` every gate passes, `1` one does not, `2` the file is invalid.
+- `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
+  chart of the stages in order, the files they pass on (dotted), and the gates
+  each one needs, green when it passes and red when it does not.
 
 ### Changes
 

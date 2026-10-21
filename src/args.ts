@@ -205,6 +205,8 @@ Pipelines
   --dry-run shows the plan and spends nothing. "testeiya pipeline-check" checks
   the file and every gate it declares, and prints the message of each gate that
   does not pass. It exits 1 when one does not, 2 when the file is invalid.
+  --diagram also writes <name>.diagram.md: a Mermaid chart of the stages, the
+  files they pass on, and the gates, coloured by the check.
 
 Testomat.io
 
@@ -244,6 +246,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (first === "pipeline-check" && !text) return { error: "pipeline-check needs a pipeline name or a .yml path" };
   if (typeof values.dir === "string") args.dir = values.dir;
   if (values["dry-run"]) args.dryRun = true;
+  if (values.diagram) args.diagram = true;
   if (Array.isArray(values.set)) {
     const sets = parseSets(values.set as string[]);
     if (typeof sets === "string") return { error: sets };
@@ -332,6 +335,7 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
     dir: PIPELINE_OPTIONS.dir!,
     set: PIPELINE_OPTIONS.set!,
     gate: PIPELINE_OPTIONS.gate!,
+    diagram: { type: "boolean" },
     help: HELP_FLAG,
   },
   models: { json: JSON_FLAG, help: HELP_FLAG },
@@ -399,6 +403,7 @@ export interface CliArgs {
   pipeline?: string;
   dir?: string;
   dryRun?: boolean;
+  diagram?: boolean;
   sets?: Record<string, string>;
   gates?: Record<string, string>;
   /** Set when argv was malformed; the caller prints the message and exits 2. */

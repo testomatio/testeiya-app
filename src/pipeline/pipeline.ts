@@ -7,6 +7,7 @@ import { chalkStderr as c } from "chalk";
 import { Git, type Changes } from "../git.js";
 import { UsageError } from "../model.js";
 import { CommandStage } from "./command-stage.js";
+import { Diagram } from "./diagram.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
@@ -160,6 +161,12 @@ export class Pipeline {
       process.stdout.write(`${JSON.stringify({ name: spec.name, file: file.path, gates: checked }, null, 2)}\n`);
     }
     for (const gate of checked) log.gate(gate.name, gate.passed, gate.message);
+    if (this.options.diagram) {
+      const passed = new Map(checked.map((gate) => [gate.name, gate.passed]));
+      const path = resolve(`${spec.name}.diagram.md`);
+      writeFileSync(path, new Diagram(spec, stages, passed).toMarkdown());
+      log.note(c.dim(`\n  Diagram: ${path}`));
+    }
     log.checked(failed);
     if (failed) return 1;
     return 0;
@@ -416,6 +423,8 @@ export interface PipelineOptions {
   name: string;
   dir?: string;
   dryRun?: boolean;
+  /** pipeline-check also writes a Mermaid diagram to the current folder. */
+  diagram?: boolean;
   sets?: Record<string, string>;
   /** Gate name to a shell check, from --gate. */
   gates?: Record<string, string>;
