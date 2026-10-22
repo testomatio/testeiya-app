@@ -23,6 +23,7 @@ its own browser, and syncs with your Testomat.io project.
 | OS | Download |
 |---|---|
 | macOS (Apple Silicon) | [`stable-macos-arm64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-arm64-Testeiya.dmg) |
+| macOS (Intel) | [`stable-macos-x64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-x64-Testeiya.dmg) |
 | Windows (x64) | [`stable-win-x64-Testeiya.zip`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-win-x64-Testeiya.zip) |
 | Linux (x64) | [`Testeiya-x86_64.AppImage`](https://github.com/testomatio/testeiya-app/releases/latest/download/Testeiya-x86_64.AppImage) |
 
