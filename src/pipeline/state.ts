@@ -5,7 +5,9 @@ export const STATE_FILE = "pipeline.json";
 export const COPY_FILE = "pipeline.yml";
 export const SESSIONS_DIR = ".sessions";
 export const CHANGES_FILE = "changes.txt";
-const OWN = [STATE_FILE, COPY_FILE, SESSIONS_DIR];
+/** The last round's files, kept so the next round updates them. */
+export const LAST_DIR = ".last";
+const OWN = [STATE_FILE, COPY_FILE, SESSIONS_DIR, LAST_DIR];
 
 /**
  * `pipeline.json` in the pipeline folder: the round, each stage's result, and

@@ -1,5 +1,5 @@
-import { existsSync, globSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, join } from "node:path";
+import { cpSync, existsSync, globSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join, relative } from "node:path";
 
 import type { Launched, Launcher } from "./launcher.js";
 import { log } from "./log.js";
@@ -11,14 +11,19 @@ import type { Variables } from "./variables.js";
 const UNITS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
 
 /**
- * One step of a pipeline. The base runs what every stage shares: loops over
- * lines or files, the outputs check, timing. A subclass runs one item.
+ * One step of a pipeline. The base runs what every stage shares: its folder
+ * with the inputs linked in, loops over lines or files, the outputs check,
+ * timing. A subclass runs one item.
  */
 export abstract class Stage {
   /** The field and file a loop's items are joined into. */
   protected abstract readonly result: { field: "report" | "log"; extension: string };
 
-  constructor(readonly spec: StageSpec) {}
+  /** `folder` is the stage's own folder in the pipeline folder, like `2-review`. */
+  constructor(
+    readonly spec: StageSpec,
+    readonly folder = spec.id
+  ) {}
 
   /** "30m", "90s", "1h", or a bare number of seconds, in milliseconds. */
   static duration(value: unknown): number | null {
@@ -43,10 +48,19 @@ export abstract class Stage {
   /** The files the stage leaves in the pipeline folder on its own. */
   abstract files(): string[];
 
-  /** Files the stage reads, the loop's list included. */
+  /** Files the stage reads: the loop's list, and the folder an `each_file` mask starts with. */
   inputs(): string[] {
-    if (this.spec.each_line) return [...this.spec.inputs, this.spec.each_line];
-    return this.spec.inputs;
+    const { each_line, each_file } = this.spec;
+    const inputs = [...this.spec.inputs];
+    if (each_line) inputs.push(each_line);
+    const head = each_file?.split("/")[0];
+    if (head && head !== each_file && !head.includes("*")) inputs.push(`${head}/`);
+    return [...new Set(inputs)];
+  }
+
+  /** The stage's folder, absolute. */
+  dir(context: StageContext): string {
+    return join(context.dir, this.folder);
   }
 
   produces(file: string): boolean {
@@ -70,7 +84,9 @@ export abstract class Stage {
 
   async run(context: StageContext, record: StageRecord): Promise<void> {
     const resumed = PipelineState.STOPPED.includes(record.status);
-    const items = this.items(context.dir);
+    mkdirSync(this.dir(context), { recursive: true });
+    this.linkInputs(context);
+    const items = this.items(this.dir(context));
     if (items && items.length === 0) {
       this.skip(record, this.emptyLoop());
       return;
@@ -84,7 +100,7 @@ export abstract class Stage {
 
     const status = record.status as Status;
     if (status === "pass" || status === "fail") {
-      const missing = this.spec.outputs.filter((output) => !existsSync(join(context.dir, output)));
+      const missing = this.spec.outputs.filter((output) => !existsSync(join(this.dir(context), output)));
       if (missing.length > 0) {
         record.status = "broken";
         record.reason = `did not write ${missing.join(", ")}`;
@@ -104,7 +120,7 @@ export abstract class Stage {
   }
 
   private runOne(context: StageContext, item: Item): Promise<StageResult> {
-    let vars = context.vars;
+    let vars = context.vars.with({ STAGE_DIR: this.dir(context) });
     if (item.item !== undefined) vars = vars.with({ ITEM: item.item, ITEM_NAME: basename(item.item, extname(item.item)) });
     if (item.resumed) vars = vars.with({ PIPELINE_RESUME: "1" });
     log.starting(`${this.id}${item.suffix}`, item.item);
@@ -128,6 +144,25 @@ export abstract class Stage {
     }
     record.status = PipelineState.verdict(record.items);
     this.joinItems(context.dir, record);
+  }
+
+  // A link per input, so the stage reads every file from its own folder and a review sees what it read.
+  private linkInputs(context: StageContext): void {
+    for (const input of this.inputs()) {
+      const folder = context.locate(input, this);
+      if (!folder) continue;
+      let name = input;
+      if (name.endsWith("/")) name = name.slice(0, -1);
+      const target = join(this.dir(context), name);
+      const from = join(context.dir, folder, name);
+      rmSync(target, { recursive: true, force: true });
+      mkdirSync(dirname(target), { recursive: true });
+      try {
+        symlinkSync(relative(dirname(target), from), target);
+      } catch {
+        cpSync(from, target, { recursive: true });
+      }
+    }
   }
 
   private items(dir: string): string[] | null {
@@ -155,7 +190,7 @@ export abstract class Stage {
     const parts = (record.items ?? [])
       .filter((item: ItemRecord) => item[field] && existsSync(join(dir, item[field]!)))
       .map((item) => `## ${item.item}\n\n${readFileSync(join(dir, item[field]!), "utf8").trim()}\n`);
-    const file = `${this.id}.${extension}`;
+    const file = `${this.folder}/${this.id}.${extension}`;
     writeFileSync(join(dir, file), parts.join("\n"));
     record[field] = file;
   }
@@ -172,6 +207,8 @@ export interface StageContext {
   report: Report | null;
   /** Why an input is not in the folder. */
   missing(input: string): string;
+  /** The folder holding an input: the folder of the stage that wrote it, `.` for the top, null when absent. */
+  locate(input: string, reader: Stage): string | null;
 }
 
 export interface Item {

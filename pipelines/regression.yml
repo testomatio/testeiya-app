@@ -22,6 +22,8 @@ env:
 
 stages:
   - id: tests
+    title: Tests
+    emoji: 🧪
     when: [testomatio]
     run: |
       npx -y @testomatio/reporter run --kind detect --warn \
@@ -30,10 +32,11 @@ stages:
     timeout: 30m
 
   - id: failures
+    title: Failures
+    emoji: 🐞
     when: [local, test-command]
     session: triage
     task: |
-      Read the test run in tests.log. For each failure, say if this change caused it,
-      if it is flaky, or if the test is out of date. /debug-fix-failed-flaky-autotests
-      Do not edit any file. Fail the run if this change caused a failure.
+      Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
+      Fail the run if this change caused a failure.
     inputs: [tests.log]

@@ -13,38 +13,39 @@ gates:
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
 
 env:
-  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
   EXPLORBOT_NO_BANNER: "1"
 
 stages:
   - id: review
+    title: Review
+    emoji: 🔍
     session: qa
-    task: |
-      Review this pull request as a QA engineer. /qa-review-pr
-      Write the user-facing scenarios worth checking in a browser to scenarios.md.
-    outputs: [scenarios.md]
+    task: Review this pull request as a QA engineer. List the scenarios worth checking in a browser. /qa-review-pr
 
   - id: write-plan
+    title: Test plan
+    emoji: 🗺️
     session: qa
     when: [staging]
-    task: |
-      Turn scenarios.md into an Explorbot test plan for ${EXPLORBOT_URL}. /explorbot-plan
-      Write the plan to plan.md. Keep only scenarios a browser can check.
-    inputs: [scenarios.md]
+    task: Turn the browser scenarios in review.md into an Explorbot test plan for ${EXPLORBOT_URL} in plan.md. /explorbot-plan
+    inputs: [review.md]
     outputs: [plan.md]
 
   - id: explore
+    title: Browser testing
+    emoji: 🌐
     when: [staging, browser, explorbot-ai]
-    run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot test "$STAGE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
     timeout: 30m
 
   - id: results
+    title: Results
+    emoji: 📊
     session: qa
     when: [staging, browser, explorbot-ai]
     task: |
-      Explorbot results are under explorbot/. Find its session report and read it.
-      Say which failed scenarios are real defects in this change and which are test noise.
+      Read the Explorbot report in explorbot/ and say which failed scenarios are real defects and which are noise. /explorbot-fundamentals
       Fail the run if any is a real defect.
     inputs: [plan.md, explorbot/]

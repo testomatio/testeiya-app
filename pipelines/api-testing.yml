@@ -10,30 +10,33 @@ gates:
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
 
 env:
-  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
   EXPLORBOT_NO_BANNER: "1"
 
 stages:
   - id: review
+    title: Pull request review
+    emoji: 🔍
     session: qa
     task: |
       Review this pull request as a QA engineer. /qa-review-pr
-      List every API endpoint it adds or changes in endpoints.txt, one path per line, like /users/{id}.
-      Leave the file empty when no endpoint changed.
+      List the API endpoints it adds or changes in endpoints.txt, one path per line like /users/{id}, empty if none.
     outputs: [endpoints.txt]
 
   - id: explore
+    title: API exploration
+    emoji: 🤖
     when: [api, explorbot-ai]
     each_line: endpoints.txt
-    run: npx -y explorbot api explore "$ITEM" --style psycho
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --style psycho
     outputs: [explorbot/]
     timeout: 10m
 
   - id: results
+    title: Results
+    emoji: 📊
     session: qa
     when: [api, explorbot-ai]
     task: |
-      Explorbot results are under explorbot/: plans, request logs, and a session report. Read them.
-      Say which failures are real defects in this change: a broken contract, missing validation, a wrong status.
+      Read the Explorbot results in explorbot/ and say which failures are real defects in this change. /explorbot-fundamentals
       Fail the run if any is a real defect.
     inputs: [endpoints.txt, explorbot/]

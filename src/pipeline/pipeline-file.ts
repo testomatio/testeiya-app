@@ -6,6 +6,7 @@ import { PACKAGE_ROOT } from "../env.js";
 import { UsageError } from "../model.js";
 import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
 import { Stage } from "./stage.js";
+import { Variables } from "./variables.js";
 
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
@@ -13,7 +14,7 @@ const RESERVED_IDS = ["pipeline", "summary"];
 const TOP_KEYS = ["name", "description", "summary", "env", "gates", "when", "stages"];
 const GATE_KEYS = ["env", "file", "run", "changes", "message"];
 const CHANGES_KEYS = ["paths", "ignore", "min_files"];
-const STAGE_KEYS = ["id", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "timeout", "each_line", "each_file"];
+const STAGE_KEYS = ["id", "title", "emoji", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "timeout", "each_line", "each_file"];
 
 /**
  * A pipeline file: found by path or bundled name, then parsed and validated
@@ -81,6 +82,7 @@ export class PipelineFile {
       stages,
     };
     this.checkReferences(spec);
+    this.checkFilters(spec);
     return spec;
   }
 
@@ -129,8 +131,15 @@ export class PipelineFile {
       this.fail(`${where} can loop over each_line or each_file, not both`);
     }
 
+    const title = this.string(value.title, `${where} title`);
+    if (!title) this.fail(`${where} needs a title`);
+    const emoji = this.string(value.emoji, `${where} emoji`);
+    if (!emoji) this.fail(`${where} needs an emoji`);
+
     const stage: StageSpec = {
       id,
+      title,
+      emoji,
       inputs: this.list(value.inputs, `${where} inputs`),
       outputs: this.list(value.outputs, `${where} outputs`),
       when: this.list(value.when, `${where} when`),
@@ -168,6 +177,26 @@ export class PipelineFile {
       for (const name of stage.when) {
         if (!spec.gates[name]) this.fail(`stage "${stage.id}" when names gate "${name}", which gates does not define`);
       }
+    }
+  }
+
+  // Filters run where the runner expands. A shell would fail on them.
+  private checkFilters(spec: PipelineSpec): void {
+    const texts: Array<[string, string]> = Object.entries(spec.env).map(([key, value]) => [`env.${key}`, value]);
+    for (const [name, gate] of Object.entries(spec.gates)) {
+      for (const file of gate.file ?? []) texts.push([`gate "${name}" file`, file]);
+      if (gate.run) texts.push([`gate "${name}" run`, gate.run]);
+    }
+    for (const stage of spec.stages) {
+      if (stage.task) texts.push([`stage "${stage.id}" task`, stage.task]);
+      for (const output of stage.outputs) texts.push([`stage "${stage.id}" outputs`, output]);
+      if (stage.run && Variables.filtered(stage.run)) {
+        this.fail(`stage "${stage.id}" run: a shell command cannot use filters. Set a variable in env and use that`);
+      }
+    }
+    for (const [where, text] of texts) {
+      const problem = Variables.problem(text);
+      if (problem) this.fail(`${where}: ${problem}`);
     }
   }
 

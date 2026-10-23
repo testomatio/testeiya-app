@@ -5,7 +5,7 @@ import { Stage, type Item, type StageContext } from "./stage.js";
 import type { StageResult } from "./state.js";
 import type { Variables } from "./variables.js";
 
-/** A shell command. Exit 0 passes, anything else fails. Its output goes to `<id>.log`. */
+/** A shell command. Exit 0 passes, anything else fails. Its output goes to `<id>.log` in its folder. */
 export class CommandStage extends Stage {
   protected readonly result = { field: "log" as const, extension: "log" };
 
@@ -15,7 +15,7 @@ export class CommandStage extends Stage {
 
   protected async runItem(context: StageContext, item: Item, vars: Variables): Promise<StageResult> {
     const command = this.spec.run!;
-    const logFile = `${this.id}${item.suffix}.log`;
+    const logFile = `${this.folder}/${this.id}${item.suffix}.log`;
     log.command(command.trim().split("\n")[0]!);
     const done = await context.launcher.start({
       command,

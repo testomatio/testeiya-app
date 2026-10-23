@@ -11,29 +11,30 @@ gates:
 
 when: [issue]
 
+env:
+  # https://github.com/org/repo/issues/42 → org-repo-issues-42
+  TESTOMATIO_BRANCH: ${ISSUE_URL | path | slugify}
+
 stages:
   - id: requirements
+    title: Requirements
+    emoji: 📋
     session: analyst
-    task: |
-      Read the issue at ${ISSUE_URL}: its body, its comments, and every linked issue.
-      An epic has sub-issues. Read each one. On GitHub, `gh issue view <url> --comments`
-      reads an issue and `gh api repos/<owner>/<repo>/issues/<number>/sub_issues` lists sub-issues.
-      Review the requirements as a QA engineer. /qa-requirement-reviewer
-      Write the acceptance criteria to criteria.md, one section per sub-issue or feature area.
-      End it with the open questions and gaps you found.
-      The code here may not implement the issue yet. Read it only to use the real names of screens and terms.
-    outputs: [criteria.md]
+    task: Review the requirements in ${ISSUE_URL}. /qa-requirement-reviewer
 
   - id: test-cases
+    title: Test cases
+    emoji: 📝
     session: writer
     task: |
-      Write test cases from criteria.md. /qa-write-test-cases
-      Put them in test-cases/, one markdown file per suite, one suite per sub-issue or feature area.
-      Cover every criterion. A case that depends on an open question says so in its description.
-    inputs: [criteria.md]
+      Write test cases from requirements.md. /qa-write-test-cases
+      Put them in test-cases/, one markdown file per suite.
+    inputs: [requirements.md]
     outputs: [test-cases/]
 
   - id: sync
+    title: Sync to Testomat.io
+    emoji: 🔄
     when: [testomatio]
     each_file: test-cases/*.md
     task: |
