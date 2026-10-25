@@ -115,6 +115,8 @@ async function pipeline(args: CliArgs): Promise<number> {
     dryRun: args.dryRun,
     sets: args.sets,
     gates: args.gates,
+    pipelineOverrides: args.pipelineOverrides,
+    stageOverrides: args.stageOverrides,
     outputs: args.outputs,
     thread: args.thread,
     header: args.header,
@@ -128,8 +130,8 @@ async function pipeline(args: CliArgs): Promise<number> {
 }
 
 async function pipelineCheck(args: CliArgs): Promise<number> {
-  const { dir, sets, gates, model, json, diagram } = args;
-  return new Pipeline({ name: args.pipeline!, dir, sets, gates, model, json, diagram, checkAi }).check();
+  const { dir, sets, gates, pipelineOverrides, stageOverrides, model, json, diagram } = args;
+  return new Pipeline({ name: args.pipeline!, dir, sets, gates, pipelineOverrides, stageOverrides, model, json, diagram, checkAi }).check();
 }
 
 async function checkAi(model?: string): Promise<void> {

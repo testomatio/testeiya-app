@@ -64,6 +64,7 @@ stages:
 
 | Key | Required | Meaning |
 |---|---|---|
+| `extends` | no | A bundled pipeline or a `.yml` path to start from. See [Overrides](#overrides) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
 | `summary` | no | Extra instructions for the final summary |
@@ -147,8 +148,8 @@ testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
 - Validates the file the way a run does, then checks every gate it declares,
   used or not, plus `ai` and any `--gate`.
 - Prints each gate as passed or not, with its `message` when it does not pass.
-- Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--dir`, `--model`
-  and `--json`.
+- Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--stage`,
+  `--pipeline`, `--dir`, `--model` and `--json`.
 - Exit code: `0` every gate passes, `1` one does not, `2` the file is invalid.
 - `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
   chart of the stages in order, the files they pass on (dotted), and the gates
@@ -378,6 +379,61 @@ runs, as a CI cache per pull request, and each run is a round:
 
 `pipeline.json` in the folder holds the round, each stage's status and the
 round history. `--json` prints it.
+
+## Overrides
+
+Change a pipeline without copying it. Two ways in, one set of rules.
+
+From the command line, for one run:
+
+```bash
+testeiya pipeline issue-test-cases \
+  --stage 'requirements:append_task: Never assume user credentials. Ask for them.' \
+  --stage 'sync:append_when: [release]' \
+  --pipeline 'gates: {release: {env: [RELEASE], message: Not a release.}}'
+```
+
+From a file, to keep in the repo:
+
+```yaml
+# .github/testeiya/issue-test-cases.yml
+extends: issue-test-cases
+gates:
+  release:
+    env: [RELEASE]
+    message: Not a release.
+stages:
+  - id: requirements
+    append_task: Never assume user credentials. Ask for them.
+  - id: sync
+    append_when: [release]
+```
+
+- `--stage ID:YAML` changes one stage. It splits on the first colon. Several
+  keys go in one flow map: `--stage 'explore:{timeout: 45m, append_when: staging}'`.
+- The value is YAML, so quote text that holds `: `:
+  `--stage 'plan:append_task: "Note: be brief."'`.
+- `--pipeline YAML` changes the top level: `summary`, `env`, `gates`, `when`, `stages`.
+- `extends` takes a bundled name or a path relative to the file. The rest of the
+  file is laid over it. It inherits the base's `name` unless it sets its own.
+- Order: `extends`, then every `--pipeline`, then every `--stage`.
+
+| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, gate `env` and `file` | Map: `env`, `gates` |
+|---|---|---|---|
+| `key` | replaces | replaces | merges by key |
+| `append_key` | adds at the end, on a new line | adds at the end | error |
+| `prepend_key` | adds at the start, on a new line | adds at the start | error |
+| `remove_key` | error | drops the items given | drops the keys given |
+
+- Any other key, like `timeout` or `title`, only replaces.
+- Stages match by `id`. An unknown id with a `task` or `run` is a new stage,
+  added at the end. Without one it is an error.
+- `remove_stages: [id]` and `remove_gates: [name]` drop a stage or a gate.
+- The result is checked like any pipeline file, before anything runs. A typo,
+  a missing stage or a gate no one defines is an error and exits 2.
+- `--dry-run` and `pipeline-check` print every override and the keys it changes.
+- `pipeline.yml` in the folder holds the pipeline with every override applied.
+  A retry runs that copy, so it repeats the round it started.
 
 ## In CI
 

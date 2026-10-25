@@ -11,6 +11,7 @@ import { Diagram } from "./diagram.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
+import { Overlay } from "./overlay.js";
 import { PipelineFile } from "./pipeline-file.js";
 import { Report } from "./report.js";
 import type { PipelineSpec, StageSpec } from "./spec.js";
@@ -42,8 +43,12 @@ export class Pipeline {
   private readonly launcher = new Launcher(this.cwd);
   private readonly cli: string;
 
+  private readonly overlays: Overlay[];
+
   constructor(private readonly options: PipelineOptions) {
     this.cli = options.cli ?? fileURLToPath(new URL("../cli.js", import.meta.url));
+    // --pipeline first, so --stage can change a stage it adds.
+    this.overlays = [...(options.pipelineOverrides ?? []).map(Overlay.pipeline), ...(options.stageOverrides ?? []).map(Overlay.stage)];
   }
 
   static list(json?: boolean): number {
@@ -63,7 +68,8 @@ export class Pipeline {
   async run(): Promise<number> {
     const { options, cwd } = this;
     const file = PipelineFile.find(options.name);
-    const named = file.read();
+    const resolved = file.resolve(this.overlays);
+    const named = resolved.spec;
     const dir = this.folder(named.name);
     if (dir === cwd || cwd.startsWith(dir + sep)) {
       throw new UsageError("--dir must be a folder of its own, not the checkout or a folder above it");
@@ -94,6 +100,7 @@ export class Pipeline {
     const changes = await this.git.changes(since, vars.toEnv());
     const results = await this.checkGates(gates, [spec.when, ...stages.map((stage) => stage.spec.when)].flat(), vars, changes);
     log.header(spec.name, round, changes, dir);
+    if (!retry) log.overlays(this.overlays);
 
     const blocked = spec.when.find((name) => !results.get(name));
     if (blocked) {
@@ -118,7 +125,7 @@ export class Pipeline {
       mkdirSync(join(dir, LAST_DIR));
       for (const name of created.filter((entry) => existsSync(join(dir, entry)))) renameSync(join(dir, name), join(dir, LAST_DIR, name));
       created = [];
-      writeFileSync(join(dir, COPY_FILE), file.text());
+      writeFileSync(join(dir, COPY_FILE), resolved.text);
     }
     if (changes.files) writeFileSync(join(dir, CHANGES_FILE), `${changes.files.join("\n")}\n`);
     this.checkInputs(stages, dir);
@@ -142,13 +149,14 @@ export class Pipeline {
   /** Validates the file, then checks every gate it declares. Runs no stage. */
   async check(): Promise<number> {
     const file = PipelineFile.find(this.options.name);
-    const named = file.read();
+    const named = file.read(this.overlays);
     const dir = this.folder(named.name, false);
     const spec = this.spec(file, named, dir, false);
     const gates = this.gates(spec);
     const stages = this.stages(spec.stages);
     this.checkInputs(stages, dir);
     log.valid(spec.name, file.path);
+    log.overlays(this.overlays);
 
     let aiProblem: string | null = null;
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
@@ -432,6 +440,10 @@ export interface PipelineOptions {
   sets?: Record<string, string>;
   /** Gate name to a shell check, from --gate. */
   gates?: Record<string, string>;
+  /** YAML laid over the pipeline, from --pipeline. */
+  pipelineOverrides?: string[];
+  /** ID:YAML laid over one stage, from --stage. */
+  stageOverrides?: string[];
   outputs?: string[];
   thread?: string;
   header?: string;

@@ -304,7 +304,11 @@ those belong to a single task. Use `--thread` on the pipeline instead.
 `--set KEY=VALUE` sets a variable for every stage. `--gate NAME:COMMAND` adds a
 check from the CI job: when the command fails, the whole run is skipped and exits
 0, before any output is checked. Use it for what only the job knows, like
-whether this push belongs to a pull request. `--dry-run` prints every
+whether this push belongs to a pull request. `--stage ID:YAML` and
+`--pipeline YAML` change a pipeline for one run, e.g. `--stage
+'requirements:append_task: Never assume credentials.'`. A plain key replaces,
+`append_` and `prepend_` add, `remove_` drops. A file that starts with
+`extends: <name>` keeps the same changes in the repo. `--dry-run` prints every
 gate and stage and spends nothing. `testeiya pipeline-check` checks the file and
 every gate it declares, used or not, and prints the message of each one that
 does not pass. `--diagram` also writes the pipeline as a Mermaid chart.

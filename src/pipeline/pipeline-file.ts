@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import { parse } from "yaml";
+import { basename, dirname, join, resolve } from "node:path";
+import { parse, stringify } from "yaml";
 
 import { PACKAGE_ROOT } from "../env.js";
 import { UsageError } from "../model.js";
+import { Overlay } from "./overlay.js";
 import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
 import { Stage } from "./stage.js";
 import { Variables } from "./variables.js";
@@ -48,12 +49,24 @@ export class PipelineFile {
     return readFileSync(this.path, "utf8");
   }
 
-  read(): PipelineSpec {
-    return this.parse(this.text());
+  read(overlays: Overlay[] = []): PipelineSpec {
+    return this.resolve(overlays).spec;
+  }
+
+  /** The spec with `extends` and every overlay applied, and the same as YAML, which needs neither. */
+  resolve(overlays: Overlay[] = []): { spec: PipelineSpec; text: string } {
+    let raw = this.raw(this.text(), [resolve(this.path)]);
+    for (const overlay of overlays) raw = overlay.apply(raw);
+    return { spec: this.validate(raw), text: stringify(raw) };
   }
 
   /** Parse text as this file, so a copy keeps the file's name. */
   parse(text: string): PipelineSpec {
+    return this.validate(this.raw(text, [resolve(this.path)]));
+  }
+
+  // The file's own keys are an overlay on the pipeline it extends.
+  private raw(text: string, chain: string[]): Record<string, unknown> {
     let raw: unknown;
     try {
       raw = parse(text);
@@ -61,6 +74,19 @@ export class PipelineFile {
       return this.fail(String((err as Error).message ?? err));
     }
     if (!PipelineFile.isRecord(raw)) return this.fail("a pipeline is a YAML mapping");
+    if (raw.extends === undefined) return raw;
+    const { extends: name, ...own } = raw;
+    if (typeof name !== "string" || !name) return this.fail("extends names a bundled pipeline or a .yml path");
+    let path = name;
+    if (PipelineFile.isPath(name)) path = resolve(dirname(this.path), name);
+    const base = PipelineFile.find(path);
+    const at = resolve(base.path);
+    if (chain.includes(at)) return this.fail(`extends ${name} loops back to itself`);
+    const parent = base.raw(base.text(), [...chain, at]);
+    return new Overlay(this.path, own).apply(parent);
+  }
+
+  private validate(raw: Record<string, unknown>): PipelineSpec {
     this.unknownKeys(raw, TOP_KEYS, "pipeline");
 
     const gates: Record<string, GateSpec> = {};
