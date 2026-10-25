@@ -38,8 +38,8 @@ export function testomatio(options: TestomatioOptions): string {
 }
 
 function dynamicData(tms: TmsAccess): string {
-  if (tms === "mcp-proxy") {
-    return "Get them through the Testomat.io tools, one per entity (`tests`, `runs`, `testruns`, `issues`, …); pick the operation with its `command` param. The `mcp` tool searches them when the name is unclear.";
+  if (tms === "mcp-tools") {
+    return "Get them through the `mcp__testomatio__*` tools, one per entity (`tests`, `runs`, `testruns`, `issues`, …); pick the operation with its `command` param.";
   }
   if (tms === "cli-only") {
     return "There are no Testomat.io tools in this session. Get them from the REST API: `curl` with the `TESTOMATIO` token as the Authorization header against `$TESTOMATIO_URL/api/v2`. Keep to documented endpoints; never invent paths or parameters.";
@@ -48,11 +48,11 @@ function dynamicData(tms: TmsAccess): string {
 }
 
 /**
- * `mcp-proxy`: one tool per entity plus the `mcp` search tool. `cli-only`: no
+ * `mcp-tools`: one tool per entity, named `mcp__testomatio__<tool>`. `cli-only`: no
  * tools at all; `check-tests` and REST through the shell. `mcp-direct`: one tool
  * per entity, prefixed `testomatio-<slug>`; the desktop app's one-shot mode.
  */
-export type TmsAccess = "mcp-direct" | "mcp-proxy" | "cli-only";
+export type TmsAccess = "mcp-direct" | "mcp-tools" | "cli-only";
 
 export interface TestomatioOptions {
   /** How the agent reaches Testomat.io in this run. */

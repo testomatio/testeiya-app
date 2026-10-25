@@ -1,11 +1,15 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import {
   createAgentSession,
+  createCodemodeExtension,
+  createMcpExtension,
   DefaultResourceLoader,
   ModelRuntime,
   SettingsManager,
   type AgentSession,
+  type ExtensionFactory,
   type SessionManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
@@ -13,7 +17,7 @@ import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { pathClis } from "../prompt/clis.js";
 import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
-import { hasMcp, tmsAccess } from "./mcp.js";
+import { hasMcp, mcpConfig, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
 import { createSetResultTool, type RunResult } from "./result.js";
 import { sessionModel } from "./sessions.js";
@@ -22,9 +26,10 @@ import { sessionModel } from "./sessions.js";
 // resolve to dist/skills, and the filter below would silently drop everything.
 export const BUNDLED_SKILLS_DIR = join(PACKAGE_ROOT, "skills");
 
-const MCP_EXTENSION = extensionPath("mcp-extension");
 const ATTRIBUTION_EXTENSION = extensionPath("attribution-extension");
 const LANGFUSE_EXTENSION = extensionPath("langfuse-extension");
+// The package root: pi loads it through its `pi.extensions` manifest.
+const SUBAGENTS_EXTENSION = dirname(createRequire(import.meta.url).resolve("pi-subagents"));
 
 /** The one runtime factory, so every command reads the same auth. */
 export async function createRuntime(): Promise<ModelRuntime> {
@@ -49,6 +54,7 @@ export function createLoader(options: LoaderOptions): DefaultResourceLoader {
     settingsManager: options.settingsManager,
     additionalSkillPaths: [BUNDLED_SKILLS_DIR],
     additionalExtensionPaths: options.extensionPaths,
+    extensionFactories: options.extensionFactories,
     systemPromptOverride: options.systemPrompt,
     skillsOverride: (current) => ({
       skills: current.skills.filter((s) => s.baseDir.startsWith(BUNDLED_SKILLS_DIR)),
@@ -61,13 +67,19 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
   const runtime = await createRuntime();
   const model = resolveModel(runtime, options.model, sessionModel(options.sessionManager));
 
-  const settingsManager = SettingsManager.inMemory();
+  const settingsManager = SettingsManager.inMemory({
+    defaultTools: ["+codemode"],
+    // A checkout never gets to add agents, settings or MCP servers of its own.
+    defaultProjectTrust: "never",
+  });
 
-  const extensionPaths: string[] = [ATTRIBUTION_EXTENSION];
+  const extensionPaths: string[] = [ATTRIBUTION_EXTENSION, SUBAGENTS_EXTENSION];
   if (langfuseConfig()) extensionPaths.push(LANGFUSE_EXTENSION);
+  // pi's CLI loads these as built-ins; SDK sessions only get what is listed here.
+  const extensionFactories: ExtensionFactory[] = [createCodemodeExtension({ models: false })];
   const connectedMcps: string[] = [];
   if (hasMcp()) {
-    extensionPaths.push(MCP_EXTENSION);
+    extensionFactories.push(createMcpExtension({ loadConfig: mcpConfig, openUrl: () => {} }));
     connectedMcps.push("Testomat.io");
   }
 
@@ -75,6 +87,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     cwd: options.cwd,
     settingsManager,
     extensionPaths,
+    extensionFactories,
     systemPrompt: () =>
       buildSystemPrompt({
         cwd: options.cwd,
@@ -100,16 +113,11 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     settingsManager,
     sessionManager: options.sessionManager,
     customTools: [createSetResultTool(options.result)],
-    // Extensions start their runtime on this event. Without it the MCP adapter
-    // registers its tools but never connects, and every call answers
-    // "MCP not initialized".
     sessionStartEvent: { type: "session_start", reason: "startup" },
   });
 
-  // Starts the extension runtime and fires session_start. createAgentSession
-  // does not do this — pi's own modes do — and without it an extension is
-  // constructed but never initialized: the MCP adapter registers its tools and
-  // then answers "MCP not initialized" for every call.
+  // Starts the extension runtime and fires session_start, where MCP connects.
+  // createAgentSession does not do this; pi's own modes do.
   await session.bindExtensions({
     mode: "print",
     onError: (err) => {
@@ -136,6 +144,7 @@ export interface LoaderOptions {
   cwd: string;
   settingsManager: SettingsManager;
   extensionPaths: string[];
+  extensionFactories?: ExtensionFactory[];
   systemPrompt: () => string;
 }
 

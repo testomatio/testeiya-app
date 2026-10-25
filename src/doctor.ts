@@ -1,9 +1,8 @@
 import { existsSync } from "node:fs";
 import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
-import { hasMcp, hasTestomatio, metadataCachePath, vendorBundle } from "./mcp.js";
+import { hasMcp, hasTestomatio, mcpServerScript } from "./mcp.js";
 import { PROVIDER_KEYS, resolveModel, UsageError } from "./model.js";
 import { loadBundledSkills } from "./skills.js";
 import { BUNDLED_SKILLS_DIR, createRuntime } from "./session.js";
@@ -25,7 +24,7 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
 
   const skills = await skillsChecks();
   checks.push(...skills.checks);
-  checks.push(testomatioCheck(), mcpCacheCheck(), langfuseCheck(options.envSources));
+  checks.push(testomatioCheck(), mcpCheck(), langfuseCheck(options.envSources));
 
   if (options.probe) checks.push(await probeCheck(runtime, model.resolved));
 
@@ -152,16 +151,14 @@ function langfuseCheck(sources: Map<string, string>): Check {
   return { name: "langfuse", status: "ok", detail: `${config.baseUrl}, keys from ${from}` };
 }
 
-function mcpCacheCheck(): Check {
+function mcpCheck(): Check {
   if (!hasMcp()) return { name: "mcp", status: "ok", detail: "off" };
-  const bundle = fileURLToPath(vendorBundle());
-  if (!existsSync(bundle)) {
-    return { name: "mcp", status: "fail", detail: "vendor bundle missing — run npm run build" };
+  try {
+    mcpServerScript();
+    return { name: "mcp", status: "ok", detail: "@testomatio/mcp, direct tools" };
+  } catch {
+    return { name: "mcp", status: "fail", detail: "@testomatio/mcp is not installed" };
   }
-  if (!existsSync(metadataCachePath())) {
-    return { name: "mcp", status: "warn", detail: "tool cache empty, first run is proxy-only" };
-  }
-  return { name: "mcp", status: "ok", detail: "direct tools and proxy" };
 }
 
 async function probeCheck(runtime: Runtime, model?: Model): Promise<Check> {

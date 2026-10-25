@@ -102,9 +102,9 @@ test("the worker prompt has no interactive habits", () => {
 });
 
 test("Testomat.io access is worded for the way this run reaches it", () => {
-  const proxy = worker({ tms: "mcp-proxy", connected: true });
-  assert.match(proxy, /`mcp` tool/);
-  assert.doesNotMatch(proxy, /testomatio-<slug>/);
+  const tools = worker({ tms: "mcp-tools", connected: true });
+  assert.match(tools, /mcp__testomatio__/);
+  assert.doesNotMatch(tools, /testomatio-<slug>/);
   const cli = worker({ tms: "cli-only", connected: true });
   assert.match(cli, /\/api\/v2/);
   assert.doesNotMatch(cli, /MCP tools, one set/);
@@ -156,7 +156,7 @@ test("the report module composes the brief answer, the report contract and the v
 });
 
 test("the testomat.io module renders the domain rules for every access mode", () => {
-  assert.match(testomatio({ tms: "mcp-proxy", connected: true }), /<testomatio>/);
+  assert.match(testomatio({ tms: "mcp-tools", connected: true }), /<testomatio>/);
   assert.match(testomatio({ tms: "cli-only", connected: true }), /\/api\/v2/);
   assert.match(testomatio({ tms: "mcp-direct", connected: true }), /testomatio-<slug>/);
   const unconnected = testomatio({ tms: "cli-only" });

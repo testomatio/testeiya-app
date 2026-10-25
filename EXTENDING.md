@@ -101,7 +101,7 @@ The same reasoning applies to MCP: `src/mcp.ts` builds the server definition fro
 
 ## Adding a TUI
 
-Testeiya has no interactive mode, but pi ships the whole thing — `InteractiveMode` is the editor, transcript, autocomplete, model picker and slash commands that `pi` itself uses. Adding it is composition, not implementation. `@earendil-works/pi-tui` is already a dependency of this package.
+Testeiya has no interactive mode, but pi ships the whole thing — `InteractiveMode` is the editor, transcript, autocomplete, model picker and slash commands that `pi` itself uses. Adding it is composition, not implementation. Add `@earendil-works/pi-tui` as a dependency first.
 
 One structural difference: `InteractiveMode` takes an `AgentSessionRuntime`, not the `AgentSession` that `createTesteiyaSession` returns. The runtime is the layer that can *replace* the session — `/new`, `/resume`, `/fork` — so it takes a factory it can call again rather than a finished session. Everything `src/session.ts` passes to `DefaultResourceLoader` moves into `resourceLoaderOptions`, and everything it passes to `createAgentSession` moves into `createAgentSessionFromServices`.
 

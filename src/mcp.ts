@@ -1,9 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import type { LoadedMcpConfig } from "@earendil-works/pi-coding-agent";
 import type { TmsAccess } from "../prompt/testomat.io.js";
-import { PACKAGE_ROOT, PI_STATE_DIR } from "./env.js";
 
 const require_ = createRequire(import.meta.url);
 
@@ -16,7 +13,7 @@ export const SERVER = "testomatio";
  * prompt says exactly that instead of naming tools that are not there.
  */
 export function tmsAccess(): TmsAccess {
-  if (hasMcp()) return "mcp-proxy";
+  if (hasMcp()) return "mcp-tools";
   return "cli-only";
 }
 
@@ -32,113 +29,33 @@ function projectId(): string {
   return process.env.TESTOMATIO_PROJECT_ID ?? "";
 }
 
+export function mcpServerScript(): string {
+  return require_.resolve("@testomatio/mcp/index.js");
+}
+
 /**
- * An in-memory server definition built from the environment. Deliberately not
- * discovered from the checkout: a CI clone must not be able to point the agent
- * at an MCP server of its own.
+ * The one server pi's MCP extension connects, built from the environment.
+ * Replaces pi's own config loading, so a CI clone cannot point the agent at an
+ * MCP server of its own through `.pi/mcp.json`.
  */
-export function mcpConfig(): McpConfig {
-  const args = [
-    require_.resolve("@testomatio/mcp/index.js"),
-    "--token",
-    process.env.TESTOMATIO ?? "",
-    "--project",
-    projectId(),
-    // Part of the cache key: drops tool lists cached from @testomatio/mcp 2.x.
-    "--tools",
-    "full",
-  ];
+export function mcpConfig(): LoadedMcpConfig {
   const env: Record<string, string> = {};
   if (process.env.TESTOMATIO_URL) env.TESTOMATIO_BASE_URL = process.env.TESTOMATIO_URL;
 
   return {
-    mcpServers: {
-      [SERVER]: {
-        command: process.execPath,
-        args,
-        env,
-        lifecycle: "lazy",
-        directTools: true,
+    servers: [
+      {
+        name: SERVER,
+        source: "testeiya",
+        scope: "extension",
+        config: {
+          command: process.execPath,
+          args: [mcpServerScript(), "--token", process.env.TESTOMATIO ?? "", "--project", projectId(), "--tools", "full"],
+          env,
+          exposure: "direct",
+        },
       },
-    },
+    ],
+    errors: [],
   };
-}
-
-export function metadataCachePath(): string {
-  return join(PI_STATE_DIR, "mcp-cache.json");
-}
-
-/**
- * The MCP adapter, bundled at build time (see scripts/vendor-entry.ts). The
- * specifier is built at runtime so it is never resolved at compile time — the
- * bundle only exists after a build.
- */
-export function vendorBundle(): string {
-  return pathToFileURL(join(PACKAGE_ROOT, "dist", "vendor", "mcp.js")).href;
-}
-
-/**
- * Direct tools are registered from the adapter's metadata cache, which does not
- * exist on a fresh CI runner — so a first run would degrade to proxy-only. The
- * tool metadata ships with this package as mcp-tools.json (generated from
- * @testomatio/mcp's own definitions), and this writes it as a cache entry.
- *
- * The entry is keyed by a hash of the resolved server definition, so the hash
- * comes from the adapter's own bundled code rather than a copy of its logic — a
- * mismatch would silently invalidate the seed. A failure here is not fatal: the
- * run continues proxy-only, which still works.
- */
-export async function seedMetadataCache(config: McpConfig): Promise<void> {
-  const cachePath = metadataCachePath();
-  if (existsSync(cachePath)) return;
-
-  const tools = readSeedTools();
-  if (tools.length === 0) return;
-
-  const hash = await computeServerHash(config.mcpServers[SERVER]);
-  if (!hash) return;
-
-  const cache = {
-    version: 1,
-    servers: {
-      [SERVER]: {
-        configHash: hash,
-        tools,
-        resources: [],
-        cachedAt: Date.now(),
-      },
-    },
-  };
-  mkdirSync(PI_STATE_DIR, { recursive: true });
-  writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
-}
-
-function readSeedTools(): SeedTool[] {
-  const path = join(PACKAGE_ROOT, "mcp-tools.json");
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return [];
-  }
-}
-
-async function computeServerHash(definition: unknown): Promise<string | null> {
-  try {
-    const vendor = (await import(vendorBundle())) as {
-      computeServerHash: (definition: unknown) => string;
-    };
-    return vendor.computeServerHash(definition);
-  } catch {
-    return null;
-  }
-}
-
-export interface SeedTool {
-  name: string;
-  description?: string;
-  inputSchema?: unknown;
-}
-
-export interface McpConfig {
-  mcpServers: Record<string, Record<string, unknown>>;
 }
