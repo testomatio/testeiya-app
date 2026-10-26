@@ -98,7 +98,7 @@ async function runOnce(prompt = "check the login page") {
     },
   };
 
-  handlers.before_agent_start({ prompt }, ctx);
+  handlers.before_agent_start({ messageType: "user", prompt }, ctx);
   handlers.context({ messages: [{ role: "user", content: prompt }] });
   handlers.message_start({ message: assistant });
   handlers.tool_execution_start({ toolCallId: "call-1", toolName: "bash", args: { cmd: "ls" } });

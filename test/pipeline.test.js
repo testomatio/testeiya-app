@@ -12,6 +12,7 @@ import { Pipeline } from "../dist/src/pipeline/pipeline.js";
 import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
 import { CommandStage } from "../dist/src/pipeline/command-stage.js";
 import { Stage } from "../dist/src/pipeline/stage.js";
+import { SummaryStage } from "../dist/src/pipeline/summary-stage.js";
 import { TaskStage } from "../dist/src/pipeline/task-stage.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
 
@@ -21,14 +22,12 @@ const parse = (text) => new PipelineFile("p.yml").parse(text);
 // and every file the task asks for. "FAIL" in a task is a negative verdict.
 const FAKE = `
 import { appendFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 const args = process.argv.slice(2);
 const task = args.at(-1);
 appendFileSync(process.env.FAKE_LOG, JSON.stringify(args) + "\\n");
 if (process.env.FAKE_SLOW && task.includes("SLOW")) await new Promise((done) => setTimeout(done, 20000));
-const dir = task.match(/Pipeline folder: (.*)/)[1];
 const wanted = task.match(/Write these files: (.*)/);
-for (const file of wanted ? wanted[1].split(", ") : []) writeFileSync(join(dir, file), "written\\n");
+for (const file of wanted ? wanted[1].split(", ") : []) writeFileSync(file, "written\\n");
 for (let i = 0; i < args.length; i++) {
   if (args[i] !== "-o") continue;
   const out = args[i + 1];
@@ -43,27 +42,33 @@ test("every bundled pipeline loads", () => {
 });
 
 test("a stage naming an undefined gate is bad usage", () => {
-  const text = "stages:\n  - id: a\n    run: echo\n    when: [staging]\n";
+  const text = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    when: [staging]\n";
   assert.throws(() => parse(text), /names gate "staging"/);
 });
 
 test("a stage needs exactly one of task or run", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n"), /exactly one of task or run/);
-  const both = "stages:\n  - id: a\n    run: echo\n    task: hi\n";
+  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n"), /exactly one of task or run/);
+  const both = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    task: hi\n";
   assert.throws(() => parse(both), /exactly one of task or run/);
 });
 
-test("reserved ids, unknown keys and stray stopOn are rejected", () => {
-  assert.throws(() => parse("stages:\n  - id: summary\n    run: echo\n"), /reserved/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run: echo\n    model: x\n"), /unknown key "model"/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run: echo\n    stopOn: always\n"), /stopOn/);
+test("a stage needs a title and an emoji", () => {
+  assert.throws(() => parse("stages:\n  - id: a\n    emoji: x\n    run: echo\n"), /stage "a" needs a title/);
+  assert.throws(() => parse("stages:\n  - id: a\n    title: A\n    run: echo\n"), /stage "a" needs an emoji/);
 });
 
-test("an output may not reuse a stage's own file name", async () => {
+test("reserved ids, unknown keys and stray stopOn are rejected", () => {
+  assert.throws(() => parse("stages:\n  - id: summary\n    title: summary\n    emoji: 🔹\n    run: echo\n"), /reserved/);
+  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    model: x\n"), /unknown key "model"/);
+  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    stopOn: always\n"), /stopOn/);
+});
+
+test("an output may not reuse the stage's own file name, nor one of its inputs", async () => {
   const { repo, cli } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: plan\n    task: hi\n  - id: b\n    task: hi\n    outputs: [plan.md]\n");
-  const run = () => new Pipeline({ name: file, dir: join(repo, ".qa"), cli, dryRun: true }).run();
-  await assert.rejects(inRepo(repo, run), /plan.md is a file stage "plan" writes/);
+  const check = (text) => inRepo(repo, () => new Pipeline({ name: write(repo, "pipe.yml", text), dir: join(repo, ".qa"), cli, dryRun: true }).run());
+  await assert.rejects(check("stages:\n  - id: plan\n    title: plan\n    emoji: 🔹\n    task: hi\n    outputs: [plan.md]\n"), /plan.md is a file the stage writes itself/);
+  const edits = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    task: hi\n    outputs: [x.md]\n  - id: b\n    title: b\n    emoji: 🔹\n    task: hi\n    inputs: [x.md]\n    outputs: [x.md]\n";
+  await assert.rejects(check(edits), /reads and writes x.md/);
 });
 
 test("durations read seconds, minutes and hours", () => {
@@ -114,18 +119,29 @@ gates:
     message: No staging URL.
 stages:
   - id: review
+    title: review
+    emoji: 🔹
     session: qa
     task: Review it.
     outputs: [endpoints.txt]
   - id: list
-    run: printf '/users\\n\\n/orders\\n' > "$PIPELINE_DIR/endpoints.txt"
+    title: list
+    emoji: 🔹
+    run: printf '/users\\n\\n/orders\\n' > "$STAGE_DIR/endpoints.txt"
+    outputs: [endpoints.txt]
   - id: check
+    title: check
+    emoji: 🔹
     each_line: endpoints.txt
     run: echo "checking $ITEM"
   - id: explore
+    title: explore
+    emoji: 🔹
     when: [staging]
     task: Explore it.
   - id: results
+    title: results
+    emoji: 🔹
     session: qa
     task: Read results.
     inputs: [explore.md, review.md]
@@ -142,22 +158,58 @@ stages:
   );
   assert.equal(state.stages[3].reason, "No staging URL.");
   assert.deepEqual(state.stages[2].items.map((item) => item.item), ["/users", "/orders"]);
-  assert.match(readFileSync(join(dir, "check.log"), "utf8"), /checking \/orders/);
+  assert.match(readFileSync(join(dir, "3-check", "check.log"), "utf8"), /checking \/orders/);
+  assert.equal(readFileSync(join(dir, "3-check", "endpoints.txt"), "utf8"), "/users\n\n/orders\n");
+  assert.equal(state.stages[1].log, "2-list/list.log");
+  assert.ok(existsSync(join(dir, "summary", "summary.md")));
 
   const calls = calledWith(log);
   const results = calls.find((args) => args.at(-1).startsWith("Read results."));
-  assert.match(results.at(-1), /Read these first: review.md/);
+  assert.match(results.at(-1), new RegExp(`Read these first: ${join(dir, "5-results", "review.md")}`));
+  assert.equal(readFileSync(join(dir, "5-results", "review.md"), "utf8"), readFileSync(join(dir, "1-review", "review.md"), "utf8"));
   assert.match(results.at(-1), /Not available: explore.md \(stage explore skipped: No staging URL.\)/);
   assert.ok(results.includes("--no-thread"));
   assert.ok(results.includes(join(dir, ".sessions", "qa.jsonl")));
 
-  const summary = calls.find((args) => args.at(-1).startsWith("/pipeline-report"));
+  const summary = calls.find((args) => args.at(-1).startsWith("Write the final report"));
   assert.ok(!summary.includes("--no-thread"));
+  assert.match(summary.at(-1), new RegExp(`The draft: ${join(dir, "summary", "draft.md")}`));
+  assert.ok(results.includes("--no-default-footer"));
+  assert.ok(!summary.includes("--no-default-footer"));
+  const draft = readFileSync(join(dir, "summary", "draft.md"), "utf8");
+  assert.ok(draft.startsWith("### 🔹 review\n\nreport of Review it.\n\n### 🔹 list\n\n`printf"));
+  assert.match(draft, /ended pass\. Log: \[2-list\/list\.log\]/);
+  assert.match(draft, /### 🔹 explore\n\nSkipped: No staging URL\.\n/);
   assert.ok(!summary.includes("--followup"));
   assert.ok(summary.includes("gh:pr#7"));
   assert.ok(!summary.includes("out/final.md"));
   assert.equal(calls.filter((args) => args.includes("gh:pr#7")).length, 1);
   assert.ok(existsSync(join(repo, "out/final.md")));
+});
+
+test("each stage works in a numbered folder, reading earlier folders through links", async () => {
+  const { repo, cli } = setup();
+  const filler = Array.from({ length: 8 }, (_, index) => `  - id: step-${index}\n    title: step-${index}\n    emoji: 🔹\n    run: "true"\n`).join("");
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: write
+    title: write
+    emoji: 🔹
+    run: mkdir -p "$STAGE_DIR/cases" && touch "$STAGE_DIR/cases/a.md" "$STAGE_DIR/cases/b.md"
+    outputs: [cases/]
+  - id: sync
+    title: sync
+    emoji: 🔹
+    each_file: cases/*.md
+    run: echo "syncing $ITEM"
+${filler}`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run()), 0);
+  assert.ok(existsSync(join(dir, "01-write", "cases", "a.md")));
+  assert.ok(existsSync(join(dir, "10-step-7")));
+  const synced = readFileSync(join(dir, "02-sync", "sync.log"), "utf8");
+  assert.match(synced, /syncing cases\/a.md/);
+  assert.match(synced, /syncing cases\/b.md/);
 });
 
 test("changes git cannot read stop the run instead of skipping it", async () => {
@@ -170,6 +222,8 @@ gates:
 when: [big]
 stages:
   - id: one
+    title: one
+    emoji: 🔹
     run: echo one
 `);
   await assert.rejects(
@@ -180,7 +234,7 @@ stages:
 
 test("the checkout itself is not a pipeline folder", async () => {
   const { repo, cli } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    run: echo one\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run: echo one\n");
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: file, dir: repo, cli }).run()), /folder of its own/);
 });
 
@@ -194,8 +248,12 @@ gates:
 when: [coverage]
 stages:
   - id: one
+    title: one
+    emoji: 🔹
     task: One.
   - id: two
+    title: two
+    emoji: 🔹
     task: Two.
 `);
   const dir = join(repo, ".qa");
@@ -220,6 +278,8 @@ gates:
     message: Never used.
 stages:
   - id: one
+    title: one
+    emoji: 🔹
     when: [staging]
     run: echo one
 `);
@@ -230,7 +290,7 @@ stages:
   assert.equal(await inRepo(repo, () => new Pipeline({ name: fixed, dir, cli, sets: { CHECK_STAGING_URL: "x" } }).check()), 0);
   assert.equal(existsSync(dir), false);
   assert.equal(calledWith(log).length, 0);
-  const broken = write(repo, "broken.yml", "stages:\n  - id: one\n    run: echo\n    inputs: [nope.md]\n");
+  const broken = write(repo, "broken.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run: echo\n    inputs: [nope.md]\n");
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: broken, dir, cli }).check()), /reads nope.md/);
 });
 
@@ -242,9 +302,13 @@ gates:
 when: [map]
 stages:
   - id: review
+    title: review
+    emoji: 🔹
     task: Review.
     outputs: [plan.md]
   - id: explore
+    title: explore
+    emoji: 🔹
     when: [staging]
     run: echo
     inputs: [plan.md, seed.txt]
@@ -263,14 +327,14 @@ stages:
 
 test("a --gate from the job skips the run before outputs are checked", async () => {
   const { repo, log, cli } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    task: One.\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    task: One.\n");
   const dir = join(repo, ".qa");
   const options = { name: file, dir, cli, outputs: ["gh:pr#"], gates: { pr: "test -n \"$PR\"" } };
   assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
   await assert.rejects(inRepo(repo, () => new Pipeline({ ...options, sets: { PR: "1" } }).run()), /gh:pr#/);
-  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    when: [pr]\n    task: One.\n");
+  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    title: one\n    emoji: 🔹\n    when: [pr]\n    task: One.\n");
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: gated, dir, cli, gates: { pr: "true" } }).run()), /already defines/);
 });
 
@@ -279,9 +343,13 @@ test("stopOn fail stops the stages after it, the summary still runs", async () =
   const file = write(repo, "pipe.yml", `
 stages:
   - id: one
+    title: one
+    emoji: 🔹
     task: FAIL on purpose.
     stopOn: fail
   - id: two
+    title: two
+    emoji: 🔹
     task: Two.
 `);
   const dir = join(repo, ".qa");
@@ -298,13 +366,19 @@ test("a timed-out round retries from the stage that stopped", async () => {
   const file = write(repo, "pipe.yml", `
 stages:
   - id: one
+    title: one
+    emoji: 🔹
     session: qa
     task: One.
   - id: two
+    title: two
+    emoji: 🔹
     session: qa
     task: SLOW two.
     timeout: 1s
   - id: three
+    title: three
+    emoji: 🔹
     task: Three.
 `);
   const dir = join(repo, ".qa");
@@ -319,18 +393,24 @@ stages:
   const second = await inRepo(repo, () => new Pipeline({ name: file, dir, cli }).run());
   assert.equal(second, 0);
   const calls = calledWith(log);
-  assert.deepEqual(calls.map((args) => args.at(-1).split("\n")[0]), ["SLOW two.", "Three.", "/pipeline-report"]);
+  assert.deepEqual(calls.map((args) => args.at(-1).split("\n")[0]), ["SLOW two.", "Three.", 'Write the final report of the "pipe" pipeline, round 1.']);
   assert.ok(calls[0].includes("--followup"));
   assert.equal(readJson(join(dir, "pipeline.json")).round, 1);
 });
 
-test("a new commit starts a new round counted from the last one", async () => {
-  const { repo, cli } = setup();
+test("a new commit starts a new round that updates the last one", async () => {
+  const { repo, log, cli } = setup();
   const file = write(repo, "pipe.yml", `
 stages:
   - id: one
-    run: cp "$PIPELINE_DIR/changes.txt" "$PIPELINE_DIR/seen.txt"
+    title: one
+    emoji: 🔹
+    run: cp "$PIPELINE_DIR/changes.txt" "$STAGE_DIR/seen.txt"
     outputs: [seen.txt]
+  - id: two
+    title: two
+    emoji: 🔹
+    task: Two.
 `);
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "pipeline");
@@ -343,8 +423,14 @@ stages:
   const state = readJson(join(dir, "pipeline.json"));
   assert.equal(state.round, 2);
   assert.equal(state.since, firstCommit);
-  assert.equal(readFileSync(join(dir, "seen.txt"), "utf8").trim(), "src/new.ts");
+  assert.equal(readFileSync(join(dir, "1-one", "seen.txt"), "utf8").trim(), "src/new.ts");
   assert.deepEqual(state.rounds.map((entry) => entry.round), [1, 2]);
+  assert.ok(existsSync(join(dir, ".last", "1-one", "seen.txt")));
+  assert.ok(existsSync(join(dir, ".last", "summary", "summary.md")));
+
+  const tasks = calledWith(log).map((args) => args.at(-1)).filter((task) => task.startsWith("Two."));
+  assert.doesNotMatch(tasks[0], /Last round/);
+  assert.match(tasks[1], new RegExp(`Last round: ${join(dir, ".last", "2-two")}\\..*Changed files: ${join(dir, "changes.txt")}`));
 });
 
 function setup() {
@@ -400,3 +486,38 @@ function calledWith(log) {
   if (!existsSync(log)) return [];
   return readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
+
+test("the summary draft keeps each stage report word for word, its headings under the section", () => {
+  const dir = mkdtempSync(join(tmpdir(), "summary-"));
+  mkdirSync(join(dir, "1-req"));
+  writeFileSync(join(dir, "1-req", "req.md"), "## Breakdown\n\n- one\n\n```\n# not a heading\n```\n\n### Risks\n\n1. two\n");
+  const spec = (id, extra) => ({ id, title: id, emoji: "🔹", inputs: [], outputs: [], when: [], stopOn: [], ...extra });
+  const stages = [new TaskStage(spec("req", { task: "Req." }), "1-req"), new TaskStage(spec("cases", { task: "Cases." }), "2-cases")];
+  const records = { req: { id: "req", status: "pass", report: "1-req/req.md" }, cases: { id: "cases", status: "skipped", reason: "No tests." } };
+  const state = { record: { round: 1, status: "pass" }, stage: (id) => records[id] };
+  const summary = new SummaryStage({ name: "p" }, stages, state, dir);
+  assert.equal(
+    summary.draft(dir),
+    "### 🔹 req\n\n#### Breakdown\n\n- one\n\n```\n# not a heading\n```\n\n##### Risks\n\n1. two\n\n### 🔹 cases\n\nSkipped: No tests.\n"
+  );
+});
+
+test("a variable can run Liquid filters and ours for URLs", () => {
+  const vars = new Variables({ URL: "https://staging.example.com/users/Settings", NAME: " qa " });
+  assert.equal(vars.expand("${URL | host}"), "staging.example.com");
+  assert.equal(vars.expand("${URL | path | slugify}"), "users-settings");
+  assert.equal(vars.expand("${NAME | strip | capitalize}"), "Qa");
+  assert.equal(vars.expand('${MISSING | default: "none"}'), "none");
+  assert.equal(vars.expand("${MISSING | host}"), "");
+  assert.equal(vars.expand("${URL:-x} ${MISSING:-x}"), "https://staging.example.com/users/Settings x");
+  const env = vars.withExpanded({ SITE: "${URL | host}", PAGE: "${URL | path | slugify}", KEY: "${SITE}-${PAGE}" });
+  assert.equal(env.get("KEY"), "staging.example.com-users-settings");
+});
+
+test("an unknown filter, or a filter in a shell command, is bad usage", () => {
+  const stage = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n";
+  assert.throws(() => parse(`env:\n  SITE: \${URL | nope}\n${stage}    run: echo\n`), /env.SITE: \$\{URL \| nope\}: undefined filter: nope/);
+  assert.throws(() => parse(`${stage}    task: Check \${URL | hots}\n`), /stage "a" task: .*undefined filter: hots/);
+  assert.throws(() => parse(`${stage}    run: echo \${URL | host}\n`), /a shell command cannot use filters/);
+  assert.equal(parse(`env:\n  SITE: \${URL | host}\n${stage}    run: echo "$SITE"\n`).env.SITE, "${URL | host}");
+});

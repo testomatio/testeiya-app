@@ -201,7 +201,7 @@ Pipelines
   A stage whose gate fails is skipped with the gate's message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a
   CI cache per pull request, and a re-run on the same commit retries from the
-  stage that stopped, while a new commit starts a round told what changed.
+  stage that stopped, while a new commit starts a round that updates the last one.
   --dry-run shows the plan and spends nothing. "testeiya pipeline-check" checks
   the file and every gate it declares, and prints the message of each gate that
   does not pass. It exits 1 when one does not, 2 when the file is invalid.

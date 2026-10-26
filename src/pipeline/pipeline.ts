@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,12 +18,13 @@ import type { Stage, StageContext } from "./stage.js";
 import {
   CHANGES_FILE,
   COPY_FILE,
+  LAST_DIR,
   PipelineState,
-  STATE_FILE,
   type PipelineRecord,
   type StageRecord,
   type Status,
 } from "./state.js";
+import { SummaryStage } from "./summary-stage.js";
 import { TaskStage } from "./task-stage.js";
 import { Variables } from "./variables.js";
 
@@ -112,8 +113,10 @@ export class Pipeline {
     let created = previous?.created ?? [];
     mkdirSync(dir, { recursive: true });
     if (!retry) {
-      // A new round clears what the last one wrote and keeps the sessions.
-      for (const name of created) rmSync(join(dir, name), { recursive: true, force: true });
+      // A new round moves what the last one wrote to .last, and keeps the sessions.
+      rmSync(join(dir, LAST_DIR), { recursive: true, force: true });
+      mkdirSync(join(dir, LAST_DIR));
+      for (const name of created.filter((entry) => existsSync(join(dir, entry)))) renameSync(join(dir, name), join(dir, LAST_DIR, name));
       created = [];
       writeFileSync(join(dir, COPY_FILE), file.text());
     }
@@ -232,30 +235,13 @@ export class Pipeline {
     const { state } = run;
     const record: StageRecord = { id: "summary", status: "not-run" };
     state.record.stages.push(record);
-    await this.summaryStage(run).run(this.context(run, true), record);
+    await new SummaryStage(run.spec, run.stages, run.state, run.dir).run(this.context(run, true), record);
     // The verdict came from the stages; the summary only explains it.
     if (record.status === "fail") {
       record.status = "pass";
       delete record.reason;
     }
     if (!this.launcher.interrupted) state.record.status = PipelineState.verdict(state.record.stages);
-  }
-
-  private summaryStage(run: Run): TaskStage {
-    const { spec, stages, state } = run;
-    const files = state.record.stages.flatMap((record) => {
-      const stage = stages.find((entry) => entry.id === record.id);
-      const own = [record.report, record.log, ...(stage?.spec.outputs ?? [])];
-      return own.filter((name): name is string => Boolean(name));
-    });
-    const lines = ["/pipeline-report", "", `Write the final report of the "${spec.name}" pipeline, round ${state.record.round}.`];
-    if (spec.summary) lines.push("", spec.summary.trim());
-    lines.push(
-      "",
-      `Read pipeline.json first. The verdict is ${state.record.status}. Explain it, never change it.`,
-      `Stage files: ${files.join(", ") || "none"}`
-    );
-    return new TaskStage({ id: "summary", task: lines.join("\n"), session: "summary", inputs: [STATE_FILE], outputs: [], when: [], stopOn: [] });
   }
 
   private context(run: Run, reporter: boolean): StageContext {
@@ -269,6 +255,7 @@ export class Pipeline {
       model: this.options.model,
       report,
       missing: (input) => this.whyMissing(input, run),
+      locate: (input, reader) => this.locate(input, reader, run),
     };
   }
 
@@ -302,16 +289,22 @@ export class Pipeline {
     return gates;
   }
 
-  /** An output may not take a file another stage writes on its own. */
+  /**
+   * Each stage gets a numbered folder, padded so they sort in order. An output may
+   * not take the stage's own file names, nor be one of its inputs: those are links
+   * to another stage's files.
+   */
   private stages(specs: StageSpec[]): Stage[] {
-    const stages = specs.map((spec) => {
-      if (spec.run !== undefined) return new CommandStage(spec);
-      return new TaskStage(spec);
+    const width = String(specs.length).length;
+    const stages = specs.map((spec, index) => {
+      const folder = `${String(index + 1).padStart(width, "0")}-${spec.id}`;
+      if (spec.run !== undefined) return new CommandStage(spec, folder);
+      return new TaskStage(spec, folder);
     });
     for (const stage of stages) {
       for (const output of stage.spec.outputs) {
-        const owner = stages.find((other) => other.files().includes(output));
-        if (owner) throw new UsageError(`stage "${stage.id}" output ${output} is a file stage "${owner.id}" writes itself`);
+        if (stage.files().includes(output)) throw new UsageError(`stage "${stage.id}" output ${output} is a file the stage writes itself`);
+        if (stage.inputs().includes(output)) throw new UsageError(`stage "${stage.id}" reads and writes ${output}. Write a new file`);
       }
     }
     return stages;
@@ -357,6 +350,17 @@ export class Pipeline {
       if (!producer) return false;
       return run.state.stage(producer.id)?.status === "skipped";
     });
+  }
+
+  /** The last stage before the reader that wrote the input, else the top of the folder. */
+  private locate(input: string, reader: Stage, run: Run): string | null {
+    let before = run.stages;
+    const index = run.stages.indexOf(reader);
+    if (index >= 0) before = run.stages.slice(0, index);
+    const producer = before.filter((stage) => stage.produces(input) && existsSync(join(run.dir, stage.folder, input))).at(-1);
+    if (producer) return producer.folder;
+    if (existsSync(join(run.dir, input))) return ".";
+    return null;
   }
 
   private whyMissing(input: string, run: Run): string {

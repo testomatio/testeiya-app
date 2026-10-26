@@ -1,14 +1,43 @@
+import { Liquid } from "liquidjs";
+
+/** `${NAME}`, `${NAME:-default}` or `${NAME | filter | filter: arg}`. */
+const REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*)|(\s*\|[^}]*))?\}/g;
+
+/** Liquid's filters, and ours for URLs. Only expressions: Liquid's tags never run. */
+const liquid = new Liquid({ strictFilters: true });
+liquid.registerFilter("host", (value: unknown) => url(value)?.host ?? "");
+liquid.registerFilter("path", (value: unknown) => url(value)?.pathname ?? "");
+
 /** The environment a pipeline runs in, and `${NAME}` expansion over it. */
 export class Variables {
   constructor(private readonly values: Env) {}
+
+  /** Why the filters in `text` cannot run, or null. */
+  static problem(text: string): string | null {
+    for (const [, name, , filters] of text.matchAll(REFERENCE)) {
+      if (!filters) continue;
+      try {
+        liquid.evalValueSync(`${name}${filters}`, {});
+      } catch (err) {
+        return `\${${name}${filters}}: ${(err as Error).message.split("\n")[0]}`;
+      }
+    }
+    return null;
+  }
+
+  /** Whether `text` uses a filter. */
+  static filtered(text: string): boolean {
+    return [...text.matchAll(REFERENCE)].some((match) => match[3]);
+  }
 
   get(name: string): string | undefined {
     return this.values[name];
   }
 
-  /** `${NAME}` and `${NAME:-default}`, the shell's rule: unset is empty. */
+  /** `${NAME}` and `${NAME:-default}`, the shell's rule: unset is empty. A `|` runs Liquid filters. */
   expand(text: string): string {
-    return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => {
+    return text.replace(REFERENCE, (_, name: string, fallback?: string, filters?: string) => {
+      if (filters) return String(liquid.evalValueSync(`${name}${filters}`, this.values) ?? "");
       const value = this.values[name];
       if (value) return value;
       return fallback ?? "";
@@ -37,6 +66,11 @@ export class Variables {
   toEnv(): Env {
     return { ...this.values };
   }
+}
+
+function url(value: unknown): URL | null {
+  if (typeof value !== "string" || !URL.canParse(value)) return null;
+  return new URL(value);
 }
 
 export type Env = Record<string, string | undefined>;

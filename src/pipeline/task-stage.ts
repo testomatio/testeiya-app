@@ -3,15 +3,15 @@ import { join } from "node:path";
 
 import { log } from "./log.js";
 import { Stage, type Item, type StageContext } from "./stage.js";
-import { SESSIONS_DIR, type StageResult } from "./state.js";
+import { CHANGES_FILE, LAST_DIR, SESSIONS_DIR, type StageResult } from "./state.js";
 import type { Variables } from "./variables.js";
 
 const RETRY_NOTE =
-  "This stage stopped before it finished. Go on from where you stopped. Files you already wrote are in the pipeline folder.";
+  "This stage stopped before it finished. Go on from where you stopped. Files you already wrote are in the stage folder.";
 
 /**
  * An agent stage: a `testeiya task` run. It writes its report to `<id>.md`
- * and its verdict to `<id>.json`.
+ * and its verdict to `<id>.json`, in its folder.
  */
 export class TaskStage extends Stage {
   protected readonly result = { field: "report" as const, extension: "md" };
@@ -22,8 +22,8 @@ export class TaskStage extends Stage {
 
   protected async runItem(context: StageContext, item: Item, vars: Variables): Promise<StageResult> {
     const { dir } = context;
-    const report = `${this.id}${item.suffix}.md`;
-    const envelope = `${this.id}${item.suffix}.json`;
+    const report = `${this.folder}/${this.id}${item.suffix}.md`;
+    const envelope = `${this.folder}/${this.id}${item.suffix}.json`;
     rmSync(join(dir, report), { force: true });
     rmSync(join(dir, envelope), { force: true });
 
@@ -45,7 +45,8 @@ export class TaskStage extends Stage {
     const { session } = this.spec;
     const args: string[] = [];
     // Only the reporting stage posts. Every other stage keeps out of the comment thread.
-    if (!context.report) args.push("--no-thread");
+    // Their reports land in the summary, which is signed once.
+    if (!context.report) args.push("--no-thread", "--no-default-footer");
     for (const output of outputs) args.push("-o", output);
     if (context.report) args.push(...context.report.args());
     if (session) args.push("--session-file", join(context.dir, SESSIONS_DIR, `${session}.jsonl`));
@@ -57,16 +58,28 @@ export class TaskStage extends Stage {
 
   /** The task, then where its files are, so the model never guesses a path. */
   private task(context: StageContext, vars: Variables): string {
-    const { dir } = context;
-    const lines = [`Pipeline folder: ${dir}`];
+    const dir = this.dir(context);
+    const lines = [`Stage folder: ${dir}`];
     const wanted = this.inputs();
     const present = wanted.filter((input) => existsSync(join(dir, input)));
     const absent = wanted.filter((input) => !present.includes(input));
-    if (present.length > 0) lines.push(`Read these first: ${present.join(", ")}`);
-    const outputs = this.spec.outputs.map((output) => vars.expand(output));
+    if (present.length > 0) lines.push(`Read these first: ${present.map((input) => join(dir, input)).join(", ")}`);
+    const outputs = this.spec.outputs.map((output) => join(dir, vars.expand(output)));
     if (outputs.length > 0) lines.push(`Write these files: ${outputs.join(", ")}`);
     for (const input of absent) lines.push(`Not available: ${input} (${context.missing(input)})`);
+    const last = this.lastRound(context);
+    if (last) lines.push(last);
     return `${vars.expand(this.spec.task ?? "").trim()}\n\n${lines.join("\n")}`;
+  }
+
+  /** A new round updates the last one's result instead of starting over. */
+  protected lastRound(context: StageContext): string | null {
+    const last = join(context.dir, LAST_DIR, this.folder);
+    if (!existsSync(last)) return null;
+    let line = `Last round: ${last}. Update its result: keep what still holds, redo what the changes touch.`;
+    const changes = join(context.dir, CHANGES_FILE);
+    if (existsSync(changes)) line += ` Changed files: ${changes}`;
+    return line;
   }
 
   private readEnvelope(path: string): { status?: string; reason?: string | null } | null {

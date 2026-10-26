@@ -18,6 +18,7 @@ export default function langfuseExtension(pi: ExtensionAPI): void {
   let context: unknown[] = [];
 
   pi.on("before_agent_start", (event, ctx) => {
+    if (event.messageType !== "user") return;
     root = tracer.trace(traceName(event.prompt), {
       input: event.prompt,
       tags: ["testeiya", "cli"],

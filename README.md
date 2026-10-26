@@ -23,6 +23,7 @@ its own browser, and syncs with your Testomat.io project.
 | OS | Download |
 |---|---|
 | macOS (Apple Silicon) | [`stable-macos-arm64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-arm64-Testeiya.dmg) |
+| macOS (Intel) | [`stable-macos-x64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-x64-Testeiya.dmg) |
 | Windows (x64) | [`stable-win-x64-Testeiya.zip`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-win-x64-Testeiya.zip) |
 | Linux (x64) | [`Testeiya-x86_64.AppImage`](https://github.com/testomatio/testeiya-app/releases/latest/download/Testeiya-x86_64.AppImage) |
 
@@ -227,28 +228,35 @@ gates:
     run: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
     message: No browser. Run npx playwright install --with-deps chromium.
 
-env:
-  EXPLORBOT_OUTPUT: ${PIPELINE_DIR}/explorbot
-
 stages:
   - id: review
+    title: Review
+    emoji: 🔍
     session: qa
     task: Review this pull request. Write browser scenarios to plan.md. /explorbot-plan
     outputs: [plan.md]
   - id: explore
+    title: Browser testing
+    emoji: 🌐
     when: [staging, browser]
-    run: npx -y explorbot test "$PIPELINE_DIR/plan.md" '*'
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot test "$STAGE_DIR/plan.md" '*'
+    inputs: [plan.md]
+    outputs: [explorbot/]
     timeout: 30m
   - id: results
+    title: Results
+    emoji: 📊
     session: qa
     task: Read the Explorbot report under explorbot/ and say what broke.
     inputs: [explorbot/]
 ```
 
-- A stage is a `task` for the agent or a `run` shell command.
-- Stages pass files through one folder, `$PIPELINE_DIR`. An agent stage writes
-  `<id>.md` and `<id>.json`, a command writes `<id>.log`. `inputs` and
-  `outputs` name the rest.
+- A stage is a `task` for the agent or a `run` shell command. Its `title` and
+  `emoji` head its section in the final report, `### 🔍 Review`.
+- Each stage keeps its files in a numbered folder, `1-review/`, `2-explore/`, …,
+  so a run reads in order. An agent stage writes `<id>.md` and `<id>.json`, a
+  command writes `<id>.log`. `outputs` name the rest. `inputs` are linked into
+  the folder from the stage that wrote them, as `$STAGE_DIR/<file>`.
 - `gates` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
   `ignore`, `min_files`). `when:` names the gates a stage needs. One fails and
   the stage is skipped with its message. In the top-level `when:` it skips the
@@ -262,16 +270,19 @@ stages:
 
 The full format is in [PIPELINES.md](PIPELINES.md).
 
-A pipeline with more than one stage ends with a summary written by the
-`pipeline-report` skill. It is the only thing posted to `--output`. Every other
-stage runs with `--no-thread`, so nothing else touches the pull request.
+A pipeline with more than one stage ends with a summary: one `### <emoji> <title>`
+section per stage holding that stage's report, trimmed, with nothing repeated
+between sections. It never adds content of its own. It is the
+only thing posted to `--output`. Every other stage runs with `--no-thread`, so
+nothing else touches the pull request.
 
 ### Rounds
 
 Keep `--dir` between runs, as a CI cache per pull request, and each run is a
 round. A re-run on the same commit retries from the stage that stopped. A new
-commit starts a new round: `changes` count from the last round's commit, stages
-with a session are told what changed, and the summary updates its comment.
+commit starts a new round: `changes` count from the last round's commit, the
+last round's files move to `.last/`, and each agent stage updates its own last
+result instead of starting over. The summary updates its comment.
 
 ```yaml
 - uses: actions/cache/restore@v4

@@ -40,6 +40,8 @@ when: [coverage]
 
 stages:
   - id: tests
+    title: Tests
+    emoji: 🧪
     when: [testomatio]
     run: |
       npx -y @testomatio/reporter run --kind detect --warn \
@@ -48,11 +50,12 @@ stages:
     timeout: 30m
 
   - id: failures
+    title: Failures
+    emoji: 🐞
     when: [local, test-command]
     session: triage
     task: |
-      Read the test run in tests.log. For each failure, say if this change caused it,
-      if it is flaky, or if the test is out of date. /debug-fix-failed-flaky-autotests
+      Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
       Fail the run if this change caused a failure.
     inputs: [tests.log]
 ```
@@ -76,12 +79,14 @@ An unknown key is an error, found before anything runs.
 | Key | Meaning |
 |---|---|
 | `id` | Required. Lowercase words joined by dashes. Unique. Names the stage's files. `pipeline` and `summary` are reserved |
+| `title` | Required. The stage's heading in the final report |
+| `emoji` | Required. Shown before the title in the final report |
 | `task` | An agent stage: the task text. `/skill` names expand |
 | `run` | A command stage: a shell command, run with `sh` in the checkout |
 | `when` | Gates this stage needs. One fails: the stage is skipped with its message |
 | `session` | A named, persistent conversation. See [Sessions](#sessions) |
-| `inputs` | Files the stage reads, from the pipeline folder |
-| `outputs` | Files the stage must leave in the pipeline folder |
+| `inputs` | Files the stage reads, linked into its folder. See [Files](#files) |
+| `outputs` | Files the stage must leave in its folder |
 | `each_line` | Run once per non-empty line of this file. See [Loops](#loops) |
 | `each_file` | Run once per file matching this mask |
 | `stopOn` | `fail`, `gate`, or both as a list. See [Stopping](#stopping) |
@@ -176,6 +181,23 @@ Every key is optional. All given must hold, and at least one file must count.
 - `${NAME}` and `${NAME:-default}` expand in `task`, `env`, `outputs` and gate
   values. Unset is empty. `run` goes to the shell, which uses the same rules and
   more, like `${NAME:+word}`.
+- `${NAME | filter}` runs [Liquid filters](https://liquidjs.com/filters/overview.html)
+  on the value: `strip`, `downcase`, `capitalize`, `replace: "/", "-"`,
+  `slugify`, `default: "x"`, and the rest. Two more are for URLs: `host` and
+  `path`. Filters chain left to right.
+- A shell command cannot use filters. Set a variable in `env:` and use that:
+
+  ```yaml
+  env:
+    SITE: ${STAGING_URL | host}          # staging.example.com
+    PAGE: ${STAGING_URL | path | slugify} # users-settings
+    NAME: ${SITE}-${PAGE}
+  stages:
+    - id: explore
+      run: explorbot explore "$STAGING_URL" --output "$STAGE_DIR/$NAME"
+  ```
+
+- An unknown filter fails the file, so `pipeline-check` catches it.
 - `--set KEY=VALUE` and the job's own environment reach every stage. `--set` wins
   over `env:`.
 - The runner sets:
@@ -183,6 +205,7 @@ Every key is optional. All given must hold, and at least one file must count.
 | Variable | Value |
 |---|---|
 | `PIPELINE_DIR` | absolute path of the pipeline folder |
+| `STAGE_DIR` | absolute path of the stage's own folder |
 | `PIPELINE_NAME` | the pipeline's name |
 | `PIPELINE_ROUND` | 1, 2, … |
 | `ITEM` | in a loop: the line, or the file's path |
@@ -194,8 +217,36 @@ they belong to a single task.
 
 ## Files
 
-Every stage runs in the checkout. Paths in `inputs`, `outputs` and loops resolve
-against the pipeline folder, `$PIPELINE_DIR`. A path ending in `/` is a folder.
+Every stage runs in the checkout and keeps its files in a folder of its own,
+numbered in stage order, `$STAGE_DIR`. Open the folders in order to review a run:
+
+```
+.qa/
+  pipeline.json
+  changes.txt
+  1-requirements/
+    requirements.md
+    requirements.json
+  2-review/
+    requirements.md    -> ../1-requirements/requirements.md
+    review.md
+    review.json
+  3-explore/
+    explore.log
+    explorbot/
+  summary/
+    draft.md
+    summary.md
+```
+
+- With 10 stages or more the numbers are padded: `01-review`, `02-check`.
+- Hand a stage's report to the next one, `inputs: [requirements.md]`. Declare
+  an extra output only when a command needs its format, like a list to loop
+  over. Outputs are never part of the final report.
+- When a skill fits, keep the task to two lines: what to work on, the skill,
+  and where files go. The skill holds the method and the format.
+- Paths in `inputs`, `outputs` and loops are relative to the stage folder. A
+  path ending in `/` is a folder.
 
 Each stage leaves its own files:
 
@@ -206,11 +257,16 @@ Each stage leaves its own files:
 | `<id>.log` | command | stdout and stderr |
 
 - A later stage reads them by name: `inputs: [review.md]`.
-- An `outputs` entry may not reuse one of these names.
+- Before a stage runs, each input is linked into its folder, from the last
+  earlier stage that wrote it or from the top of the pipeline folder. A command
+  reads it as `"$STAGE_DIR/review.md"`. Stage numbers never appear in a path.
+- An `outputs` entry may not reuse one of these names, nor be one of the stage's
+  inputs. Write a new file.
 - Every input must come from an earlier stage, from the runner (`changes.txt`),
-  or exist in the folder at start.
-- After a stage, every `outputs` entry must exist, or the stage is `broken`.
-- An agent stage's task gets a block that names the folder, the files to read,
+  or exist in the pipeline folder at start.
+- After a stage, every `outputs` entry must exist in its folder, or the stage is
+  `broken`.
+- An agent stage's task gets a block that names its folder, the files to read,
   the files to write, and inputs a skipped stage did not produce.
 - A command stage whose inputs all come from skipped stages is skipped too. An
   agent stage still runs and is told what is missing.
@@ -219,18 +275,23 @@ Each stage leaves its own files:
 
 ```yaml
 - id: explore
+  title: API exploration
+  emoji: 🤖
   each_line: endpoints.txt
   run: npx -y explorbot api explore "$ITEM"
 
 - id: sync
+  title: Sync to Testomat.io
+  emoji: 🔄
   each_file: test-cases/*.md
   task: Sync ${ITEM} to Testomat.io. /sync-test-cases-with-tms
 ```
 
 - `each_line` runs once per non-empty line. `each_file` runs once per matching
   file, sorted, with `*` and `**`.
-- Both resolve against the pipeline folder and are matched when the stage
-  starts, so earlier stages can write them.
+- Both resolve against the stage folder and are matched when the stage starts.
+  The folder an `each_file` mask starts with, `test-cases/` here, counts as an
+  input and is linked in from the stage that wrote it.
 - Nothing to loop over: the stage is skipped.
 - Items run one after another. A failed item does not stop the others. The stage
   takes the worst item's status.
@@ -253,10 +314,24 @@ Each stage leaves its own files:
 A pipeline with more than one stage ends with a summary. It is not written in
 the file: the runner adds it.
 
-- It runs the `pipeline-report` skill with the `summary:` text, reads every
-  stage's files, and writes `summary.md`.
+- The runner writes `summary/draft.md`: every stage's report, word for word,
+  under its own section. Its headings move down to fit under the section.
+- An agent then trims the draft into `summary/summary.md`. It drops what an
+  earlier section already said and shortens sections that are too long. It
+  never adds, renames or drops a heading, and never writes content of its own.
+  The `summary:` text is passed to it.
 - Its report is the only thing sent to `--output`. Every other stage runs with
   `--no-thread` and posts nothing.
+- It lists every stage, in order, as its own section and nothing else:
+
+  ```markdown
+  ### 🧪 Tests
+
+  <the stage's report>
+  ```
+
+- A skipped stage shows its gate message. A stage that did not run says so.
+- Stage reports are not signed. The summary is signed once.
 - It explains the pipeline's verdict and never changes it.
 - It runs after the last stage, and after a stage that stopped the pipeline. Not
   after Ctrl-C, and not when the run was skipped.
@@ -293,9 +368,12 @@ runs, as a CI cache per pull request, and each run is a round:
 
 - A retry keeps stages that passed or failed and uses the folder's copy of the
   file, so the stages cannot change half-way.
-- A new round clears the last round's files, keeps `.sessions/`, and counts
-  `changes` from the last round's commit. Stages with a session are told what
-  changed. The summary updates its comment.
+- A new round moves the last round's files to `.last/`, keeps `.sessions/`,
+  and counts `changes` from the last round's commit.
+- Each agent stage whose folder is in `.last/` is pointed at it and told to
+  update that result: keep what still holds, redo what the changes touch. The
+  summary is built from those updated reports and updates its comment.
+- Stages match by folder name. A stage that moved gets no last round.
 - `--dir` may not be the checkout or a folder above it.
 
 `pipeline.json` in the folder holds the round, each stage's status and the

@@ -15,27 +15,31 @@ when: [code-changed]
 
 stages:
   - id: requirements
+    title: Requirements
+    emoji: 📋
     session: reviewer
-    task: |
-      Work out what this pull request is meant to do. /qa-pr-requirements-analyzer
-      Write the acceptance criteria to criteria.md.
-    outputs: [criteria.md]
+    task: Work out what this pull request is meant to do. /qa-pr-requirements-analyzer
 
   - id: review
+    title: Review
+    emoji: 🔍
     session: reviewer
-    task: |
-      Review this pull request as a QA engineer against criteria.md. /qa-review-pr
-    inputs: [criteria.md]
+    task: Review this pull request as a QA engineer against requirements.md. /qa-review-pr
+    inputs: [requirements.md]
 
   - id: test-cases
+    title: Test cases
+    emoji: 📝
     session: writer
     task: |
-      Write test cases for this pull request from criteria.md and review.md. /qa-write-test-cases
+      Write test cases for this pull request from requirements.md and review.md. /qa-write-test-cases
       Put them in test-cases/, one markdown file per suite.
-    inputs: [criteria.md, review.md]
+    inputs: [requirements.md, review.md]
     outputs: [test-cases/]
 
   - id: sync
+    title: Sync to Testomat.io
+    emoji: 🔄
     when: [testomatio]
     each_file: test-cases/*.md
     task: |

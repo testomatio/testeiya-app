@@ -42,6 +42,9 @@ export interface ChangesSpec {
 /** Exactly one of `task` or `run`; at most one of `each_line` or `each_file`. */
 export interface StageSpec {
   id: string;
+  /** Names the stage's section in the final report. */
+  title: string;
+  emoji: string;
   /** An agent stage: the task text. */
   task?: string;
   /** A command stage: a shell command. */

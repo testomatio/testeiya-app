@@ -18,7 +18,7 @@ export function finalReport(path: string): string {
     <final-report>
     * Write your complete final report to \`${path}\` with the \`write\` tool. Writing it is required before you finish.
     * That file is your answer. It is the run's deliverable; nothing else you say is kept.
-    * A skill's output format overrides every rule in this block, including the title. Follow it strictly.
+    * A skill's or the task's output format overrides every rule in this block, including the title. Follow it strictly.
     * Decide the **severity of your report**. Low severity: a few short bullets, nothing more.
     * Do not make the reader go through a long report for a minor issue with no effect.
     * Severity decides how many items you report, not how long each one is. Even a critical finding is: what breaks, for whom, when.
