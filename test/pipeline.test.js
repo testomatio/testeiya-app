@@ -9,6 +9,7 @@ import { Git } from "../dist/src/git.js";
 import { Diagram } from "../dist/src/pipeline/diagram.js";
 import { Gate } from "../dist/src/pipeline/gate.js";
 import { Pipeline } from "../dist/src/pipeline/pipeline.js";
+import { Overlay } from "../dist/src/pipeline/overlay.js";
 import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
 import { CommandStage } from "../dist/src/pipeline/command-stage.js";
 import { Stage } from "../dist/src/pipeline/stage.js";
@@ -323,6 +324,90 @@ stages:
   assert.match(chart, /g0\{\{"map"\}\}\n  class g0 pass\n  g0 --o start/);
   assert.match(chart, /class g1 fail\n  g1 --o s1/);
   assert.match(chart, /g2\{\{"ai"\}\}/);
+});
+
+const BASE = `gates:
+  pr:
+    env: [PR]
+    message: No PR.
+when: pr
+stages:
+  - id: plan
+    title: Plan
+    emoji: 🔹
+    task: Plan it.
+    when: [pr]
+  - id: run
+    title: Run
+    emoji: 🔹
+    run: echo
+`;
+
+function overlaid(...overlays) {
+  const dir = mkdtempSync(join(tmpdir(), "testeiya-overlay-"));
+  return new PipelineFile(write(dir, "base.yml", BASE)).read(overlays);
+}
+
+test("an override replaces, appends, prepends and removes", () => {
+  const spec = overlaid(
+    Overlay.stage("plan:append_task: Never assume credentials."),
+    Overlay.stage("plan:{prepend_task: Read the issue first., append_when: staging, timeout: 30m}"),
+    Overlay.stage("run:run: echo changed"),
+    Overlay.pipeline("{gates: {staging: {env: [URL], message: No URL.}}, remove_when: pr, append_summary: Be brief.}"),
+  );
+  const plan = spec.stages[0];
+  assert.equal(plan.task, "Read the issue first.\nPlan it.\nNever assume credentials.");
+  assert.deepEqual(plan.when, ["pr", "staging"]);
+  assert.equal(plan.timeout, "30m");
+  assert.equal(spec.stages[1].run, "echo changed");
+  assert.deepEqual(spec.when, []);
+  assert.equal(spec.summary, "Be brief.");
+  assert.deepEqual(spec.gates.pr, { env: ["PR"], message: "No PR." });
+  assert.deepEqual(spec.gates.staging, { env: ["URL"], message: "No URL." });
+});
+
+test("an override can add and remove stages and gates", () => {
+  const added = overlaid(Overlay.pipeline("stages: [{id: extra, title: Extra, emoji: 🔸, run: echo extra}]"));
+  assert.deepEqual(added.stages.map((stage) => stage.id), ["plan", "run", "extra"]);
+  const removed = overlaid(Overlay.pipeline("{remove_stages: [plan], remove_gates: [pr], remove_when: [pr]}"));
+  assert.deepEqual(removed.stages.map((stage) => stage.id), ["run"]);
+  assert.deepEqual(Object.keys(removed.gates), []);
+});
+
+test("a wrong override is bad usage, found before anything runs", () => {
+  assert.throws(() => overlaid(Overlay.stage("nope:append_task: x")), /--stage nope: there is no stage "nope" to change/);
+  assert.throws(() => overlaid(Overlay.stage("plan:append_timeout: 30m")), /append_timeout is not allowed/);
+  assert.throws(() => overlaid(Overlay.stage("plan:remove_task: x")), /remove_task is not allowed/);
+  assert.throws(() => overlaid(Overlay.stage("plan:apend_task: x")), /unknown key "apend_task"/);
+  assert.throws(() => overlaid(Overlay.stage("run:append_task: x")), /exactly one of task or run/);
+  assert.throws(() => overlaid(Overlay.stage("plan:append_when: staging")), /names gate "staging"/);
+  assert.throws(() => overlaid(Overlay.pipeline("remove_stages: [nope]")), /no stage "nope" to remove/);
+  assert.throws(() => Overlay.stage("plan"), /--stage takes ID:YAML/);
+  assert.throws(() => Overlay.stage("plan:just text"), /--stage plan takes YAML keys/);
+});
+
+test("a file can extend a bundled pipeline or a path, keeping only its changes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "testeiya-extends-"));
+  write(dir, "base.yml", BASE);
+  const child = write(dir, "child.yml", "extends: ./base.yml\nname: child\nstages:\n  - id: plan\n    append_task: Be brief.\n");
+  const spec = new PipelineFile(child).read();
+  assert.equal(spec.name, "child");
+  assert.equal(spec.stages[0].task, "Plan it.\nBe brief.");
+  const bundled = new PipelineFile(write(dir, "issue.yml", "extends: issue-test-cases\nstages:\n  - id: requirements\n    append_task: Never assume credentials.\n")).read();
+  assert.equal(bundled.name, "issue-test-cases");
+  assert.match(bundled.stages[0].task, /\nNever assume credentials\.$/);
+  write(dir, "loop.yml", "extends: ./loop.yml\nstages: []\n");
+  assert.throws(() => new PipelineFile(join(dir, "loop.yml")).read(), /loops back to itself/);
+});
+
+test("a run keeps the pipeline with its overrides, so a retry repeats it", async () => {
+  const { repo, log, cli } = setup();
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    task: One.\n");
+  const dir = join(repo, ".qa");
+  const options = { name: file, dir, cli, stageOverrides: ["one:append_task: Be brief."] };
+  await inRepo(repo, () => new Pipeline(options).run());
+  assert.match(calledWith(log)[0].at(-1), /^One\.\nBe brief\./);
+  assert.equal(new PipelineFile(file).parse(readFileSync(join(dir, "pipeline.yml"), "utf8")).stages[0].task, "One.\nBe brief.");
 });
 
 test("a --gate from the job skips the run before outputs are checked", async () => {

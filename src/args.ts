@@ -49,6 +49,8 @@ Pipeline options:
       --dry-run              show gates and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
+      --stage ID:YAML        change one stage, e.g. 'plan:append_task: Be brief.'
+      --pipeline YAML        change the pipeline, e.g. 'append_summary: Be brief.'
   -h, --help                 show this
   -v, --version              show version
 
@@ -198,6 +200,14 @@ Pipelines
   --gate adds a check from the CI job, e.g. --gate 'pr:test -n "$PR_NUMBER"'.
   When it fails the whole run is skipped and exits 0.
 
+  --stage and --pipeline change a pipeline without copying it. Their value is
+  YAML: a plain key replaces, append_ and prepend_ add, remove_ drops.
+
+    testeiya pipeline issue-test-cases --stage 'requirements:append_task: Never assume credentials.'
+    testeiya pipeline web-testing --stage 'explore:{timeout: 45m, append_when: [staging]}'
+
+  A file of your own can start with "extends: <name>" and hold only the changes.
+
   A stage whose gate fails is skipped with the gate's message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a
   CI cache per pull request, and a re-run on the same commit retries from the
@@ -257,6 +267,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
     if (typeof gates === "string") return { error: gates };
     args.gates = gates;
   }
+  if (Array.isArray(values.pipeline)) args.pipelineOverrides = values.pipeline as string[];
+  if (Array.isArray(values.stage)) args.stageOverrides = values.stage as string[];
   if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
   if (values.probe) args.probe = true;
@@ -322,6 +334,8 @@ const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
   "dry-run": { type: "boolean" },
   set: { type: "string", multiple: true },
   gate: { type: "string", multiple: true },
+  pipeline: { type: "string", multiple: true },
+  stage: { type: "string", multiple: true },
   help: HELP_FLAG,
 };
 
@@ -335,6 +349,8 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
     dir: PIPELINE_OPTIONS.dir!,
     set: PIPELINE_OPTIONS.set!,
     gate: PIPELINE_OPTIONS.gate!,
+    pipeline: PIPELINE_OPTIONS.pipeline!,
+    stage: PIPELINE_OPTIONS.stage!,
     diagram: { type: "boolean" },
     help: HELP_FLAG,
   },
@@ -406,6 +422,8 @@ export interface CliArgs {
   diagram?: boolean;
   sets?: Record<string, string>;
   gates?: Record<string, string>;
+  pipelineOverrides?: string[];
+  stageOverrides?: string[];
   /** Set when argv was malformed; the caller prints the message and exits 2. */
   error?: string;
 }
