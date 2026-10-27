@@ -7,6 +7,8 @@ export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
   { provider: "anthropic", env: "ANTHROPIC_API_KEY" },
   { provider: "openai", env: "OPENAI_API_KEY" },
   { provider: "google", env: "GEMINI_API_KEY" },
+  { provider: "cloudflare-ai-gateway", env: "CLOUDFLARE_API_KEY" },
+  { provider: "cloudflare-workers-ai", env: "CLOUDFLARE_API_KEY" },
 ];
 
 /** Bad usage — the caller prints the message and exits 2, never prompting. */
