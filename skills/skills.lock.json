@@ -3,12 +3,14 @@
     {
       "source": "testomatio/skills",
       "ref": null,
-      "sha": "f971b5264682260d0257e2e21f1dfa20836fe8d3",
+      "sha": "e1cf03227adfcb553c94ea5ee08c0eebc397e875",
       "folder": "testomatio",
       "skills": [
         "automate-manual-test-cases",
+        "catalog-features",
         "debug-fix-failed-flaky-autotests",
         "detect-duplicate-test-cases",
+        "detect-product-mismatches",
         "detect-useless-tests",
         "epic-requirements-specification",
         "explorbot-fundamentals",
@@ -46,7 +48,7 @@
     {
       "source": "codeceptjs/skills",
       "ref": null,
-      "sha": "d3d6a4e0e29207b1afb051eeb6f5f36984f4752b",
+      "sha": "c9a82e3e237c908ba53ec47d2c841c680b88e03a",
       "folder": "codeceptjs",
       "skills": [
         "ci-fix-tests",
@@ -55,6 +57,7 @@
         "codeceptjs-fundamentals",
         "codeceptjs-run-analysis",
         "debugging-codeceptjs-tests",
+        "lint-codeceptjs-tests",
         "migrate-codeceptjs-4",
         "migrate-cypress-to-codeceptjs",
         "migrate-protractor-to-codeceptjs",
