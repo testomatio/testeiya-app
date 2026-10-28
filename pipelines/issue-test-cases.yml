@@ -6,8 +6,8 @@ gates:
     env: [ISSUE_URL]
     message: No issue. Set ISSUE_URL to the issue or epic to cover.
   testomatio:
-    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
-    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
+    env: [TESTOMATIO]
+    message: No Testomat.io project. Set TESTOMATIO API Key to import test cases
 
 when: [issue]
 
@@ -36,7 +36,5 @@ stages:
     title: Sync to Testomat.io
     emoji: 🔄
     when: [testomatio]
-    each_file: test-cases/*.md
     task: |
       Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
-      Skip a case that already exists there.

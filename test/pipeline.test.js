@@ -96,6 +96,35 @@ test("a changes check counts what is not ignored", async () => {
   assert.equal(await passes({ ignore: ["*.md"] }, ["README.md"]), false);
 });
 
+test("branch names come from CI source branches before the checkout", async () => {
+  const repo = gitRepo();
+  const checkout = new Git(repo);
+  git(repo, "checkout", "-q", "-b", "feature/local");
+  assert.equal(await checkout.branch({ GITHUB_HEAD_REF: "feature/github", CI_MERGE_REQUEST_SOURCE_BRANCH_NAME: "feature/gitlab" }), "feature/github");
+  assert.equal(await checkout.branch({ CI_MERGE_REQUEST_SOURCE_BRANCH_NAME: "feature/gitlab", BITBUCKET_BRANCH: "feature/bitbucket" }), "feature/gitlab");
+  assert.equal(await checkout.branch({ BITBUCKET_BRANCH: "feature/bitbucket" }), "feature/bitbucket");
+  assert.equal(await checkout.branch({}), "feature/local");
+  git(repo, "checkout", "-q", "--detach", "HEAD");
+  assert.equal(await checkout.branch({}), null);
+});
+
+test("GIT_BRANCH reaches pipeline env and can be transformed", async () => {
+  const { repo, cli } = setup();
+  const file = write(repo, "pipe.yml", `
+env:
+  TESTOMATIO_BRANCH: \${GIT_BRANCH | slugify}
+stages:
+  - id: branch
+    title: branch
+    emoji: 🔹
+    run: printf '%s\\n' "$GIT_BRANCH" "$TESTOMATIO_BRANCH"
+`);
+  const dir = join(repo, ".qa");
+  const options = { name: file, dir, cli, sets: { GITHUB_HEAD_REF: "feature/new-tests" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+  assert.equal(readFileSync(join(dir, "1-branch", "branch.log"), "utf8"), "feature/new-tests\nfeature-new-tests\n");
+});
+
 test("changes count from the merge base, then from the last round", async () => {
   const repo = gitRepo();
   git(repo, "checkout", "-q", "-b", "feature");

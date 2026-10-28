@@ -3,8 +3,8 @@ description: Find the API endpoints a pull request changed, test each with Explo
 
 gates:
   api:
-    env: [EXPLORBOT_URL, EXPLORBOT_API_SPEC]
-    message: No API to test. Set EXPLORBOT_URL to the API base and EXPLORBOT_API_SPEC to its OpenAPI spec.
+    env: [API_BASE_URL, API_SPEC]
+    message: No API to test. Set API_BASE_URL to the API base and API_SPEC to its OpenAPI spec.
   explorbot-ai:
     env: [EXPLORBOT_AI_PROVIDER]
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
@@ -13,30 +13,30 @@ env:
   EXPLORBOT_NO_BANNER: "1"
 
 stages:
-  - id: review
-    title: Pull request review
+  - id: endpoints
+    title: Analyze affected endpoints
     emoji: 🔍
     session: qa
+    when: [API_SPEC]
     task: |
-      Review this pull request as a QA engineer. /qa-review-pr
       List the API endpoints it adds or changes in endpoints.txt, one path per line like /users/{id}, empty if none.
     outputs: [endpoints.txt]
 
-  - id: explore
-    title: API exploration
-    emoji: 🤖
-    when: [api, explorbot-ai]
-    each_line: endpoints.txt
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --style psycho
-    outputs: [explorbot/]
-    timeout: 10m
-
-  - id: results
-    title: Results
-    emoji: 📊
-    session: qa
-    when: [api, explorbot-ai]
-    task: |
-      Read the Explorbot results in explorbot/ and say which failures are real defects in this change. /explorbot-fundamentals
-      Fail the run if any is a real defect.
-    inputs: [endpoints.txt, explorbot/]
+#   - id: explore
+#     title: API exploration
+#     emoji: 🤖
+#     when: [api, explorbot-ai]
+#     each_line: endpoints.txt
+#     run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --style psycho
+#     outputs: [explorbot/]
+#     timeout: 10m
+#
+#   - id: results
+#     title: Results
+#     emoji: 📊
+#     session: qa
+#     when: [api, explorbot-ai]
+#     task: |
+#       Read the Explorbot results in explorbot/ and say which failures are real defects in this change. /explorbot-fundamentals
+#       Fail the run if any is a real defect.
+#     inputs: [endpoints.txt, explorbot/]

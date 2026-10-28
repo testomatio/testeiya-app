@@ -209,6 +209,7 @@ Every key is optional. All given must hold, and at least one file must count.
 | `STAGE_DIR` | absolute path of the stage's own folder |
 | `PIPELINE_NAME` | the pipeline's name |
 | `PIPELINE_ROUND` | 1, 2, … |
+| `GIT_BRANCH` | `GITHUB_HEAD_REF`, `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME` or `BITBUCKET_BRANCH`, then the checked-out Git branch; empty for a detached local HEAD |
 | `ITEM` | in a loop: the line, or the file's path |
 | `ITEM_NAME` | in an `each_file` loop: the file name without its extension |
 | `PIPELINE_RESUME` | `1` when a command stage is retried |

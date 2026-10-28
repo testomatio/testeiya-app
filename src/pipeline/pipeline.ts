@@ -96,7 +96,7 @@ export class Pipeline {
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
-    const vars = this.variables(spec, dir, round);
+    const vars = await this.variables(spec, dir, round);
     const changes = await this.git.changes(since, vars.toEnv());
     const results = await this.checkGates(gates, [spec.when, ...stages.map((stage) => stage.spec.when)].flat(), vars, changes);
     log.header(spec.name, round, changes, dir);
@@ -160,7 +160,7 @@ export class Pipeline {
 
     let aiProblem: string | null = null;
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
-    const vars = this.variables(spec, dir, 1);
+    const vars = await this.variables(spec, dir, 1);
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
     const results = await this.checkGates(gates, [...gates.keys()], vars, changes);
@@ -318,10 +318,11 @@ export class Pipeline {
     return stages;
   }
 
-  private variables(spec: PipelineSpec, dir: string, round: number): Variables {
+  private async variables(spec: PipelineSpec, dir: string, round: number): Promise<Variables> {
     const sets = this.options.sets ?? {};
+    const branch = await this.git.branch({ ...process.env, ...sets });
     return new Variables({ ...process.env })
-      .with({ ...sets, PIPELINE_DIR: dir, PIPELINE_NAME: spec.name, PIPELINE_ROUND: String(round) })
+      .with({ ...sets, GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: spec.name, PIPELINE_ROUND: String(round) })
       .withExpanded(spec.env)
       .with(sets)
       .without(JOB_ONLY);
