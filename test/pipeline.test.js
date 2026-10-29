@@ -42,6 +42,12 @@ test("every bundled pipeline loads", () => {
   assert.deepEqual(names, ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
 });
 
+test("every bundled pipeline has a target", () => {
+  const targets = PipelineFile.bundled().map((pipeline) => pipeline.target);
+  assert.deepEqual(targets, ["pr", "issue", "pr", "pr", "pr"]);
+  assert.throws(() => parse("target: [pr]\nstages:\n  - id: a\n    run: echo\n"), /target must be text/);
+});
+
 test("a stage naming an undefined gate is bad usage", () => {
   const text = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    when: [staging]\n";
   assert.throws(() => parse(text), /names gate "staging"/);
@@ -53,9 +59,11 @@ test("a stage needs exactly one of task or run", () => {
   assert.throws(() => parse(both), /exactly one of task or run/);
 });
 
-test("a stage needs a title and an emoji", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n    emoji: x\n    run: echo\n"), /stage "a" needs a title/);
-  assert.throws(() => parse("stages:\n  - id: a\n    title: A\n    run: echo\n"), /stage "a" needs an emoji/);
+test("a stage without a title or an emoji gets them from its id", () => {
+  const [stage] = parse("stages:\n  - id: browser-testing\n    run: echo\n").stages;
+  assert.equal(stage.title, "Browser testing");
+  assert.ok(stage.emoji);
+  assert.equal(parse("stages:\n  - id: browser-testing\n    run: echo\n").stages[0].emoji, stage.emoji);
 });
 
 test("reserved ids, unknown keys and stray stopOn are rejected", () => {

@@ -1,10 +1,11 @@
 name: api-testing
 description: Find the API endpoints a pull request changed, test each with Explorbot, explain what broke.
+target: pr
 
 gates:
   api:
-    env: [EXPLORBOT_URL, EXPLORBOT_API_SPEC]
-    message: No API to test. Set EXPLORBOT_URL to the API base and EXPLORBOT_API_SPEC to its OpenAPI spec.
+    env: [EXPLORBOT_URL, OPENAPI_SPEC]
+    message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
   explorbot-ai:
     env: [EXPLORBOT_AI_PROVIDER]
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
@@ -13,13 +14,22 @@ env:
   EXPLORBOT_NO_BANNER: "1"
 
 stages:
+  - id: spec
+    title: OpenAPI spec
+    emoji: 📜
+    when: [api]
+    run: npx -y @apidevtools/swagger-cli validate "$OPENAPI_SPEC"
+    stopOn: fail
+    timeout: 2m
+
   - id: review
-    title: Pull request review
+    title: API review
     emoji: 🔍
     session: qa
     task: |
-      Review this pull request as a QA engineer. /qa-review-pr
+      Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt, one path per line like /users/{id}, empty if none.
+
     outputs: [endpoints.txt]
 
   - id: explore
@@ -27,7 +37,7 @@ stages:
     emoji: 🤖
     when: [api, explorbot-ai]
     each_line: endpoints.txt
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --style psycho
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
     outputs: [explorbot/]
     timeout: 10m
 

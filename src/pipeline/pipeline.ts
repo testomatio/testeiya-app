@@ -57,9 +57,12 @@ export class Pipeline {
       process.stdout.write(`${JSON.stringify({ pipelines }, null, 2)}\n`);
       return 0;
     }
-    process.stdout.write("\n");
-    for (const pipeline of pipelines) {
-      process.stdout.write(`  ${pipeline.name.padEnd(14)} ${c.dim(pipeline.description)}\n`);
+    const targets = [...new Set(pipelines.map((pipeline) => pipeline.target ?? "other"))];
+    for (const target of targets) {
+      process.stdout.write(`\n  ${c.bold(target)}\n`);
+      for (const pipeline of pipelines.filter((item) => (item.target ?? "other") === target)) {
+        process.stdout.write(`    ${pipeline.name.padEnd(18)} ${c.dim(pipeline.description)}\n`);
+      }
     }
     process.stdout.write('\n  Run one with:  testeiya pipeline <name>, or pass your own .yml\n\n');
     return 0;

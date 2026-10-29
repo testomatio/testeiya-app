@@ -1,5 +1,6 @@
 name: pr-review
 description: Review a pull request, propose test cases for it, and sync them to Testomat.io.
+target: pr
 
 gates:
   code-changed:

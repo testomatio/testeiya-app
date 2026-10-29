@@ -219,6 +219,7 @@ path.
 ```yaml
 name: web-testing
 description: Review a pull request, test it in a browser, explain what broke.
+target: pr
 
 gates:
   staging:
@@ -252,7 +253,8 @@ stages:
 ```
 
 - A stage is a `task` for the agent or a `run` shell command. Its `title` and
-  `emoji` head its section in the final report, `### 🔍 Review`.
+  `emoji` head its section in the final report, `### 🔍 Review`. Both are
+  optional: the title defaults to the id, the emoji is picked for you.
 - Each stage keeps its files in a numbered folder, `1-review/`, `2-explore/`, …,
   so a run reads in order. An agent stage writes `<id>.md` and `<id>.json`, a
   command writes `<id>.log`. `outputs` name the rest. `inputs` are linked into

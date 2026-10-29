@@ -15,6 +15,7 @@ how to use pipelines in CI.
 ```yaml
 name: regression
 description: Run the tests a change can break, then explain the failures.
+target: pr
 
 summary: |
   Lead with failures this change caused. Flaky tests go last.
@@ -67,6 +68,7 @@ stages:
 | `extends` | no | A bundled pipeline or a `.yml` path to start from. See [Overrides](#overrides) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
+| `target` | no | What starts it: `issue`, `pr`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it |
 | `summary` | no | Extra instructions for the final summary |
 | `env` | no | Variables for every stage. Values expand `${NAME}` |
 | `gates` | no | Named checks, defined once. See [Gates](#gates) |

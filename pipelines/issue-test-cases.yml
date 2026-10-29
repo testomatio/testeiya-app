@@ -1,5 +1,6 @@
 name: issue-test-cases
 description: Turn an issue or epic into test cases, and sync them to Testomat.io.
+target: issue
 
 gates:
   issue:

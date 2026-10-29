@@ -1,5 +1,6 @@
 name: regression
 description: Run the tests a change can break, from the coverage map, then explain the failures.
+target: pr
 
 gates:
   coverage:

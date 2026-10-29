@@ -5,6 +5,8 @@
 export interface PipelineSpec {
   name: string;
   description: string;
+  /** What starts it, for grouping: issue, pr, daily-cron, weekly-cron. Free text. */
+  target?: string;
   /** Extra instructions for the final summary. */
   summary?: string;
   /** Variables for every stage. Values expand `${NAME}`. */

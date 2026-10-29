@@ -12,9 +12,10 @@ import { Variables } from "./variables.js";
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
 const RESERVED_IDS = ["pipeline", "summary"];
-const TOP_KEYS = ["name", "description", "summary", "env", "gates", "when", "stages"];
+const TOP_KEYS = ["name", "description", "target", "summary", "env", "gates", "when", "stages"];
 const GATE_KEYS = ["env", "file", "run", "changes", "message"];
 const CHANGES_KEYS = ["paths", "ignore", "min_files"];
+const STAGE_EMOJIS = ["🔹", "🔸", "🧪", "🔍", "🛠️", "📋", "🚀", "🧭", "📦", "🧩", "🎯", "⚙️"];
 const STAGE_KEYS = ["id", "title", "emoji", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "timeout", "each_line", "each_file"];
 
 /**
@@ -36,12 +37,12 @@ export class PipelineFile {
     throw new UsageError(`no pipeline "${name}" — run "testeiya pipeline" to list them, or pass a .yml path`);
   }
 
-  static bundled(): Array<{ name: string; description: string }> {
+  static bundled(): Array<{ name: string; description: string; target?: string }> {
     if (!existsSync(BUNDLED_DIR)) return [];
     const files = readdirSync(BUNDLED_DIR).filter((file) => file.endsWith(".yml")).sort();
     return files.map((file) => {
       const spec = new PipelineFile(join(BUNDLED_DIR, file)).read();
-      return { name: basename(file, ".yml"), description: spec.description };
+      return { name: basename(file, ".yml"), description: spec.description, target: spec.target };
     });
   }
 
@@ -101,6 +102,7 @@ export class PipelineFile {
     const spec: PipelineSpec = {
       name: this.string(raw.name, "name") ?? basename(this.path).replace(/\.ya?ml$/, ""),
       description: this.string(raw.description, "description") ?? "",
+      target: this.string(raw.target, "target"),
       summary: this.string(raw.summary, "summary"),
       env: this.map(raw.env, "env"),
       gates,
@@ -157,10 +159,8 @@ export class PipelineFile {
       this.fail(`${where} can loop over each_line or each_file, not both`);
     }
 
-    const title = this.string(value.title, `${where} title`);
-    if (!title) this.fail(`${where} needs a title`);
-    const emoji = this.string(value.emoji, `${where} emoji`);
-    if (!emoji) this.fail(`${where} needs an emoji`);
+    const title = this.string(value.title, `${where} title`) || PipelineFile.titleOf(id);
+    const emoji = this.string(value.emoji, `${where} emoji`) || PipelineFile.emojiOf(id);
 
     const stage: StageSpec = {
       id,
@@ -267,6 +267,18 @@ export class PipelineFile {
 
   private static isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  // `browser-testing` reads as "Browser testing".
+  private static titleOf(id: string): string {
+    const words = id.split("-").join(" ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  // Picked from the id, so a stage keeps its emoji across runs.
+  private static emojiOf(id: string): string {
+    const sum = [...id].reduce((total, char) => total + char.charCodeAt(0), 0);
+    return STAGE_EMOJIS[sum % STAGE_EMOJIS.length];
   }
 
   private static isSlug(value: string): boolean {
