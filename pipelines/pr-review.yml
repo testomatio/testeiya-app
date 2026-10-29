@@ -8,11 +8,19 @@ gates:
       min_files: 3
       ignore: ["**/*.md", "**/*.lock", "docs/**"]
     message: Fewer than 3 code files changed.
+  testcases-needed:
+    env: [CREATE_TESTCASES]
+    message: 'No test cases created. Enable test case creation via CREATE_TESTCASES env var'
   testomatio:
-    env: [TESTOMATIO, TESTOMATIO_PROJECT_ID]
-    message: No Testomat.io project. Set TESTOMATIO and TESTOMATIO_PROJECT_ID.
+    env: [TESTOMATIO]
+    message: No Testomat.io project. Set TESTOMATIO.
 
 when: [code-changed]
+
+env:
+  # feature/add-login → feature-add-login
+  TESTOMATIO_BRANCH: ${GIT_BRANCH | slugify}
+
 
 stages:
   - id: requirements
@@ -32,7 +40,9 @@ stages:
     title: Test cases
     emoji: 📝
     session: writer
+    when: [testcases-needed]
     task: |
+      If there is linked issue and it was already reviewed by Testeiya and have linked tests - skip this step
       Write test cases for this pull request from requirements.md and review.md. /qa-write-test-cases
       Put them in test-cases/, one markdown file per suite.
     inputs: [requirements.md, review.md]
@@ -41,8 +51,6 @@ stages:
   - id: sync
     title: Sync to Testomat.io
     emoji: 🔄
-    when: [testomatio]
-    each_file: test-cases/*.md
+    when: [testomatio, testcases-needed]
     task: |
       Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
-      Skip a case that already exists there.

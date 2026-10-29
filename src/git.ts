@@ -8,6 +8,14 @@ export class Git {
     return this.read("rev-parse", "HEAD");
   }
 
+  /** The PR source branch in CI, or the checked-out branch locally. */
+  async branch(env: Env = process.env): Promise<string | null> {
+    if (env.GITHUB_HEAD_REF) return env.GITHUB_HEAD_REF;
+    if (env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME) return env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+    if (env.BITBUCKET_BRANCH) return env.BITBUCKET_BRANCH;
+    return this.read("branch", "--show-current");
+  }
+
   /**
    * Where the checkout stands, read once. The marker stamps the commit on a
    * comment, the pull request section picks its host from the remote, and the
