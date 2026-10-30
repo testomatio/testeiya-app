@@ -30,6 +30,10 @@ jobs:
     name: Publish to npm
     if: startsWith(github.event.release.tag_name || inputs.tag, 'cli-v')
     runs-on: ubuntu-latest
+    # Write, to hand latest back to the desktop release below.
+    permissions:
+      contents: write
+      id-token: write
     steps:
       # An empty ref keeps checkout's default, which on a release event is the
       # tag itself; a manual run names the tag it wants to republish.
@@ -103,3 +107,13 @@ jobs:
             exit 0
           fi
           npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}
+
+      # The GitHub UI ticks "latest" by default. A cli-v release left as latest
+      # breaks the desktop updater, which reads releases/latest/download/runtime.json.
+      - name: Keep the newest desktop release latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" --exclude-pre-releases --json tagName -q '[.[] | select(.tagName | startswith("cli-v") | not)][0].tagName')
+          test -n "$tag" || { echo "no desktop release to mark latest"; exit 0; }
+          gh release edit "$tag" -R "$GITHUB_REPOSITORY" --latest
