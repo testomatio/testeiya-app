@@ -12,9 +12,19 @@
   "bin": {
     "testeiya": "dist/src/cli.js"
   },
+  "exports": {
+    "./prompt/*.js": {
+      "types": "./dist/prompt/*.d.ts",
+      "default": "./dist/prompt/*.js"
+    },
+    "./skills/*": "./skills/*",
+    "./scripts/vendor-skills.js": "./scripts/vendor-skills.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "prompt",
+    "scripts",
     "pipelines",
     "PIPELINES.md",
     "skills",
@@ -30,7 +40,7 @@
   "scripts": {
     "start": "npm run build && node dist/src/cli.js",
     "dev": "./testeiya",
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build",
     "test": "npm run build && node --test test/*.test.js"
