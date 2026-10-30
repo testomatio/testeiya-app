@@ -15,7 +15,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const date = new Date().toISOString().split("T")[0];
   const clis = options.connectedClis?.join(", ") || "none connected yet";
   const mcps = options.connectedMcps?.join(", ") || "none connected yet";
-  let manualTestsHint = " Pulled manual tests usually live in `.testeiya/manual-tests/`; check there before declaring the project has no manual tests.";
+  let manualTestsHint = " Pulled manual tests usually live in `.testeiya/test-cases/`; check there before declaring the project has no manual tests.";
   if (options.manualTestsHint === false) manualTestsHint = "";
 
   const prompt = dedent`
