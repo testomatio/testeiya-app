@@ -34,7 +34,6 @@ import { parse as parseYaml } from "yaml";
 
 export const SKILLS_OUTPUT = join(import.meta.dirname, "..", "skills");
 export const SKILLS_MANIFEST = join(SKILLS_OUTPUT, "skills.yaml");
-export const SKILLS_LOCK = join(SKILLS_OUTPUT, "skills.lock.json");
 const TGZ_NAME = "source.tar.gz";
 
 /**
@@ -50,101 +49,165 @@ const TGZ_NAME = "source.tar.gz";
  * Only manifest-owned folders are replaced; any other folder in skills/ is left
  * alone. Sources are fetched from the GitHub tarball, no git binary involved,
  * and the resolved SHAs + owned folders are pinned in skills/skills.lock.json.
+ * `outputDir` defaults to this package's skills/; a host vendors into its own
+ * folder, and the manifest is always this package's.
  * @param {string} vendor - only update this vendor (folder, owner, or owner/repo)
  * @param {object} options
  * @param {string} [options.branch=""] - fetch the named vendor from this branch instead of its default; fails when the branch does not exist
  * @param {Set<string>} [options.internalSlugs] - slugs a host harness ships itself, reported when a vendored skill collides with one
  */
-export async function vendorSkills(vendor = "", options = {}) {
-  if (!existsSync(SKILLS_MANIFEST)) {
-    console.warn(`No manifest at ${SKILLS_MANIFEST}`);
-    return;
+export class SkillsVendor {
+  constructor({ outputDir = SKILLS_OUTPUT } = {}) {
+    this.outputDir = outputDir;
+    this.lockPath = join(outputDir, "skills.lock.json");
   }
-  const filter = vendor;
-  const branch = options.branch || null;
-  if (branch && !filter) {
-    throw new Error("--branch needs a vendor: bunosh skills:update <vendor> --branch <branch>");
-  }
-  const parsed = parseYaml(readFileSync(SKILLS_MANIFEST, "utf-8")) ?? [];
-  const allSources = (Array.isArray(parsed) ? parsed : Object.values(parsed).flat()).map(normalizeEntry);
-  let entries = allSources;
-  if (filter) entries = allSources.filter((e) => matchesVendor(e, filter));
-  if (entries.length === 0) {
-    if (branch) {
-      console.log(`Known sources: ${allSources.map((e) => e.source).join(", ")}`);
-      throw new Error(`No manifest source matches "${filter}" — add it to ${SKILLS_MANIFEST} first`);
+
+  async update(vendor = "", options = {}) {
+    if (!existsSync(SKILLS_MANIFEST)) {
+      console.warn(`No manifest at ${SKILLS_MANIFEST}`);
+      return;
     }
-    console.warn(`No manifest source matches "${filter}"`);
-    console.log(`Known vendors: ${allSources.map(vendorFolder).join(", ")}`);
-    return;
-  }
-  if (branch) {
-    for (const entry of entries) entry.ref = branch;
-    console.log(`Using branch "${branch}" for ${entries.map((e) => e.source).join(", ")}`);
-  }
-  console.log(`Updating ${entries.length} of ${allSources.length} source(s) from ${SKILLS_MANIFEST}`);
-
-  const prevLock = readLock();
-  const managed = new Set(prevLock.map((l) => l.folder).filter(Boolean));
-  if (!filter) removeStaleFolders(prevLock, allSources);
-
-  // Slugs already taken by sources not updated in this run, so a filtered run
-  // still detects cross-vendor duplicates.
-  const seen = new Set();
-  for (const locked of prevLock) {
-    if (entries.some((e) => e.source === locked.source)) continue;
-    for (const slug of locked.skills ?? []) seen.add(slug);
-  }
-  const internal = options.internalSlugs ?? new Set();
-
-  const updatedLock = [];
-  const failed = [];
-  for (const entry of entries) {
-    const folder = vendorFolder(entry);
-    const target = join(SKILLS_OUTPUT, folder);
-    if (existsSync(target) && !managed.has(folder)) {
-      console.warn(`  ! ${entry.source} → skills/${folder} exists but is not managed by the lock — treating the folder as internal, skipping this source`);
-      continue;
+    if (this.outputDir !== SKILLS_OUTPUT) {
+      mkdirSync(this.outputDir, { recursive: true });
+      copyFileSync(SKILLS_MANIFEST, join(this.outputDir, "skills.yaml"));
     }
-    const from = isLocal(entry.source) ? resolveLocalSource(entry) : await fetchGitSource(entry);
-    if (!from) {
+    const filter = vendor;
+    const branch = options.branch || null;
+    if (branch && !filter) {
+      throw new Error("--branch needs a vendor: bunosh skills:update <vendor> --branch <branch>");
+    }
+    const parsed = parseYaml(readFileSync(SKILLS_MANIFEST, "utf-8")) ?? [];
+    const allSources = (Array.isArray(parsed) ? parsed : Object.values(parsed).flat()).map(normalizeEntry);
+    let entries = allSources;
+    if (filter) entries = allSources.filter((e) => matchesVendor(e, filter));
+    if (entries.length === 0) {
       if (branch) {
-        throw new Error(`${entry.source}@${branch} not found — check the repo and branch exist`);
+        console.log(`Known sources: ${allSources.map((e) => e.source).join(", ")}`);
+        throw new Error(`No manifest source matches "${filter}" — add it to ${SKILLS_MANIFEST} first`);
       }
-      failed.push(entry.source);
-      continue;
+      console.warn(`No manifest source matches "${filter}"`);
+      console.log(`Known vendors: ${allSources.map(vendorFolder).join(", ")}`);
+      return;
     }
-    const found = findSkills(from.root, entry.include, repoCategory(entry));
-    if (found.length === 0) {
-      console.warn(`  ! ${entry.source} — no SKILL.md found`);
-      failed.push(entry.source);
-      continue;
+    if (branch) {
+      for (const entry of entries) entry.ref = branch;
+      console.log(`Using branch "${branch}" for ${entries.map((e) => e.source).join(", ")}`);
     }
-    clearVendored(entry, folder, prevLock, allSources);
-    const vendored = [];
-    for (const skill of found) {
-      if (seen.has(skill.slug)) {
-        console.warn(`  ! duplicate skill "${skill.slug}" (${entry.source}) — keeping the first, skipping this one`);
+    console.log(`Updating ${entries.length} of ${allSources.length} source(s) from ${SKILLS_MANIFEST}`);
+
+    const prevLock = this.readLock();
+    const managed = new Set(prevLock.map((l) => l.folder).filter(Boolean));
+    if (!filter) this.#removeStaleFolders(prevLock, allSources);
+
+    // Slugs already taken by sources not updated in this run, so a filtered run
+    // still detects cross-vendor duplicates.
+    const seen = new Set();
+    for (const locked of prevLock) {
+      if (entries.some((e) => e.source === locked.source)) continue;
+      for (const slug of locked.skills ?? []) seen.add(slug);
+    }
+    const internal = options.internalSlugs ?? new Set();
+
+    const updatedLock = [];
+    const failed = [];
+    for (const entry of entries) {
+      const folder = vendorFolder(entry);
+      const target = join(this.outputDir, folder);
+      if (existsSync(target) && !managed.has(folder)) {
+        console.warn(`  ! ${entry.source} → skills/${folder} exists but is not managed by the lock — treating the folder as internal, skipping this source`);
         continue;
       }
-      if (internal.has(skill.slug)) console.log(`  ! "${skill.slug}" (${entry.source}) collides with a skill in an internal folder`);
-      const rel = skillRelPath(entry, folder, skill);
-      copySkill(skill.dir, join(SKILLS_OUTPUT, rel));
-      seen.add(skill.slug);
-      vendored.push(skill.slug);
-      console.log(`  ✓ ${rel}`);
+      const from = isLocal(entry.source) ? resolveLocalSource(entry) : await fetchGitSource(entry);
+      if (!from) {
+        if (branch) {
+          throw new Error(`${entry.source}@${branch} not found — check the repo and branch exist`);
+        }
+        failed.push(entry.source);
+        continue;
+      }
+      const found = findSkills(from.root, entry.include, repoCategory(entry));
+      if (found.length === 0) {
+        console.warn(`  ! ${entry.source} — no SKILL.md found`);
+        failed.push(entry.source);
+        continue;
+      }
+      this.#clearVendored(entry, folder, prevLock, allSources);
+      const vendored = [];
+      for (const skill of found) {
+        if (seen.has(skill.slug)) {
+          console.warn(`  ! duplicate skill "${skill.slug}" (${entry.source}) — keeping the first, skipping this one`);
+          continue;
+        }
+        if (internal.has(skill.slug)) console.log(`  ! "${skill.slug}" (${entry.source}) collides with a skill in an internal folder`);
+        const rel = skillRelPath(entry, folder, skill);
+        copySkill(skill.dir, join(this.outputDir, rel));
+        seen.add(skill.slug);
+        vendored.push(skill.slug);
+        console.log(`  ✓ ${rel}`);
+      }
+      updatedLock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, folder, skills: vendored.slice().sort() });
+      managed.add(folder);
+      if (from.cleanup) rmSync(from.cleanup, { recursive: true, force: true });
     }
-    updatedLock.push({ source: entry.source, ref: entry.ref ?? null, sha: from.sha, folder, skills: vendored.slice().sort() });
-    managed.add(folder);
-    if (from.cleanup) rmSync(from.cleanup, { recursive: true, force: true });
+
+    const sources = mergeLock(allSources, prevLock, updatedLock, !filter);
+    writeFileSync(this.lockPath, JSON.stringify({ sources }, null, 2) + "\n");
+    console.log(`\nUpdated ${updatedLock.length} vendor(s) in ${this.outputDir}; pinned in ${this.lockPath}.`);
+    // Loudly, because the callers are releases: a source that quietly failed to
+    // fetch would publish a build with that vendor's skills missing.
+    if (failed.length > 0) throw new Error(`could not vendor ${failed.join(", ")} — the tree is incomplete`);
   }
 
-  const sources = mergeLock(allSources, prevLock, updatedLock, !filter);
-  writeFileSync(SKILLS_LOCK, JSON.stringify({ sources }, null, 2) + "\n");
-  console.log(`\nUpdated ${updatedLock.length} vendor(s) in ${SKILLS_OUTPUT}; pinned in ${SKILLS_LOCK}.`);
-  // Loudly, because the callers are releases: a source that quietly failed to
-  // fetch would publish a build with that vendor's skills missing.
-  if (failed.length > 0) throw new Error(`could not vendor ${failed.join(", ")} — the tree is incomplete`);
+  readLock() {
+    if (!existsSync(this.lockPath)) return [];
+    try {
+      return JSON.parse(readFileSync(this.lockPath, "utf-8")).sources ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  #removeStaleFolders(prevLock, sources) {
+    const current = new Set(sources.map(vendorFolder));
+    for (const locked of prevLock) {
+      if (!locked.folder) continue;
+      if (!current.has(locked.folder)) {
+        rmSync(join(this.outputDir, locked.folder), { recursive: true, force: true });
+        console.log(`  - removed skills/${locked.folder} (${locked.source} no longer in the manifest)`);
+        continue;
+      }
+      // The folder is still another source's, so only this source's skills go.
+      if (sources.some((e) => e.source === locked.source)) continue;
+      this.#removeLockedSkills(locked);
+      console.log(`  - removed ${locked.source}'s skills from skills/${locked.folder} (no longer in the manifest)`);
+    }
+  }
+
+  // A folder only this source owns is replaced whole; one it shares with another
+  // source keeps its siblings, so only what this source vendored last time goes.
+  #clearVendored(entry, folder, prevLock, allSources) {
+    const shared = allSources.some((other) => other.source !== entry.source && vendorFolder(other) === folder);
+    if (!shared) {
+      rmSync(join(this.outputDir, folder), { recursive: true, force: true });
+      return;
+    }
+    const locked = prevLock.find((l) => l.source === entry.source && l.folder === folder);
+    if (locked) this.#removeLockedSkills(locked);
+  }
+
+  #removeLockedSkills(locked) {
+    for (const slug of locked.skills ?? []) {
+      rmSync(join(this.outputDir, locked.folder, slug), { recursive: true, force: true });
+    }
+  }
+}
+
+export function vendorSkills(vendor = "", options = {}) {
+  return new SkillsVendor().update(vendor, options);
+}
+
+export function readLock() {
+  return new SkillsVendor().readLock();
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -199,14 +262,6 @@ function skillRelPath(entry, folder, skill) {
   return join(folder, categoryDir, skill.slug);
 }
 
-export function readLock() {
-  if (!existsSync(SKILLS_LOCK)) return [];
-  try {
-    return JSON.parse(readFileSync(SKILLS_LOCK, "utf-8")).sources ?? [];
-  } catch {
-    return [];
-  }
-}
 
 // A full run drops lock entries for sources gone from the manifest (their
 // folders were removed); a filtered run keeps them so a later full run still
@@ -225,40 +280,6 @@ function mergeLock(allSources, prevLock, updatedLock, fullRun) {
     sources.push(locked);
   }
   return sources;
-}
-
-function removeStaleFolders(prevLock, sources) {
-  const current = new Set(sources.map(vendorFolder));
-  for (const locked of prevLock) {
-    if (!locked.folder) continue;
-    if (!current.has(locked.folder)) {
-      rmSync(join(SKILLS_OUTPUT, locked.folder), { recursive: true, force: true });
-      console.log(`  - removed skills/${locked.folder} (${locked.source} no longer in the manifest)`);
-      continue;
-    }
-    // The folder is still another source's, so only this source's skills go.
-    if (sources.some((e) => e.source === locked.source)) continue;
-    removeLockedSkills(locked);
-    console.log(`  - removed ${locked.source}'s skills from skills/${locked.folder} (no longer in the manifest)`);
-  }
-}
-
-// A folder only this source owns is replaced whole; one it shares with another
-// source keeps its siblings, so only what this source vendored last time goes.
-function clearVendored(entry, folder, prevLock, allSources) {
-  const shared = allSources.some((other) => other.source !== entry.source && vendorFolder(other) === folder);
-  if (!shared) {
-    rmSync(join(SKILLS_OUTPUT, folder), { recursive: true, force: true });
-    return;
-  }
-  const locked = prevLock.find((l) => l.source === entry.source && l.folder === folder);
-  if (locked) removeLockedSkills(locked);
-}
-
-function removeLockedSkills(locked) {
-  for (const slug of locked.skills ?? []) {
-    rmSync(join(SKILLS_OUTPUT, locked.folder, slug), { recursive: true, force: true });
-  }
 }
 
 function isLocal(source) {

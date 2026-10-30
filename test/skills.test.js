@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { expandSkills } from "../dist/src/skills.js";
+import { SkillsVendor } from "../scripts/vendor-skills.js";
 
 const dir = mkdtempSync(join(tmpdir(), "testeiya-skills-"));
 const skills = [skill("qa-thinking", "Think like QA."), skill("qa-write-test-cases", "Write cases.")];
@@ -41,3 +42,16 @@ function skill(name, body) {
   writeFileSync(filePath, `---\nname: ${name}\ndescription: ${body}\n---\n\n${body}\n`);
   return { name, description: body, filePath, baseDir, sourceInfo: {}, disableModelInvocation: false };
 }
+
+test("vendored lock lives in the output dir", () => {
+  const out = mkdtempSync(join(tmpdir(), "vendor-"));
+  const vendor = new SkillsVendor({ outputDir: out });
+  assert.equal(vendor.lockPath, join(out, "skills.lock.json"));
+  assert.deepEqual(vendor.readLock(), []);
+});
+
+test("vendoring copies the manifest into a foreign output dir", async () => {
+  const out = mkdtempSync(join(tmpdir(), "vendor-"));
+  await new SkillsVendor({ outputDir: out }).update("no-such-vendor");
+  assert.ok(existsSync(join(out, "skills.yaml")));
+});
