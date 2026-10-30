@@ -35,7 +35,9 @@ const SUBAGENTS_EXTENSION = dirname(createRequire(import.meta.url).resolve("pi-s
 export async function createRuntime(): Promise<ModelRuntime> {
   const runtime = await ModelRuntime.create({
     authPath: join(TESTEIYA_HOME, "auth.json"),
-    modelsPath: null,
+    // A run inside Testeiya Cloud points its providers at the cloud's own AI
+    // proxy by handing the CLI a models.json; anywhere else this stays unset.
+    modelsPath: process.env.TESTEIYA_MODELS_JSON ?? null,
   });
   await applyEnvKeys(runtime);
   return runtime;
