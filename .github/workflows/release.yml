@@ -5,8 +5,9 @@ name: Release
 # fetches them fresh from the sources in skills/skills.yaml. Skip that step and
 # the package ships an empty skills tree.
 #
-# The release this reacts to is created by the upstream app repository right
-# after it pushes the subtree, so the tag is always in place before this runs.
+# Only `cli-v*` releases publish. Create them with `--latest=false`: the desktop
+# app's `v*` releases carry the installers and the updater manifest, and the app
+# and README read them through `releases/latest`.
 # `workflow_dispatch` re-publishes a tag by hand, which is the recovery path
 # when a release is edited rather than published (an edit fires no `published`).
 
@@ -16,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish, e.g. 0.3.3"
+        description: "Release tag to publish, e.g. cli-v0.4.0"
         required: true
 
 permissions:
@@ -27,6 +28,7 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'cli-v')
     runs-on: ubuntu-latest
     steps:
       # An empty ref keeps checkout's default, which on a release event is the
@@ -71,7 +73,7 @@ jobs:
       - name: Sync version from the release tag
         env:
           TAG: ${{ steps.tag.outputs.name }}
-        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+        run: npm version "${TAG#cli-v}" --no-git-tag-version --allow-same-version
 
       - name: Determine npm dist-tag
         id: npm_tag
