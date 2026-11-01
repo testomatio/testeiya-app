@@ -10,7 +10,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": false,
+    "declaration": true,
     "sourceMap": true,
     "types": ["node"]
   },

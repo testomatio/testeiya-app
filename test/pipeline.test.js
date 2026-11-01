@@ -21,6 +21,11 @@ import { KILL_GRACE_MS } from "../dist/src/pipeline/launcher.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
 import { UsageError } from "../dist/src/model.js";
 
+// A pull request run in CI names its own branches; the tests name theirs.
+for (const name of Object.keys(process.env)) {
+  if (name.startsWith("GITHUB_") || name.startsWith("CI_MERGE_REQUEST_") || name.startsWith("BITBUCKET_")) delete process.env[name];
+}
+
 const parse = (text) => new PipelineFile("p.yml").parse(text);
 
 // Stands in for runTask: logs the request and the env it ran in, writes the

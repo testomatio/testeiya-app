@@ -9,7 +9,6 @@ The rule is: **shared is what the model reads, private is what runs the model.**
 Here, and open to pull requests:
 
 - `prompt/` — the system-prompt fragments
-- `skills/skills.yaml` — the manifest of skill repositories to vendor
 - `src/` — the Node CLI
 
 Not here, and not accepted as patches: sessions, servers, transports, workspace classification, sync, authentication, telemetry, the desktop and web UI, and the first-party skills written against those tools. Those live in a private harness repository that consumes this one.
@@ -30,7 +29,7 @@ Every file in `prompt/` is a `dedent` template that ends up in the agent's syste
 
 A skill is a folder containing `SKILL.md`, optionally with supporting files beside it.
 
-**No skill is authored in this repository.** Every folder under `skills/` — `skills/testomatio/`, `skills/codeceptjs/`, `skills/playwright/` — is fetched from its own upstream repository by the release tooling, and they are gitignored here. A patch against one of them cannot land; send it to the repository listed in `skills/skills.yaml` and it will arrive on the next update. Skills written against the desktop and web app's own tools live in the private harness repository, for the same reason its prompt fragments do.
+**No skill is authored in this repository.** `skills/` is copied from [testomatio/skills](https://github.com/testomatio/skills) by the release tooling, and it is gitignored here. A patch against it cannot land; send it to testomatio/skills and it arrives with the next release. Skills written against the desktop and web app's own tools live in the private harness repository, for the same reason its prompt fragments do.
 
 The frontmatter rules below still describe what the loader expects of any skill it reads:
 
@@ -45,17 +44,6 @@ description: Use when … — one sentence saying when the agent should reach fo
 - `description` is required and must be under 1024 characters. Write it as a trigger: when should the agent pick this skill? That sentence is all the agent sees when deciding.
 
 Style that works: short sentences, bullets over paragraphs, a list of use cases, no duplicated parameter tables. Write for an agent skimming under load, not a human reading start to finish.
-
-## Adding an external skill source
-
-Add one line to `skills/skills.yaml` — a GitHub repository, optionally pinned:
-
-```yaml
-- owner/repo
-- owner/repo/tree/<ref>/<subdir>
-```
-
-That line is the whole change — send it as the pull request. `node scripts/vendor-skills.js` resolves the commit, downloads it, and records it in `skills/skills.lock.json`; run it to check your source lands where you expect. Every release runs it too, so the published package carries the result. The fetched folder is never committed here.
 
 ## Working on the CLI
 
@@ -90,3 +78,14 @@ npm run build
 ```
 
 CI runs the same two. Keep the change scoped — a prompt tweak and a CLI refactor in one pull request are two reviews wedged into one.
+
+## Releasing the CLI
+
+Maintainers release the CLI by hand, with notes written for that release:
+
+```bash
+gh release create 0.11.0 --latest=false --title "Testeiya CLI 0.11.0" --notes-file notes.md
+```
+
+The tag is the npm version. `release.yml` publishes it to npm, then makes sure the newest desktop release is still latest. Tags that start with `app-` are desktop releases: the desktop app's own workflow makes them, and they never publish to npm.
+

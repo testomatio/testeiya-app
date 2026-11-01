@@ -26,7 +26,7 @@ stages:
     title: API review
     emoji: 🔍
     session: qa
-    when: [API_SPEC]
+    when: [api]
     task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt, one path per line like /users/{id}, empty if none.

@@ -1,12 +1,12 @@
 name: Release
 
 # Publishes the `testeiya` CLI to npm. The skills the agent reads are not kept
-# in git — they belong to the repositories that wrote them — so every publish
-# fetches them fresh from the sources in skills/skills.yaml. Skip that step and
-# the package ships an empty skills tree.
+# in git, so every publish copies them fresh from testomatio/skills. Skip that
+# step and the package ships an empty skills tree.
 #
-# The release this reacts to is created by the upstream app repository right
-# after it pushes the subtree, so the tag is always in place before this runs.
+# CLI releases are made here by hand, on bare version tags (0.11.0), with
+# hand-written notes. Desktop releases arrive from the app's own workflow,
+# tagged app-<version> and titled "Testeiya App"; they never publish to npm.
 # `workflow_dispatch` re-publishes a tag by hand, which is the recovery path
 # when a release is edited rather than published (an edit fires no `published`).
 
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish, e.g. 0.3.3"
+        description: "Release tag to publish, e.g. 0.10.2"
         required: true
 
 permissions:
@@ -27,7 +27,12 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
+    if: "!startsWith(github.event.release.tag_name || inputs.tag, 'app-')"
     runs-on: ubuntu-latest
+    # Write, to hand latest back to the desktop release below.
+    permissions:
+      contents: write
+      id-token: write
     steps:
       # An empty ref keeps checkout's default, which on a release event is the
       # tag itself; a manual run names the tag it wants to republish.
@@ -60,13 +65,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      # The vendored skill folders are gitignored, so they are absent from a
-      # fresh checkout. This fetches the current version of every source in
-      # skills/skills.yaml, which `files: ["skills"]` then packs.
-      - name: Vendor the external skills
+      # skills/ is gitignored. This fills it from testomatio/skills, and
+      # `files: ["skills"]` then packs it.
+      - name: Vendor the skills
         run: node scripts/vendor-skills.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync version from the release tag
         env:
@@ -101,3 +103,13 @@ jobs:
             exit 0
           fi
           npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}
+
+      # The desktop updater reads releases/latest/download/runtime.json, so a
+      # CLI release left as latest would stop every installed app updating.
+      - name: Keep the newest desktop release latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" --exclude-pre-releases --json tagName,name -q '[.[] | select(.name | startswith("Testeiya App"))][0].tagName')
+          test -n "$tag" || { echo "no desktop release to mark latest"; exit 0; }
+          gh release edit "$tag" -R "$GITHUB_REPOSITORY" --latest

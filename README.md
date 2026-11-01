@@ -168,16 +168,6 @@ testeiya task "Run explorbot against https://staging.example.com, max 10 tests, 
   --output explorbot-report.md
 ```
 
-### Repair failing tests after a red build
-
-On a failed CodeceptJS run, the `ci-fix-tests` skill attempts safe fixes only —
-locator drift, missing waits — reruns just the failing scenarios, rolls back any
-edit that did not help, and always writes `output/ci-fix.md` for the next job:
-
-```bash
-testeiya task "Fix the failed CodeceptJS tests using ci-fix-tests. No refactors."
-```
-
 ### Audit the test suite on a schedule
 
 Nightly, the agent walks the Testomat.io project and reports gaps — suites with
@@ -730,21 +720,19 @@ testeiya skills playwright  # filter by name, category or description
 testeiya skills --json      # [{name, group, description}]
 ```
 
-Categories today: QA process, test management, test automation, Explorbot,
-Playwright, CodeceptJS.
+Categories today: requirements, test management, test automation, QA process,
+Explorbot. One per plugin of
+[testomatio/skills](https://github.com/testomatio/skills).
 
-Sources are declared in `skills/skills.yaml` and pinned in
-`skills/skills.lock.json`. The vendored folders are deliberately not committed —
-they belong to their authors, under their own licences. A clone has the manifest
-and nothing else; `node scripts/vendor-skills.js` fills the tree. Every release
-runs it, so the published `testeiya` package ships each skill as current on
-release day.
+The skills are not committed here. `node scripts/vendor-skills.js` clones
+testomatio/skills and copies them into `skills/`. Every release runs it, so the
+published `testeiya` package ships each skill as current on release day.
 
 `skillsOverride` in `src/session.ts` keeps only what is found under that tree,
 so an arbitrary clone cannot hand the model its own skills. To add yours, point
 `additionalSkillPaths` at your folder. [EXTENDING.md](EXTENDING.md) covers both hooks.
 
-To propose a new source, add its line to `skills/skills.yaml`. See [CONTRIBUTING.md](CONTRIBUTING.md).
+To change a skill, send a pull request to [testomatio/skills](https://github.com/testomatio/skills).
 
 ## Building your own agent
 
