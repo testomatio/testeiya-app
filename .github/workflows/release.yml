@@ -5,9 +5,8 @@ name: Release
 # fetches them fresh from the sources in skills/skills.yaml. Skip that step and
 # the package ships an empty skills tree.
 #
-# Only `cli-v*` releases publish. Create them with `--latest=false`: the desktop
-# app's `v*` releases carry the installers and the updater manifest, and the app
-# and README read them through `releases/latest`.
+# Every release publishes. The desktop app's release workflow creates them, so
+# the npm version always matches the desktop version.
 # `workflow_dispatch` re-publishes a tag by hand, which is the recovery path
 # when a release is edited rather than published (an edit fires no `published`).
 
@@ -17,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish, e.g. cli-v0.4.0"
+        description: "Release tag to publish, e.g. 0.10.2"
         required: true
 
 permissions:
@@ -28,12 +27,7 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
-    if: startsWith(github.event.release.tag_name || inputs.tag, 'cli-v')
     runs-on: ubuntu-latest
-    # Write, to hand latest back to the desktop release below.
-    permissions:
-      contents: write
-      id-token: write
     steps:
       # An empty ref keeps checkout's default, which on a release event is the
       # tag itself; a manual run names the tag it wants to republish.
@@ -77,7 +71,7 @@ jobs:
       - name: Sync version from the release tag
         env:
           TAG: ${{ steps.tag.outputs.name }}
-        run: npm version "${TAG#cli-v}" --no-git-tag-version --allow-same-version
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
 
       - name: Determine npm dist-tag
         id: npm_tag
@@ -107,13 +101,3 @@ jobs:
             exit 0
           fi
           npm publish --provenance --tag ${{ steps.npm_tag.outputs.tag }}
-
-      # The GitHub UI ticks "latest" by default. A cli-v release left as latest
-      # breaks the desktop updater, which reads releases/latest/download/runtime.json.
-      - name: Keep the newest desktop release latest
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=$(gh release list -R "$GITHUB_REPOSITORY" --exclude-pre-releases --json tagName -q '[.[] | select(.tagName | startswith("cli-v") | not)][0].tagName')
-          test -n "$tag" || { echo "no desktop release to mark latest"; exit 0; }
-          gh release edit "$tag" -R "$GITHUB_REPOSITORY" --latest
