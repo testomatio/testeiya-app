@@ -78,3 +78,14 @@ npm run build
 ```
 
 CI runs the same two. Keep the change scoped — a prompt tweak and a CLI refactor in one pull request are two reviews wedged into one.
+
+## Releasing the CLI
+
+Maintainers release the CLI by hand, with notes written for that release:
+
+```bash
+gh release create 0.11.0 --latest=false --title "Testeiya CLI 0.11.0" --notes-file notes.md
+```
+
+The tag is the npm version. `release.yml` publishes it to npm, then makes sure the newest desktop release is still latest. Tags that start with `app-` are desktop releases: the desktop app's own workflow makes them, and they never publish to npm.
+
