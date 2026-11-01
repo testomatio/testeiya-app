@@ -1,8 +1,12 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
+import { UsageError } from "../model.js";
+import type { TaskOutcome, TaskRequest } from "../run.js";
+import { KILL_GRACE_MS, type Launched } from "./launcher.js";
 import { log } from "./log.js";
 import { Stage, type Item, type StageContext } from "./stage.js";
+import { StageEnv } from "./stage-env.js";
 import { CHANGES_FILE, LAST_DIR, SESSIONS_DIR, type StageResult } from "./state.js";
 import type { Variables } from "./variables.js";
 
@@ -10,7 +14,7 @@ const RETRY_NOTE =
   "This stage stopped before it finished. Go on from where you stopped. Files you already wrote are in the stage folder.";
 
 /**
- * An agent stage: a `testeiya task` run. It writes its report to `<id>.md`
+ * An agent stage: one task, run in this process. It writes its report to `<id>.md`
  * and its verdict to `<id>.json`, in its folder.
  */
 export class TaskStage extends Stage {
@@ -28,6 +32,76 @@ export class TaskStage extends Stage {
     rmSync(join(dir, envelope), { force: true });
 
     const task = this.task(context, vars);
+    if (process.env.TESTEIYA_PIPELINE_SPAWN === "1") return this.spawn(context, item, vars, task, report, envelope);
+
+    const request = this.request(context, item, [join(dir, report), join(dir, envelope)], task);
+    let session: string | null = null;
+    if (request.sessionFile) session = basename(request.sessionFile);
+    log.task(`${this.id}${item.suffix}`, context.model, session, task);
+
+    const controller = new AbortController();
+    context.launcher.track(controller);
+    let timer: NodeJS.Timeout | undefined;
+    if (this.timeout) timer = setTimeout(() => controller.abort("timeout"), this.timeout);
+    // A task that ignores the abort is left behind once the grace period runs out.
+    let grace: NodeJS.Timeout | undefined;
+    const abandoned = new Promise<null>((done) => {
+      controller.signal.addEventListener("abort", () => (grace = setTimeout(() => done(null), KILL_GRACE_MS)), { once: true });
+    });
+    const running: { task?: Promise<TaskOutcome>; left?: boolean } = {};
+    context.guard.arm();
+    try {
+      // Raced inside the env, so the env comes back even for a task left behind.
+      const outcome = await new StageEnv(vars.toEnv()).run(() => {
+        running.task = context.runTask(request, { signal: controller.signal });
+        return Promise.race([running.task, abandoned]);
+      });
+      if (!outcome) {
+        running.left = true;
+        log.abandoned(`${this.id}${item.suffix}`);
+      }
+      context.report?.copy(join(dir, report));
+      const done: Launched = { code: outcome?.code ?? 1, timedOut: controller.signal.reason === "timeout", interrupted: context.launcher.interrupted };
+      if (!outcome) return { ...this.outcome(done, "broken", "it did not stop"), report };
+      let status: StageResult["status"] = "pass";
+      if (outcome.envelope.status === "fail") status = "fail";
+      return { ...this.outcome(done, status, outcome.envelope.reason), report };
+    } catch (err) {
+      const done: Launched = { code: 1, timedOut: false, interrupted: context.launcher.interrupted };
+      let message = String(err);
+      if (err instanceof Error) message = err.message;
+      if (err instanceof UsageError) return { ...this.outcome(done, "broken", `bad usage: ${message}`), report };
+      return { ...this.outcome(done, "broken", message), report };
+    } finally {
+      clearTimeout(timer);
+      clearTimeout(grace);
+      context.launcher.untrack();
+      // A task left behind can still crash the process, so the guard stays until it settles.
+      const disarm = () => context.guard.disarm();
+      if (running.left && running.task) running.task.then(disarm, disarm);
+      else disarm();
+    }
+  }
+
+  private request(context: StageContext, item: Item, outputs: string[], task: string): TaskRequest {
+    const { session } = this.spec;
+    const request: TaskRequest = { prompt: task, outputs: [...outputs] };
+    // Only the reporting stage posts. Every other stage keeps out of the comment thread.
+    if (!context.report) {
+      request.noThread = true;
+      request.noDefaultFooter = true;
+    }
+    context.report?.fill(request);
+    if (session) request.sessionFile = join(context.dir, SESSIONS_DIR, `${session}.jsonl`);
+    else request.noSession = true;
+    if (context.model) request.model = context.model;
+    if (item.resumed && session) request.followUp = RETRY_NOTE;
+    return request;
+  }
+
+  /** The old path: a `testeiya task` child process. */
+  private async spawn(context: StageContext, item: Item, vars: Variables, task: string, report: string, envelope: string): Promise<StageResult> {
+    const { dir } = context;
     const args = [context.cli, "task", ...this.options(context, item, [join(dir, report), join(dir, envelope)]), "--", task];
     log.command(`testeiya ${args.slice(1, -1).join(" ")} "${task.split("\n")[0]}…"`);
 

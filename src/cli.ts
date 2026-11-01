@@ -1,15 +1,15 @@
 #!/usr/bin/env node
+import { chalkStderr as c } from "chalk";
 import { HELP, parseCliArgs, USAGE, WELCOME, type CliArgs } from "./args.js";
 import { runDoctor } from "./doctor.js";
 import { loadEnvFiles, VERSION } from "./env.js";
 import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
-import { parseDestinations, preflight } from "./output.js";
 import { Pipeline } from "./pipeline/pipeline.js";
-import { runPrint } from "./run.js";
+import { runTask } from "./run.js";
 import { createRuntime } from "./session.js";
-import { openSessionManager, runSessions } from "./sessions.js";
+import { runSessions } from "./sessions.js";
 
 main(process.argv.slice(2)).catch((err) => {
   process.stderr.write(`${err?.message ?? err}\n`);
@@ -71,40 +71,39 @@ async function task(args: CliArgs): Promise<number> {
     process.exit(2);
   }
 
-  const destinations = parseDestinations(args.outputs ?? [], args.json);
-  if (typeof destinations === "string") throw new UsageError(destinations);
-  // Everything a destination needs is checked before a single token is spent.
-  const unreachable = await preflight(destinations);
-  if (unreachable) throw new UsageError(unreachable);
-
-  // A job-level TESTEIYA_SESSION_FILE must not quietly redirect a run that named
-  // its own session on the command line.
-  if (!args.session && !args.resume && !args.continueLast) {
-    args.sessionFile ??= process.env.TESTEIYA_SESSION_FILE;
-  }
-  const sessionManager = await openSessionManager(process.cwd(), args);
-  if (typeof sessionManager === "string") throw new UsageError(sessionManager);
-  if (args.name) sessionManager.appendSessionInfo(args.name);
-
-  let sessionId: string | null = null;
-  if (!args.noSession) sessionId = sessionManager.getSessionId();
-
-  const brief = args.command === "ask";
-  return runPrint({
-    prompt,
-    followUp,
-    destinations,
-    sessionManager,
-    sessionId,
-    brief,
-    thread: args.thread ?? process.env.TESTEIYA_THREAD,
-    model: args.model,
-    exitZero: args.exitZero,
-    header: args.header,
-    footer: args.footer,
-    noDefaultFooter: args.noDefaultFooter,
-    noThread: args.noThread,
+  const controller = new AbortController();
+  process.on("SIGINT", () => {
+    process.stderr.write(`${c.yellow("\n  ⨯ interrupted")}\n`);
+    controller.abort("interrupted");
   });
+
+  const { envelope, code, undelivered } = await runTask(
+    {
+      prompt,
+      followUp,
+      outputs: args.outputs ?? [],
+      json: args.json,
+      brief: args.command === "ask",
+      continueLast: args.continueLast,
+      resume: args.resume,
+      session: args.session,
+      sessionFile: args.sessionFile,
+      noSession: args.noSession,
+      name: args.name,
+      model: args.model,
+      thread: args.thread,
+      header: args.header,
+      footer: args.footer,
+      noDefaultFooter: args.noDefaultFooter,
+      noThread: args.noThread,
+      exitZero: args.exitZero,
+    },
+    { signal: controller.signal }
+  );
+  // The report is worth more than the destination: never lose it.
+  if (undelivered && envelope.report) process.stdout.write(envelope.report);
+  if (controller.signal.aborted) return 130;
+  return code;
 }
 
 async function pipeline(args: CliArgs): Promise<number> {

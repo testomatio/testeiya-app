@@ -58,6 +58,17 @@ export class PipelineLog {
     this.note(c.dim(line));
   }
 
+  /** An agent stage starting in this process. */
+  task(id: string, model: string | undefined, session: string | null, task: string): void {
+    this.note(`  ${c.dim("→")} ${id} ${c.dim("·")} ${model ?? "default model"} ${c.dim("·")} ${session ? `session ${session}` : "no session"}`);
+    this.note(c.dim(`    ${task.split("\n")[0]}`));
+  }
+
+  /** A task that did not stop when asked: it runs on, its result is ignored. */
+  abandoned(id: string): void {
+    this.note(c.yellow(`  ⨯ ${id} did not stop, left running`));
+  }
+
   command(text: string): void {
     this.note(c.dim(`  $ ${text}`));
   }

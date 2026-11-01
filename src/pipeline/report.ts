@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import { UsageError } from "../model.js";
 import { parseDestinations, preflight } from "../output.js";
+import type { TaskRequest } from "../run.js";
 
 /**
  * Where the pipeline's report goes. Only the reporting stage gets these
@@ -44,6 +45,16 @@ export class Report {
     if (options.footer !== undefined) args.push("--footer", options.footer);
     if (options.noDefaultFooter) args.push("--no-default-footer");
     return args;
+  }
+
+  /** The same, on a request run in this process. */
+  fill(request: TaskRequest): void {
+    const { options } = this;
+    request.outputs.push(...this.passed);
+    if (options.thread) request.thread = options.thread;
+    if (options.header !== undefined) request.header = options.header;
+    if (options.footer !== undefined) request.footer = options.footer;
+    if (options.noDefaultFooter) request.noDefaultFooter = true;
   }
 
   // The stage already writes its own markdown report, and a task takes only one.

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { compose, exitCode } from "../dist/src/run.js";
+import { UsageError } from "../dist/src/model.js";
+import { compose, exitCode, prepareTask, TaskAbort } from "../dist/src/run.js";
 
 test("a negative verdict fails the command", () => {
   assert.equal(exitCode(null, "fail", false, null), 1);
@@ -44,4 +48,56 @@ test("an update is read between the task and the reply", () => {
 test("an update with no reply is still delivered", () => {
   const prompt = compose("review this pr", "Since your last round:\n\n- moved");
   assert.equal(prompt, "review this pr\n\nSince your last round:\n\n- moved");
+});
+
+test("a bad output is bad usage before any token is spent", async () => {
+  await assert.rejects(prepareTask({ prompt: "x", outputs: ["a.md", "b.md"], noSession: true }, process.cwd()), UsageError);
+});
+
+test("a request with no session gets an in-memory session", async () => {
+  const options = await prepareTask({ prompt: "Do it.", outputs: [], noSession: true }, process.cwd());
+  assert.equal(options.prompt, "Do it.");
+  assert.equal(options.sessionId, null);
+  assert.equal(options.sessionManager.isPersisted(), false);
+});
+
+test("TESTEIYA_SESSION_FILE is a fallback, never an override", async () => {
+  process.env.TESTEIYA_SESSION_FILE = join(mkdtempSync(join(tmpdir(), "tt-")), "env.jsonl");
+  const named = join(mkdtempSync(join(tmpdir(), "tt-")), "named.jsonl");
+  const options = await prepareTask({ prompt: "x", outputs: [], sessionFile: named }, process.cwd());
+  const fallback = await prepareTask({ prompt: "x", outputs: [] }, process.cwd());
+  const env = process.env.TESTEIYA_SESSION_FILE;
+  delete process.env.TESTEIYA_SESSION_FILE;
+  assert.equal(options.sessionManager.getSessionFile(), named);
+  assert.equal(fallback.sessionManager.getSessionFile(), env);
+});
+
+const stubSession = () => ({ aborted: 0, async abort() { this.aborted++; } });
+
+test("an abort while watched stops the session and names the reason", () => {
+  const session = stubSession();
+  const controller = new AbortController();
+  const abort = new TaskAbort(session, controller.signal);
+  abort.watch();
+  assert.equal(abort.reason, null);
+  controller.abort("timeout");
+  assert.equal(session.aborted, 1);
+  assert.equal(abort.reason, "ran past its timeout");
+});
+
+test("an abort after release leaves the session alone", () => {
+  const session = stubSession();
+  const controller = new AbortController();
+  const abort = new TaskAbort(session, controller.signal);
+  abort.watch();
+  abort.release();
+  controller.abort("interrupted");
+  assert.equal(session.aborted, 0);
+  assert.equal(abort.reason, "interrupted");
+});
+
+test("a run with no signal is never aborted", () => {
+  const abort = new TaskAbort(stubSession());
+  abort.watch();
+  assert.equal(abort.reason, null);
 });

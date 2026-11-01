@@ -1,8 +1,10 @@
 import { cpSync, existsSync, globSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative } from "node:path";
 
+import type { CrashGuard } from "./crash-guard.js";
 import type { Launched, Launcher } from "./launcher.js";
 import { log } from "./log.js";
+import type { TaskRunner } from "../run.js";
 import type { Report } from "./report.js";
 import type { StageSpec, StopOn } from "./spec.js";
 import { PipelineState, type ItemRecord, type StageRecord, type StageResult, type Status } from "./state.js";
@@ -200,7 +202,11 @@ export interface StageContext {
   dir: string;
   vars: Variables;
   launcher: Launcher;
-  /** The `testeiya` CLI an agent stage runs. */
+  /** Runs an agent stage in this process. */
+  runTask: TaskRunner;
+  /** Records the stage and exits when that agent stage crashes the process. */
+  guard: CrashGuard;
+  /** The `testeiya` CLI an agent stage spawns under TESTEIYA_PIPELINE_SPAWN=1. */
   cli: string;
   model?: string;
   /** Set only for the stage whose report the pipeline posts. */

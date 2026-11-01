@@ -6,7 +6,9 @@ import { chalkStderr as c } from "chalk";
 
 import { Git, type Changes } from "../git.js";
 import { UsageError } from "../model.js";
+import { runTask, type TaskRunner } from "../run.js";
 import { CommandStage } from "./command-stage.js";
+import { CrashGuard } from "./crash-guard.js";
 import { Diagram } from "./diagram.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
@@ -42,11 +44,13 @@ export class Pipeline {
   private readonly git = new Git(this.cwd);
   private readonly launcher = new Launcher(this.cwd);
   private readonly cli: string;
+  private readonly runTask: TaskRunner;
 
   private readonly overlays: Overlay[];
 
   constructor(private readonly options: PipelineOptions) {
     this.cli = options.cli ?? fileURLToPath(new URL("../cli.js", import.meta.url));
+    this.runTask = options.runTask ?? runTask;
     // --pipeline first, so --stage can change a stage it adds.
     this.overlays = [...(options.pipelineOverrides ?? []).map(Overlay.pipeline), ...(options.stageOverrides ?? []).map(Overlay.stage)];
   }
@@ -263,11 +267,28 @@ export class Pipeline {
       vars: run.vars,
       launcher: this.launcher,
       cli: this.cli,
+      runTask: this.runTask,
+      guard: new CrashGuard((err) => this.crashed(run.state, err)),
       model: this.options.model,
       report,
       missing: (input) => this.whyMissing(input, run),
       locate: (input, reader) => this.locate(input, reader, run),
     };
+  }
+
+  /** The process is in an unknown state after an uncaught error: save what ran, stop. */
+  private crashed(state: PipelineState, err: unknown): void {
+    let message = String(err);
+    if (err instanceof Error) message = err.message;
+    for (const record of state.record.stages) {
+      if (record.status !== "running") continue;
+      record.status = "broken";
+      record.reason = `crashed: ${message}`;
+      log.stage(record);
+    }
+    state.record.status = "broken";
+    state.save();
+    process.exit(1);
   }
 
   private interrupted(state: PipelineState): number {
@@ -456,8 +477,10 @@ export interface PipelineOptions {
   model?: string;
   exitZero?: boolean;
   json?: boolean;
-  /** The CLI a stage runs. Tests swap in a fake. */
+  /** The CLI a stage spawns under TESTEIYA_PIPELINE_SPAWN=1. Tests swap in a fake. */
   cli?: string;
+  /** Runs an agent stage. Tests swap in a fake. */
+  runTask?: TaskRunner;
   /** Throws when no model or key resolves. */
   checkAi?: (model?: string) => Promise<void>;
 }

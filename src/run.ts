@@ -17,6 +17,8 @@ import {
   deliver,
   marker,
   markdownPath,
+  parseDestinations,
+  preflight,
   modelName,
   pullRequestNumber,
   threadComments,
@@ -26,12 +28,50 @@ import {
   type RunEnvelope,
 } from "./output.js";
 import { commentThread, threadHost } from "../prompt/thread.js";
-import { shortId } from "./sessions.js";
+import { openSessionManager, shortId, type SessionArgs } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
 import { expandSkills } from "./skills.js";
 import type { RunResult } from "./result.js";
 
-export async function runPrint(options: PrintOptions): Promise<number> {
+/** One task, start to end. Never exits, never traps signals: the caller owns the process. */
+export async function runTask(request: TaskRequest, control: TaskControl = {}): Promise<TaskOutcome> {
+  return execute(await prepareTask(request, process.cwd()), control);
+}
+
+/** Everything a task needs, checked before a single token is spent. */
+export async function prepareTask(request: TaskRequest, cwd: string): Promise<PrintOptions> {
+  const destinations = parseDestinations(request.outputs, request.json);
+  if (typeof destinations === "string") throw new UsageError(destinations);
+  const unreachable = await preflight(destinations);
+  if (unreachable) throw new UsageError(unreachable);
+
+  // A job-level TESTEIYA_SESSION_FILE must not quietly redirect a run that named its own session.
+  const args: SessionArgs = { ...request };
+  if (!args.session && !args.resume && !args.continueLast) args.sessionFile ??= process.env.TESTEIYA_SESSION_FILE;
+  const sessionManager = await openSessionManager(cwd, args);
+  if (typeof sessionManager === "string") throw new UsageError(sessionManager);
+  if (request.name) sessionManager.appendSessionInfo(request.name);
+
+  let sessionId: string | null = null;
+  if (!request.noSession) sessionId = sessionManager.getSessionId();
+  return {
+    prompt: request.prompt,
+    followUp: request.followUp,
+    destinations,
+    sessionManager,
+    sessionId,
+    brief: request.brief,
+    thread: request.thread ?? process.env.TESTEIYA_THREAD,
+    model: request.model,
+    exitZero: request.exitZero,
+    header: request.header,
+    footer: request.footer,
+    noDefaultFooter: request.noDefaultFooter,
+    noThread: request.noThread,
+  };
+}
+
+async function execute(options: PrintOptions, control: TaskControl): Promise<TaskOutcome> {
   const started = Date.now();
   const result: RunResult = {};
   const outputPath = markdownPath(options.destinations) ?? impliedReport(options.destinations);
@@ -63,58 +103,45 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // wants to know first or continuing before the session is built.
   const earlier = inThread ? await threadComments(pr, stamp.thread) : [];
 
-  let created;
-  try {
-    // First or continuing: a checkpoint left by a previous round of this
-    // session, or an answer already visible in the thread, makes this a later
-    // round. Nothing does: the run opens the thread.
-    const threadMode: "first" | "continuing" | undefined = !inThread
-      ? undefined
-      : lastCheckpoint(options.sessionManager) || earlier.length > 0
-        ? "continuing"
-        : "first";
+  // First or continuing: a checkpoint left by a previous round of this
+  // session, or an answer already visible in the thread, makes this a later
+  // round. Nothing does: the run opens the thread.
+  const threadMode: "first" | "continuing" | undefined = !inThread
+    ? undefined
+    : lastCheckpoint(options.sessionManager) || earlier.length > 0
+      ? "continuing"
+      : "first";
 
-    created = await createTesteiyaSession({
-      cwd,
-      result,
-      sessionManager: options.sessionManager,
-      model: options.model,
-      outputFile: outputPath,
-      brief: options.brief,
-      threadMode,
-      // The model names itself in the default footer, and the agent posts that
-      // footer, so the section cannot be built until the model is resolved.
-      sections: (model) => {
-        if (!host) return [];
-        return [
-          commentThread({
-            host,
-            thread,
-            marker: marker(stamp),
-            reportFile: outputPath,
-            header: headerFor(options, inThread),
-            footer: footerFor(options, model),
-            delivered: Boolean(pr),
-            threadMode,
-          }),
-        ];
-      },
-      ...connectionOptions(),
-    });
-  } catch (err) {
-    // A misconfigured model or missing key is bad usage (exit 2), not a failed
-    // run — cli.ts turns it into that. Everything else is a failed run.
-    if (err instanceof UsageError) throw err;
-    note(c.red(`  ✗ ${errorText(err)}`));
-    return 1;
-  }
+  const created = await createTesteiyaSession({
+    cwd,
+    result,
+    sessionManager: options.sessionManager,
+    model: options.model,
+    outputFile: outputPath,
+    brief: options.brief,
+    threadMode,
+    // The model names itself in the default footer, and the agent posts that
+    // footer, so the section cannot be built until the model is resolved.
+    sections: (model) => {
+      if (!host) return [];
+      return [
+        commentThread({
+          host,
+          thread,
+          marker: marker(stamp),
+          reportFile: outputPath,
+          header: headerFor(options, inThread),
+          footer: footerFor(options, model),
+          delivered: Boolean(pr),
+          threadMode,
+        }),
+      ];
+    },
+    ...connectionOptions(),
+  });
 
   const { session, model, skills } = created;
   const task = expandSkills(compose(options.prompt, update, options.followUp), skills);
-  process.on("SIGINT", () => {
-    note(c.yellow("\n  ⨯ interrupted"));
-    void session.abort().finally(() => process.exit(130));
-  });
 
   // With nothing but stdout to write to, the answer is the output: one line of
   // run info on stderr, no banner in front of it.
@@ -132,8 +159,17 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   // collapsing this list needs no judgement about which comment is the new one.
   const run = watchRun(session);
 
-  await promptOnce(session, task.prompt, run);
-  const written = await collectReport(session, run, outputPath, stampBefore);
+  // Watched through the report nudge too: that is a second agent turn.
+  const abort = new TaskAbort(session, control.signal);
+  abort.watch();
+  if (!abort.reason) await promptOnce(session, task.prompt, run);
+  if (abort.reason) run.error = abort.reason;
+  let written = await collectReport(session, run, outputPath, stampBefore);
+  abort.release();
+  if (abort.reason) {
+    run.error = abort.reason;
+    written = null;
+  }
   if (!run.error && checkpoint) saveCheckpoint(options.sessionManager, checkpoint);
   const report = sign(written, options, model, stamp, inThread);
 
@@ -164,14 +200,13 @@ export async function runPrint(options: PrintOptions): Promise<number> {
   const failure = await deliver(options.destinations, envelope, { earlier });
   if (failure) {
     note(`  ${c.red(`✗ ${failure}`)}`);
-    // The report is worth more than the destination: never lose it.
-    if (report) process.stdout.write(report);
     code = 1;
   }
 
   await session.dispose();
-  return code;
+  return { code, envelope, undelivered: Boolean(failure) };
 }
+
 
 /**
  * What the agent is asked, in the order it reads: the task, what moved since
@@ -465,6 +500,60 @@ function tokens(count: number): string {
   if (count < 1000) return String(count);
   return `${(count / 1000).toFixed(1)}k`;
 }
+
+/** Stops the session when the caller aborts, for as long as it is watched. */
+export class TaskAbort {
+  private readonly stop = () => void this.session.abort();
+
+  constructor(
+    private readonly session: Pick<AgentSession, "abort">,
+    private readonly signal?: AbortSignal
+  ) {}
+
+  watch(): void {
+    this.signal?.addEventListener("abort", this.stop, { once: true });
+  }
+
+  release(): void {
+    this.signal?.removeEventListener("abort", this.stop);
+  }
+
+  get reason(): string | null {
+    if (!this.signal?.aborted) return null;
+    if (this.signal.reason === "timeout") return "ran past its timeout";
+    return "interrupted";
+  }
+}
+
+export interface TaskRequest extends SessionArgs {
+  prompt: string;
+  followUp?: string;
+  /** Same strings as -o. */
+  outputs: string[];
+  json?: boolean;
+  brief?: boolean;
+  name?: string;
+  model?: string;
+  thread?: string;
+  header?: string;
+  footer?: string;
+  noDefaultFooter?: boolean;
+  noThread?: boolean;
+  exitZero?: boolean;
+}
+
+export interface TaskControl {
+  signal?: AbortSignal;
+}
+
+export interface TaskOutcome {
+  code: number;
+  envelope: RunEnvelope;
+  /** A destination failed: the caller keeps the report. */
+  undelivered: boolean;
+}
+
+export type TaskRunner = (request: TaskRequest, control?: TaskControl) => Promise<TaskOutcome>;
 
 export interface PrintOptions {
   prompt: string;

@@ -3,7 +3,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 
 import type { Variables } from "./variables.js";
 
-const KILL_GRACE_MS = 5_000;
+export const KILL_GRACE_MS = 5_000;
 
 /**
  * Starts one stage process at a time, streams its output, and stops its whole
@@ -12,6 +12,7 @@ const KILL_GRACE_MS = 5_000;
 export class Launcher {
   interrupted = false;
   private current: ChildProcess | null = null;
+  private task: AbortController | null = null;
 
   constructor(private readonly cwd: string) {}
 
@@ -19,7 +20,18 @@ export class Launcher {
     process.on("SIGINT", () => {
       this.interrupted = true;
       if (this.current) this.kill(this.current, "SIGINT");
+      this.task?.abort("interrupted");
     });
+  }
+
+  /** An agent stage running in this process: Ctrl-C aborts it. */
+  track(task: AbortController): void {
+    this.task = task;
+    if (this.interrupted) task.abort("interrupted");
+  }
+
+  untrack(): void {
+    this.task = null;
   }
 
   /** A shell command when `args` is null, otherwise a program and its arguments. */
