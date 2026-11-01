@@ -64,8 +64,9 @@ export class Launcher {
       const finish = (code: number) => {
         clearTimeout(timer);
         this.current = null;
-        file?.end();
-        done({ code, timedOut, interrupted: this.interrupted });
+        const result = { code, timedOut, interrupted: this.interrupted };
+        if (!file) return done(result);
+        file.end(() => done(result));
       };
       child.on("error", (err) => {
         forward(Buffer.from(`${err.message}\n`));
