@@ -17,7 +17,6 @@
       "types": "./dist/prompt/*.d.ts",
       "default": "./dist/prompt/*.js"
     },
-    "./skills/*": "./skills/*",
     "./scripts/vendor-skills.js": "./scripts/vendor-skills.js",
     "./package.json": "./package.json"
   },

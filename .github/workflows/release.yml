@@ -1,9 +1,8 @@
 name: Release
 
 # Publishes the `testeiya` CLI to npm. The skills the agent reads are not kept
-# in git — they belong to the repositories that wrote them — so every publish
-# fetches them fresh from the sources in skills/skills.yaml. Skip that step and
-# the package ships an empty skills tree.
+# in git, so every publish copies them fresh from testomatio/skills. Skip that
+# step and the package ships an empty skills tree.
 #
 # Every release publishes. The desktop app's release workflow creates them, so
 # the npm version always matches the desktop version.
@@ -60,13 +59,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      # The vendored skill folders are gitignored, so they are absent from a
-      # fresh checkout. This fetches the current version of every source in
-      # skills/skills.yaml, which `files: ["skills"]` then packs.
-      - name: Vendor the external skills
+      # skills/ is gitignored. This fills it from testomatio/skills, and
+      # `files: ["skills"]` then packs it.
+      - name: Vendor the skills
         run: node scripts/vendor-skills.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync version from the release tag
         env:
