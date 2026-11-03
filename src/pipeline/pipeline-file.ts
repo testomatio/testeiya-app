@@ -12,7 +12,7 @@ import { Variables } from "./variables.js";
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
 const RESERVED_IDS = ["pipeline", "summary"];
-const TOP_KEYS = ["name", "description", "target", "summary", "env", "prerequisites", "when", "stages"];
+const TOP_KEYS = ["name", "description", "target", "summary", "env", "packages", "prerequisites", "when", "stages"];
 const GATE_KEYS = ["env", "file", "run", "changes", "message"];
 const CHANGES_KEYS = ["paths", "ignore", "min_files"];
 const STAGE_EMOJIS = ["🔹", "🔸", "🧪", "🔍", "🛠️", "📋", "🚀", "🧭", "📦", "🧩", "🎯", "⚙️"];
@@ -106,6 +106,7 @@ export class PipelineFile {
       target: this.string(raw.target, "target"),
       summary: this.string(raw.summary, "summary"),
       env: this.map(raw.env, "env"),
+      packages: this.map(raw.packages, "packages"),
       prerequisites,
       when: this.list(raw.when, "when"),
       stages,
@@ -210,6 +211,7 @@ export class PipelineFile {
   // Filters run where the runner expands. A shell would fail on them.
   private checkFilters(spec: PipelineSpec): void {
     const texts: Array<[string, string]> = Object.entries(spec.env).map(([key, value]) => [`env.${key}`, value]);
+    for (const [name, version] of Object.entries(spec.packages)) texts.push([`packages.${name}`, version]);
     for (const [name, gate] of Object.entries(spec.prerequisites)) {
       for (const file of gate.file ?? []) texts.push([`prerequisite "${name}" file`, file]);
       if (gate.run) texts.push([`prerequisite "${name}" run`, gate.run]);
