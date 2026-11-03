@@ -2,7 +2,7 @@ name: issue-test-cases
 description: Turn an issue or epic into test cases, and sync them to Testomat.io.
 target: issue
 
-gates:
+prerequisites:
   issue:
     env: [ISSUE_URL]
     message: No issue. Set ISSUE_URL to the issue or epic to cover.

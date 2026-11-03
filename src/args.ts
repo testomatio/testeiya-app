@@ -18,7 +18,7 @@ Usage:
   testeiya task "<task>"      run one task and write a report
   testeiya ask "<question>"   answer a question
   testeiya pipeline <name>    run a multi-stage pipeline, or list them with no name
-  testeiya pipeline-check <name>  check a pipeline file and its gates, run nothing
+  testeiya pipeline-check <name>  check a pipeline file and its prerequisites, run nothing
   testeiya doctor             check what a run would resolve
   testeiya models [pattern]   list the models your key can reach
   testeiya skills [pattern]   list the skills bundled with this package
@@ -46,7 +46,7 @@ Options:
 
 Pipeline options:
       --dir <path>           the pipeline folder; keep it between runs for rounds
-      --dry-run              show gates and stages, spend no tokens
+      --dry-run              show prerequisites and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
       --stage ID:YAML        change one stage, e.g. 'plan:append_task: Be brief.'
@@ -208,15 +208,15 @@ Pipelines
 
   A file of your own can start with "extends: <name>" and hold only the changes.
 
-  A stage whose gate fails is skipped with the gate's message. A final summary
+  A stage whose prerequisite fails is skipped with its message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a
   CI cache per pull request, and a re-run on the same commit retries from the
   stage that stopped, while a new commit starts a round that updates the last one.
   --dry-run shows the plan and spends nothing. "testeiya pipeline-check" checks
-  the file and every gate it declares, and prints the message of each gate that
+  the file and every prerequisite it declares, and prints the message of each one that
   does not pass. It exits 1 when one does not, 2 when the file is invalid.
   --diagram also writes <name>.diagram.md: a Mermaid chart of the stages, the
-  files they pass on, and the gates, coloured by the check.
+  files they pass on, and the prerequisites, coloured by the check.
 
 Testomat.io
 

@@ -2,7 +2,7 @@ name: api-testing
 description: Find the API endpoints a pull request changed, test each with Explorbot, explain what broke.
 target: pr
 
-gates:
+prerequisites:
   api:
     env: [EXPLORBOT_URL, OPENAPI_SPEC]
     message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
@@ -29,7 +29,10 @@ stages:
     when: [api]
     task: |
       Review this pull request for public API changes
-      List the API endpoints it adds or changes in endpoints.txt, one path per line like /users/{id}, empty if none.
+      List the API endpoints it adds or changes in endpoints.txt,
+      one path per line, empty if none.
+      If you need to fill data use /qa-data-seeder to prepare data
+      The endpoints you need to write must not contain placeholders like {id} - fill them in with exact values
 
     outputs: [endpoints.txt]
 

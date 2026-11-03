@@ -309,14 +309,14 @@ export class Pipeline {
     }
     // Gates passed with --gate join `when`: the CI job decides if the run happens at all.
     for (const name of Object.keys(this.options.gates ?? {})) {
-      if (spec.gates[name]) throw new UsageError(`--gate ${name}: the pipeline already defines this gate`);
+      if (spec.prerequisites[name]) throw new UsageError(`--gate ${name}: the pipeline already defines this gate`);
     }
     return { ...spec, when: [...spec.when, ...Object.keys(this.options.gates ?? {})] };
   }
 
   private gates(spec: PipelineSpec): Map<string, Gate> {
     const gates = new Map<string, Gate>();
-    for (const [name, gate] of Object.entries(spec.gates)) gates.set(name, new Gate(name, gate));
+    for (const [name, gate] of Object.entries(spec.prerequisites)) gates.set(name, new Gate(name, gate));
     for (const [name, run] of Object.entries(this.options.gates ?? {})) gates.set(name, Gate.command(name, run));
     return gates;
   }

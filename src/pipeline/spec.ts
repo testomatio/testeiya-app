@@ -12,13 +12,13 @@ export interface PipelineSpec {
   /** Variables for every stage. Values expand `${NAME}`. */
   env: Record<string, string>;
   /** Named checks, defined once. */
-  gates: Record<string, GateSpec>;
-  /** Gates for the whole run. One fails: nothing runs. */
+  prerequisites: Record<string, GateSpec>;
+  /** Prerequisites for the whole run. One fails: nothing runs. */
   when: string[];
   stages: StageSpec[];
 }
 
-/** A gate passes when every check it has passes. */
+/** A prerequisite passes when every check it has passes. */
 export interface GateSpec {
   /** Every variable is set and not empty. */
   env?: string[];
@@ -28,7 +28,7 @@ export interface GateSpec {
   run?: string;
   /** The changed files match. */
   changes?: ChangesSpec;
-  /** Why the gate failed, shown when it skips something. */
+  /** Why the prerequisite failed, shown when it skips something. */
   message: string;
 }
 
@@ -55,7 +55,7 @@ export interface StageSpec {
   session?: string;
   inputs: string[];
   outputs: string[];
-  /** Gates this stage needs. One fails: the stage is skipped. */
+  /** Prerequisites this stage needs. One fails: the stage is skipped. */
   when: string[];
   stopOn: StopOn[];
   /** "90s", "30m", "1h", or seconds. */

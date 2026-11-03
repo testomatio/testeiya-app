@@ -23,7 +23,7 @@ summary: |
 env:
   BASE_BRANCH: ${BASE_BRANCH:-origin/main}
 
-gates:
+prerequisites:
   coverage:
     file: [coverage.tests.yml]
     message: No coverage.tests.yml. Create one with /qa-test-code-coverage.
@@ -71,8 +71,8 @@ stages:
 | `target` | no | What starts it: `issue`, `pr`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it |
 | `summary` | no | Extra instructions for the final summary |
 | `env` | no | Variables for every stage. Values expand `${NAME}` |
-| `gates` | no | Named checks, defined once. See [Gates](#gates) |
-| `when` | no | Gates for the whole run. One fails: nothing runs, exit 0 |
+| `prerequisites` | no | Named checks, defined once. See [Prerequisites](#prerequisites) |
+| `when` | no | Prerequisites for the whole run. One fails: nothing runs, exit 0 |
 | `stages` | yes | The stages, run in order. At least one |
 
 An unknown key is an error, found before anything runs.
@@ -86,7 +86,7 @@ An unknown key is an error, found before anything runs.
 | `emoji` | Required. Shown before the title in the final report |
 | `task` | An agent stage: the task text. `/skill` names expand |
 | `run` | A command stage: a shell command, run with `sh` in the checkout |
-| `when` | Gates this stage needs. One fails: the stage is skipped with its message |
+| `when` | Prerequisites this stage needs. One fails: the stage is skipped with its message |
 | `session` | A named, persistent conversation. See [Sessions](#sessions) |
 | `inputs` | Files the stage reads, linked into its folder. See [Files](#files) |
 | `outputs` | Files the stage must leave in its folder |
@@ -101,13 +101,13 @@ An unknown key is an error, found before anything runs.
 - Explorbot, the reporter and test runners are plain `run` commands. They have
   no stage type of their own.
 
-## Gates
+## Prerequisites
 
-A gate is a named check with a message. It is defined once under `gates:` and
+A prerequisite is a named check with a message. It is defined once under `prerequisites:` and
 named in `when:`, at the top level or in a stage.
 
 ```yaml
-gates:
+prerequisites:
   staging:
     env: [EXPLORBOT_URL]
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
@@ -120,25 +120,25 @@ gates:
 | `run: <command>` | the command exits 0 within 30 seconds. Its output is hidden |
 | `changes: {…}` | the changed files match, see [Changes](#changes) |
 
-- A gate needs a `message` and at least one check. All its checks must pass.
-- Every gate is checked once, before the first stage. `--dry-run` prints them all.
-- A name in `when` that `gates` does not define is an error.
+- A prerequisite needs a `message` and at least one check. All its checks must pass.
+- Every prerequisite is checked once, before the first stage. `--dry-run` prints them all.
+- A name in `when` that `prerequisites` does not define is an error.
 - `ai` is built in: a model and a provider key resolve. The summary needs it, so
   a pipeline without one exits 2 before anything runs.
 
-### Gates from the CI job
+### Prerequisites from the CI job
 
-The job can add a gate without editing the file:
+The job can add a prerequisite without editing the file:
 
 ```bash
 testeiya pipeline regression --gate 'pr:test -n "$PR_NUMBER"'
 ```
 
-- `--gate NAME:COMMAND` splits on the first colon. It is a `run` gate added to
+- `--gate NAME:COMMAND` splits on the first colon. It is a `run` prerequisite added to
   the top-level `when`.
 - When it fails the whole run is skipped and exits 0.
 - It is checked before `--output`, so `-o "gh:pr#$PR_NUMBER"` is fine when the
-  number only exists when the gate passes.
+  number only exists when the prerequisite passes.
 - A name the file already defines is an error.
 
 ### Checking a pipeline
@@ -147,20 +147,20 @@ testeiya pipeline regression --gate 'pr:test -n "$PR_NUMBER"'
 testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
 ```
 
-- Validates the file the way a run does, then checks every gate it declares,
+- Validates the file the way a run does, then checks every prerequisite it declares,
   used or not, plus `ai` and any `--gate`.
-- Prints each gate as passed or not, with its `message` when it does not pass.
+- Prints each prerequisite as passed or not, with its `message` when it does not pass.
 - Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--stage`,
   `--pipeline`, `--dir`, `--model` and `--json`.
-- Exit code: `0` every gate passes, `1` one does not, `2` the file is invalid.
+- Exit code: `0` every prerequisite passes, `1` one does not, `2` the file is invalid.
 - `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
-  chart of the stages in order, the files they pass on (dotted), and the gates
+  chart of the stages in order, the files they pass on (dotted), and the prerequisites
   each one needs, green when it passes and red when it does not.
 
 ### Changes
 
 ```yaml
-gates:
+prerequisites:
   api-changed:
     changes:
       paths: ["src/api/**", "openapi.yaml"]   # at least one changed file matches
@@ -181,7 +181,7 @@ Every key is optional. All given must hold, and at least one file must count.
 
 ## Variables
 
-- `${NAME}` and `${NAME:-default}` expand in `task`, `env`, `outputs` and gate
+- `${NAME}` and `${NAME:-default}` expand in `task`, `env`, `outputs` and prerequisite
   values. Unset is empty. `run` goes to the shell, which uses the same rules and
   more, like `${NAME:+word}`.
 - `${NAME | filter}` runs [Liquid filters](https://liquidjs.com/filters/overview.html)
@@ -334,7 +334,7 @@ the file: the runner adds it.
   <the stage's report>
   ```
 
-- A skipped stage shows its gate message. A stage that did not run says so.
+- A skipped stage shows its prerequisite message. A stage that did not run says so.
 - Stage reports are not signed. The summary is signed once.
 - It explains the pipeline's verdict and never changes it.
 - It runs after the last stage, and after a stage that stopped the pipeline. Not
@@ -349,12 +349,12 @@ the file: the runner adds it.
 | `fail` | verdict fail | non-zero exit |
 | `broken` | crashed, or an `outputs` file is missing | an `outputs` file is missing |
 | `timeout` | ran past `timeout` | same |
-| `skipped` | a gate in `when` failed, or nothing to loop over | same, or its inputs were skipped |
+| `skipped` | a prerequisite in `when` failed, or nothing to loop over | same, or its inputs were skipped |
 | `not-run` | an earlier stage stopped the pipeline | same |
 
 - `broken` and `timeout` always stop the pipeline.
 - `stopOn: fail` stops it when this stage fails.
-- `stopOn: gate` stops it when this stage is skipped by a gate.
+- `stopOn: gate` stops it when this stage is skipped by a prerequisite.
 
 Exit code: `0` pass or skipped, `1` any fail, broken or timeout, `2` bad usage
 or no AI provider, `130` interrupted. `--exit-zero` forgives `fail` only.
@@ -393,7 +393,7 @@ From the command line, for one run:
 testeiya pipeline issue-test-cases \
   --stage 'requirements:append_task: Never assume user credentials. Ask for them.' \
   --stage 'sync:append_when: [release]' \
-  --pipeline 'gates: {release: {env: [RELEASE], message: Not a release.}}'
+  --pipeline 'prerequisites: {release: {env: [RELEASE], message: Not a release.}}'
 ```
 
 From a file, to keep in the repo:
@@ -401,7 +401,7 @@ From a file, to keep in the repo:
 ```yaml
 # .github/testeiya/issue-test-cases.yml
 extends: issue-test-cases
-gates:
+prerequisites:
   release:
     env: [RELEASE]
     message: Not a release.
@@ -416,12 +416,12 @@ stages:
   keys go in one flow map: `--stage 'explore:{timeout: 45m, append_when: staging}'`.
 - The value is YAML, so quote text that holds `: `:
   `--stage 'plan:append_task: "Note: be brief."'`.
-- `--pipeline YAML` changes the top level: `summary`, `env`, `gates`, `when`, `stages`.
+- `--pipeline YAML` changes the top level: `summary`, `env`, `prerequisites`, `when`, `stages`.
 - `extends` takes a bundled name or a path relative to the file. The rest of the
   file is laid over it. It inherits the base's `name` unless it sets its own.
 - Order: `extends`, then every `--pipeline`, then every `--stage`.
 
-| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, gate `env` and `file` | Map: `env`, `gates` |
+| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, prerequisite `env` and `file` | Map: `env`, `prerequisites` |
 |---|---|---|---|
 | `key` | replaces | replaces | merges by key |
 | `append_key` | adds at the end, on a new line | adds at the end | error |
@@ -431,9 +431,9 @@ stages:
 - Any other key, like `timeout` or `title`, only replaces.
 - Stages match by `id`. An unknown id with a `task` or `run` is a new stage,
   added at the end. Without one it is an error.
-- `remove_stages: [id]` and `remove_gates: [name]` drop a stage or a gate.
+- `remove_stages: [id]` and `remove_prerequisites: [name]` drop a stage or a prerequisite.
 - The result is checked like any pipeline file, before anything runs. A typo,
-  a missing stage or a gate no one defines is an error and exits 2.
+  a missing stage or a prerequisite no one defines is an error and exits 2.
 - `--dry-run` and `pipeline-check` print every override and the keys it changes.
 - `pipeline.yml` in the folder holds the pipeline with every override applied.
   A retry runs that copy, so it repeats the round it started.

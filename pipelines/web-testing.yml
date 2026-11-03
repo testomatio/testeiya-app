@@ -2,7 +2,7 @@ name: web-testing
 description: Review a pull request, test the change in a browser with Explorbot, explain what broke.
 target: pr
 
-gates:
+prerequisites:
   staging:
     env: [EXPLORBOT_URL]
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
