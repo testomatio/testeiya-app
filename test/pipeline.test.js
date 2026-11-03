@@ -10,6 +10,7 @@ import { Diagram } from "../dist/src/pipeline/diagram.js";
 import { Gate } from "../dist/src/pipeline/gate.js";
 import { Pipeline } from "../dist/src/pipeline/pipeline.js";
 import { Overlay } from "../dist/src/pipeline/overlay.js";
+import { Packages } from "../dist/src/pipeline/packages.js";
 import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
 import { CommandStage } from "../dist/src/pipeline/command-stage.js";
 import { Stage } from "../dist/src/pipeline/stage.js";
@@ -613,6 +614,36 @@ stages:
   const tasks = calledWith(log).map((call) => call.prompt).filter((task) => task.startsWith("Two."));
   assert.doesNotMatch(tasks[0], /Last round/);
   assert.match(tasks[1], new RegExp(`Last round: ${join(dir, ".last", "2-two")}\\..*Changed files: ${join(dir, "changes.txt")}`));
+});
+
+test("package versions expand, and an empty one or a leading @ means a tag", () => {
+  const packages = new Packages({ one: "${ONE_VERSION:-latest}", two: "@next", three: "", four: "file:../four" });
+  assert.deepEqual(packages.specs(new Variables({ ONE_VERSION: "1.2.3" })), ["one@1.2.3", "two@next", "three@latest", "four@file:../four"]);
+  assert.deepEqual(packages.specs(new Variables({})).slice(0, 1), ["one@latest"]);
+});
+
+test("packages must be a mapping of name to version", () => {
+  assert.throws(() => parse("packages: [explorbot]\nstages:\n  - id: one\n    run: echo\n"), /packages must be a mapping/);
+});
+
+test("a stage runs a package's binary through npx or by name, never the registry", async () => {
+  const { repo, runTask } = setup();
+  const pkg = mkdtempSync(join(tmpdir(), "testeiya-package-"));
+  writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "fake-tool", version: "1.0.0", bin: { "fake-tool": "cli.js" } }));
+  writeFileSync(join(pkg, "cli.js"), '#!/usr/bin/env node\nconsole.log("fake-tool " + process.argv[2]);\n', { mode: 0o755 });
+  const file = write(repo, "pipe.yml", `
+packages:
+  fake-tool: \${TOOL_VERSION:-file:${pkg}}
+stages:
+  - id: one
+    run: npx fake-tool ran > "$STAGE_DIR/out.txt" && fake-tool too >> "$STAGE_DIR/out.txt"
+    outputs: [out.txt]
+`);
+  const dir = join(repo, ".qa");
+  const code = await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run());
+  assert.equal(code, 0);
+  assert.equal(readFileSync(join(dir, "1-one", "out.txt"), "utf8"), "fake-tool ran\nfake-tool too\n");
+  assert.ok(existsSync(join(dir, ".packages", "lib", "node_modules", "fake-tool")));
 });
 
 function setup() {

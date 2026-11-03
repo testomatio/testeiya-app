@@ -6,6 +6,9 @@ prerequisites:
   api:
     env: [EXPLORBOT_URL, OPENAPI_SPEC]
     message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
+  api_auth:
+    env: [EXPLORBOT_AUTH]
+    message: No auth instructions passed. If your API is publicly available with no auth - add lines explaining this. But EXPLORBOT_AUTH variable must be set
   explorbot-ai:
     env: [EXPLORBOT_AI_PROVIDER]
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
@@ -13,12 +16,16 @@ prerequisites:
 env:
   EXPLORBOT_NO_BANNER: "1"
 
+packages:
+  explorbot: ${EXPLORBOT_VERSION:-latest}
+  "@apidevtools/swagger-cli": latest
+
 stages:
   - id: spec
     title: OpenAPI spec
     emoji: 📜
     when: [api]
-    run: npx -y @apidevtools/swagger-cli validate "$OPENAPI_SPEC"
+    run: npx swagger-cli validate "$OPENAPI_SPEC"
     stopOn: fail
     timeout: 2m
 
@@ -26,13 +33,19 @@ stages:
     title: API review
     emoji: 🔍
     session: qa
-    when: [api]
+    when: [api, api_auth]
     task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt,
       one path per line, empty if none.
+      Write each path exactly as it appears under `paths:` in ${OPENAPI_SPEC},
+      relative to ${EXPLORBOT_URL} — no host, no base prefix.
+
+      Check if API is available at ${EXPLORBOT_URL}, use ${EXPLORBOT_AUTH} to authorize
       If you need to fill data use /qa-data-seeder to prepare data
-      The endpoints you need to write must not contain placeholders like {id} - fill them in with exact values
+      The endpoints you need to write MUST NOT contain placeholders like {id} - fill them in with exact values
+      Fill in placeholders with values you find out while examining api
+      Exit if API is not accessible
 
     outputs: [endpoints.txt]
 
@@ -41,7 +54,7 @@ stages:
     emoji: 🤖
     when: [api, explorbot-ai]
     each_line: endpoints.txt
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
     outputs: [explorbot/]
     timeout: 10m
 

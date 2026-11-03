@@ -71,6 +71,7 @@ stages:
 | `target` | no | What starts it: `issue`, `pr`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it |
 | `summary` | no | Extra instructions for the final summary |
 | `env` | no | Variables for every stage. Values expand `${NAME}` |
+| `packages` | no | npm packages the stages call, name to version. See [Packages](#packages) |
 | `prerequisites` | no | Named checks, defined once. See [Prerequisites](#prerequisites) |
 | `when` | no | Prerequisites for the whole run. One fails: nothing runs, exit 0 |
 | `stages` | yes | The stages, run in order. At least one |
@@ -218,6 +219,32 @@ Every key is optional. All given must hold, and at least one file must count.
 
 `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE` are removed:
 they belong to a single task.
+
+## Packages
+
+`packages:` names the npm packages the stages call, each with a version, a range
+or a tag. The runner installs them into `.packages/` in the pipeline folder once
+per run, after the prerequisites pass. Every stage gets that folder as npm's
+global prefix (`npm_config_prefix`) and its binaries first on `PATH`, so
+`npx explorbot` and plain `explorbot` both run the installed copy:
+
+```yaml
+packages:
+  explorbot: ${EXPLORBOT_VERSION:-latest}
+  "@apidevtools/swagger-cli": ^4
+stages:
+  - id: explore
+    run: npx explorbot api explore /users
+```
+
+- Values expand `${NAME}`, so the job picks the version: `EXPLORBOT_VERSION=0.6.0`.
+- An empty value means `latest`, and a leading `@` is dropped: `@latest` works.
+- Anything `npm install name@...` takes works: `file:../explorbot`, `github:org/repo`.
+- Tags re-resolve every run, so `latest` is the newest release, never a stale cache.
+- Prerequisite `run` checks run before the install and cannot call these binaries.
+- A stage's `npm install --global` lands in `.packages/` too, not the machine's own prefix.
+- A failed install stops the run before any stage. The npm log is
+  `.packages/install.log`.
 
 ## Files
 

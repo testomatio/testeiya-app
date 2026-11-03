@@ -52,6 +52,11 @@ export class PipelineLog {
     this.note(`  ${MARKS[record.status] ?? c.dim("·")} ${record.id.padEnd(14)} ${time.padEnd(6)} ${text}`);
   }
 
+  /** The files a stage wrote, one path per line, so they can be opened. */
+  outputs(paths: string[]): void {
+    for (const path of paths) this.note(`    ${c.dim("→")} ${path}`);
+  }
+
   starting(name: string, item?: string): void {
     let line = `\n  ▸ ${name}`;
     if (item !== undefined) line += `  ${item}`;

@@ -11,6 +11,8 @@ export interface PipelineSpec {
   summary?: string;
   /** Variables for every stage. Values expand `${NAME}`. */
   env: Record<string, string>;
+  /** npm package name to version, installed for the run. Values expand `${NAME}`. */
+  packages: Record<string, string>;
   /** Named checks, defined once. */
   prerequisites: Record<string, GateSpec>;
   /** Prerequisites for the whole run. One fails: nothing runs. */

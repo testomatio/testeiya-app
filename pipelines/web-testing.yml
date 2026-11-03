@@ -16,6 +16,9 @@ prerequisites:
 env:
   EXPLORBOT_NO_BANNER: "1"
 
+packages:
+  explorbot: ${EXPLORBOT_VERSION:-latest}
+
 stages:
   - id: review
     title: Review
@@ -36,7 +39,7 @@ stages:
     title: Browser testing
     emoji: 🌐
     when: [staging, browser, explorbot-ai]
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot test "$STAGE_DIR/plan.md" '*'
+    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot test "$STAGE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
     timeout: 30m

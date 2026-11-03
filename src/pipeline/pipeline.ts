@@ -14,6 +14,7 @@ import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
 import { Overlay } from "./overlay.js";
+import { Packages } from "./packages.js";
 import { PipelineFile } from "./pipeline-file.js";
 import { Report } from "./report.js";
 import type { PipelineSpec, StageSpec } from "./spec.js";
@@ -126,6 +127,7 @@ export class Pipeline {
 
     let created = previous?.created ?? [];
     mkdirSync(dir, { recursive: true });
+    const stageVars = await new Packages(spec.packages).install(dir, this.launcher, vars);
     if (!retry) {
       // A new round moves what the last one wrote to .last, and keeps the sessions.
       rmSync(join(dir, LAST_DIR), { recursive: true, force: true });
@@ -150,7 +152,7 @@ export class Pipeline {
       created,
     });
     state.trackFiles();
-    return this.runStages({ spec, stages, gates, results, state, vars, report, dir });
+    return this.runStages({ spec, stages, gates, results, state, vars: stageVars, report, dir });
   }
 
   /** Validates the file, then checks every gate it declares. Runs no stage. */

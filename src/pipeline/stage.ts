@@ -109,6 +109,8 @@ export abstract class Stage {
       }
     }
     log.stage(record);
+    const written = this.spec.outputs.map((output) => join(this.dir(context), output)).filter((path) => existsSync(path));
+    log.outputs(written);
   }
 
   protected abstract runItem(context: StageContext, item: Item, vars: Variables): Promise<StageResult>;
