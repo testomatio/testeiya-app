@@ -30,7 +30,7 @@ const TOP: Schema = { name: "text", description: "text", summary: "text", env: "
 /**
  * Changes laid over a raw pipeline before it is validated. A plain key
  * replaces, `append_` and `prepend_` add, `remove_` drops. Stages match by id,
- * gates by name. PIPELINES.md documents every rule.
+ * prerequisites by name. PIPELINES.md documents every rule.
  */
 export class Overlay {
   constructor(
@@ -74,7 +74,7 @@ export class Overlay {
     for (const [key, value] of Object.entries(this.raw)) {
       const [op, field] = Overlay.split(key);
       if (field === "stages") result.stages = this.stages(result.stages, value, op);
-      else if (field === "gates") result.gates = this.gates(result.gates, value, op);
+      else if (field === "prerequisites") result.prerequisites = this.prerequisites(result.prerequisites, value, op);
       else this.field(result, field, op, value, TOP[field] ?? "value", "pipeline");
     }
     return result;
@@ -103,20 +103,20 @@ export class Overlay {
     return stages;
   }
 
-  private gates(base: unknown, value: unknown, op?: Op): Raw {
+  private prerequisites(base: unknown, value: unknown, op?: Op): Raw {
     const gates: Raw = { ...(Overlay.isRecord(base) ? base : {}) };
     if (op === "remove") {
       for (const name of Overlay.list(value).map(String)) {
-        if (!(name in gates)) this.fail(`there is no gate "${name}" to remove`);
+        if (!(name in gates)) this.fail(`there is no prerequisite "${name}" to remove`);
         delete gates[name];
       }
       return gates;
     }
-    if (op) this.fail(`gates take changes by name or remove_gates, not ${op}_gates`);
-    if (!Overlay.isRecord(value)) this.fail("gates must be a mapping of name to checks");
+    if (op) this.fail(`prerequisites take changes by name or remove_prerequisites, not ${op}_prerequisites`);
+    if (!Overlay.isRecord(value)) this.fail("prerequisites must be a mapping of name to checks");
     for (const [name, gate] of Object.entries(value)) {
-      if (!Overlay.isRecord(gate)) this.fail(`gate "${name}" must be a mapping`);
-      gates[name] = this.merge(Overlay.isRecord(gates[name]) ? gates[name] : {}, gate, GATE, `gate "${name}"`);
+      if (!Overlay.isRecord(gate)) this.fail(`prerequisite "${name}" must be a mapping`);
+      gates[name] = this.merge(Overlay.isRecord(gates[name]) ? gates[name] : {}, gate, GATE, `prerequisite "${name}"`);
     }
     return gates;
   }

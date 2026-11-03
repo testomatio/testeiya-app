@@ -10,3 +10,6 @@ dist/
 # would also hide the tree from the agent, whose skill discovery honours
 # .gitignore in every directory it walks.
 skills/
+
+# bunosh pipeline:* writes its runs here
+pipeline-runs/

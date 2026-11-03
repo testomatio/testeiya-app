@@ -12,7 +12,7 @@ import { Variables } from "./variables.js";
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
 const RESERVED_IDS = ["pipeline", "summary"];
-const TOP_KEYS = ["name", "description", "target", "summary", "env", "gates", "when", "stages"];
+const TOP_KEYS = ["name", "description", "target", "summary", "env", "prerequisites", "when", "stages"];
 const GATE_KEYS = ["env", "file", "run", "changes", "message"];
 const CHANGES_KEYS = ["paths", "ignore", "min_files"];
 const STAGE_EMOJIS = ["🔹", "🔸", "🧪", "🔍", "🛠️", "📋", "🚀", "🧭", "📦", "🧩", "🎯", "⚙️"];
@@ -88,12 +88,13 @@ export class PipelineFile {
   }
 
   private validate(raw: Record<string, unknown>): PipelineSpec {
+    if (raw.gates !== undefined) return this.fail("gates is now called prerequisites");
     this.unknownKeys(raw, TOP_KEYS, "pipeline");
 
-    const gates: Record<string, GateSpec> = {};
-    const rawGates = raw.gates ?? {};
-    if (!PipelineFile.isRecord(rawGates)) return this.fail("gates must be a mapping of name to checks");
-    for (const [name, value] of Object.entries(rawGates)) gates[name] = this.gate(name, value);
+    const prerequisites: Record<string, GateSpec> = {};
+    const rawPrerequisites = raw.prerequisites ?? {};
+    if (!PipelineFile.isRecord(rawPrerequisites)) return this.fail("prerequisites must be a mapping of name to checks");
+    for (const [name, value] of Object.entries(rawPrerequisites)) prerequisites[name] = this.gate(name, value);
 
     const rawStages = raw.stages;
     if (!Array.isArray(rawStages) || rawStages.length === 0) return this.fail("stages must be a non-empty list");
@@ -105,7 +106,7 @@ export class PipelineFile {
       target: this.string(raw.target, "target"),
       summary: this.string(raw.summary, "summary"),
       env: this.map(raw.env, "env"),
-      gates,
+      prerequisites,
       when: this.list(raw.when, "when"),
       stages,
     };
@@ -115,30 +116,30 @@ export class PipelineFile {
   }
 
   private gate(name: string, value: unknown): GateSpec {
-    if (!PipelineFile.isRecord(value)) return this.fail(`gate "${name}" must be a mapping`);
-    this.unknownKeys(value, GATE_KEYS, `gate "${name}"`);
-    const message = this.string(value.message, `gate "${name}" message`);
-    if (!message) return this.fail(`gate "${name}" needs a message`);
+    if (!PipelineFile.isRecord(value)) return this.fail(`prerequisite "${name}" must be a mapping`);
+    this.unknownKeys(value, GATE_KEYS, `prerequisite "${name}"`);
+    const message = this.string(value.message, `prerequisite "${name}" message`);
+    if (!message) return this.fail(`prerequisite "${name}" needs a message`);
     const gate: GateSpec = { message };
-    if (value.env !== undefined) gate.env = this.list(value.env, `gate "${name}" env`);
-    if (value.file !== undefined) gate.file = this.list(value.file, `gate "${name}" file`);
-    if (value.run !== undefined) gate.run = this.string(value.run, `gate "${name}" run`);
+    if (value.env !== undefined) gate.env = this.list(value.env, `prerequisite "${name}" env`);
+    if (value.file !== undefined) gate.file = this.list(value.file, `prerequisite "${name}" file`);
+    if (value.run !== undefined) gate.run = this.string(value.run, `prerequisite "${name}" run`);
     if (value.changes !== undefined) gate.changes = this.changes(name, value.changes);
     if (!gate.env && !gate.file && !gate.run && !gate.changes) {
-      return this.fail(`gate "${name}" needs a check: env, file, run or changes`);
+      return this.fail(`prerequisite "${name}" needs a check: env, file, run or changes`);
     }
     return gate;
   }
 
   private changes(name: string, value: unknown): ChangesSpec {
-    if (!PipelineFile.isRecord(value)) return this.fail(`gate "${name}" changes must be a mapping`);
-    this.unknownKeys(value, CHANGES_KEYS, `gate "${name}" changes`);
+    if (!PipelineFile.isRecord(value)) return this.fail(`prerequisite "${name}" changes must be a mapping`);
+    this.unknownKeys(value, CHANGES_KEYS, `prerequisite "${name}" changes`);
     const rule: ChangesSpec = {};
-    if (value.paths !== undefined) rule.paths = this.list(value.paths, `gate "${name}" paths`);
-    if (value.ignore !== undefined) rule.ignore = this.list(value.ignore, `gate "${name}" ignore`);
+    if (value.paths !== undefined) rule.paths = this.list(value.paths, `prerequisite "${name}" paths`);
+    if (value.ignore !== undefined) rule.ignore = this.list(value.ignore, `prerequisite "${name}" ignore`);
     if (value.min_files !== undefined) {
       if (!Number.isInteger(value.min_files) || (value.min_files as number) < 1) {
-        return this.fail(`gate "${name}" min_files must be a whole number above 0`);
+        return this.fail(`prerequisite "${name}" min_files must be a whole number above 0`);
       }
       rule.min_files = value.min_files as number;
     }
@@ -197,11 +198,11 @@ export class PipelineFile {
       ids.add(stage.id);
     }
     for (const name of spec.when) {
-      if (!spec.gates[name]) this.fail(`when names gate "${name}", which gates does not define`);
+      if (!spec.prerequisites[name]) this.fail(`when names prerequisite "${name}", which prerequisites does not define`);
     }
     for (const stage of spec.stages) {
       for (const name of stage.when) {
-        if (!spec.gates[name]) this.fail(`stage "${stage.id}" when names gate "${name}", which gates does not define`);
+        if (!spec.prerequisites[name]) this.fail(`stage "${stage.id}" when names prerequisite "${name}", which prerequisites does not define`);
       }
     }
   }
@@ -209,9 +210,9 @@ export class PipelineFile {
   // Filters run where the runner expands. A shell would fail on them.
   private checkFilters(spec: PipelineSpec): void {
     const texts: Array<[string, string]> = Object.entries(spec.env).map(([key, value]) => [`env.${key}`, value]);
-    for (const [name, gate] of Object.entries(spec.gates)) {
-      for (const file of gate.file ?? []) texts.push([`gate "${name}" file`, file]);
-      if (gate.run) texts.push([`gate "${name}" run`, gate.run]);
+    for (const [name, gate] of Object.entries(spec.prerequisites)) {
+      for (const file of gate.file ?? []) texts.push([`prerequisite "${name}" file`, file]);
+      if (gate.run) texts.push([`prerequisite "${name}" run`, gate.run]);
     }
     for (const stage of spec.stages) {
       if (stage.task) texts.push([`stage "${stage.id}" task`, stage.task]);

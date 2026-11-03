@@ -189,7 +189,7 @@ pipeline is that flow in one YAML file, run by one command.
 testeiya pipeline                     # list the bundled pipelines
 testeiya pipeline web-testing -o gh:pr-comment
 testeiya pipeline .github/testeiya/my-flow.yml --dry-run
-testeiya pipeline-check .github/testeiya/my-flow.yml   # check the file and every gate
+testeiya pipeline-check .github/testeiya/my-flow.yml   # check the file and every prerequisite
 testeiya pipeline-check regression --diagram           # also draw it as a Mermaid chart
 ```
 
@@ -211,7 +211,7 @@ name: web-testing
 description: Review a pull request, test it in a browser, explain what broke.
 target: pr
 
-gates:
+prerequisites:
   staging:
     env: [EXPLORBOT_URL]
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
@@ -249,8 +249,8 @@ stages:
   so a run reads in order. An agent stage writes `<id>.md` and `<id>.json`, a
   command writes `<id>.log`. `outputs` name the rest. `inputs` are linked into
   the folder from the stage that wrote them, as `$STAGE_DIR/<file>`.
-- `gates` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
-  `ignore`, `min_files`). `when:` names the gates a stage needs. One fails and
+- `prerequisites` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
+  `ignore`, `min_files`). `when:` names the prerequisites a stage needs. One fails and
   the stage is skipped with its message. In the top-level `when:` it skips the
   whole run.
 - `session: <name>` keeps a conversation. Stages with the same name share it.
@@ -301,8 +301,8 @@ whether this push belongs to a pull request. `--stage ID:YAML` and
 'requirements:append_task: Never assume credentials.'`. A plain key replaces,
 `append_` and `prepend_` add, `remove_` drops. A file that starts with
 `extends: <name>` keeps the same changes in the repo. `--dry-run` prints every
-gate and stage and spends nothing. `testeiya pipeline-check` checks the file and
-every gate it declares, used or not, and prints the message of each one that
+prerequisite and stage and spends nothing. `testeiya pipeline-check` checks the file and
+every prerequisite it declares, used or not, and prints the message of each one that
 does not pass. `--diagram` also writes the pipeline as a Mermaid chart.
 `pipeline.json` in the folder holds each stage's status; `--json` prints it.
 

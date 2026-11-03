@@ -105,7 +105,12 @@ test("every bundled pipeline has a target", () => {
 
 test("a stage naming an undefined gate is bad usage", () => {
   const text = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    when: [staging]\n";
-  assert.throws(() => parse(text), /names gate "staging"/);
+  assert.throws(() => parse(text), /names prerequisite "staging"/);
+});
+
+test("the old gates key points at prerequisites", () => {
+  const text = "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: a\n    run: echo\n";
+  assert.throws(() => parse(text), /gates is now called prerequisites/);
 });
 
 test("a stage needs exactly one of task or run", () => {
@@ -206,7 +211,7 @@ test("a pipeline runs stages, skips closed gates, loops and summarizes", async (
   const { repo, log, runTask } = setup();
   const file = write(repo, "pipe.yml", `
 name: demo
-gates:
+prerequisites:
   staging:
     env: [DEMO_STAGING_URL]
     message: No staging URL.
@@ -308,7 +313,7 @@ ${filler}`);
 test("changes git cannot read stop the run instead of skipping it", async () => {
   const { repo, runTask } = setup();
   const file = write(repo, "pipe.yml", `
-gates:
+prerequisites:
   big:
     changes: { min_files: 1 }
     message: Too small.
@@ -334,7 +339,7 @@ test("the checkout itself is not a pipeline folder", async () => {
 test("a failed gate in when skips the whole run", async () => {
   const { repo, log, runTask } = setup();
   const file = write(repo, "pipe.yml", `
-gates:
+prerequisites:
   coverage:
     file: [coverage.tests.yml]
     message: No coverage map.
@@ -359,7 +364,7 @@ stages:
 test("pipeline-check reports every declared gate and runs nothing", async () => {
   const { repo, log, runTask } = setup();
   const file = write(repo, "pipe.yml", `
-gates:
+prerequisites:
   staging:
     env: [CHECK_STAGING_URL]
     message: No staging URL.
@@ -389,7 +394,7 @@ stages:
 
 test("a diagram draws stages, the files they pass on, and gates by result", () => {
   const spec = parse(`
-gates:
+prerequisites:
   staging: { env: [X], message: m }
   map: { file: [a], message: m }
 when: [map]
@@ -418,7 +423,7 @@ stages:
   assert.match(chart, /g2\{\{"ai"\}\}/);
 });
 
-const BASE = `gates:
+const BASE = `prerequisites:
   pr:
     env: [PR]
     message: No PR.
@@ -445,7 +450,7 @@ test("an override replaces, appends, prepends and removes", () => {
     Overlay.stage("plan:append_task: Never assume credentials."),
     Overlay.stage("plan:{prepend_task: Read the issue first., append_when: staging, timeout: 30m}"),
     Overlay.stage("run:run: echo changed"),
-    Overlay.pipeline("{gates: {staging: {env: [URL], message: No URL.}}, remove_when: pr, append_summary: Be brief.}"),
+    Overlay.pipeline("{prerequisites: {staging: {env: [URL], message: No URL.}}, remove_when: pr, append_summary: Be brief.}"),
   );
   const plan = spec.stages[0];
   assert.equal(plan.task, "Read the issue first.\nPlan it.\nNever assume credentials.");
@@ -454,16 +459,16 @@ test("an override replaces, appends, prepends and removes", () => {
   assert.equal(spec.stages[1].run, "echo changed");
   assert.deepEqual(spec.when, []);
   assert.equal(spec.summary, "Be brief.");
-  assert.deepEqual(spec.gates.pr, { env: ["PR"], message: "No PR." });
-  assert.deepEqual(spec.gates.staging, { env: ["URL"], message: "No URL." });
+  assert.deepEqual(spec.prerequisites.pr, { env: ["PR"], message: "No PR." });
+  assert.deepEqual(spec.prerequisites.staging, { env: ["URL"], message: "No URL." });
 });
 
 test("an override can add and remove stages and gates", () => {
   const added = overlaid(Overlay.pipeline("stages: [{id: extra, title: Extra, emoji: 🔸, run: echo extra}]"));
   assert.deepEqual(added.stages.map((stage) => stage.id), ["plan", "run", "extra"]);
-  const removed = overlaid(Overlay.pipeline("{remove_stages: [plan], remove_gates: [pr], remove_when: [pr]}"));
+  const removed = overlaid(Overlay.pipeline("{remove_stages: [plan], remove_prerequisites: [pr], remove_when: [pr]}"));
   assert.deepEqual(removed.stages.map((stage) => stage.id), ["run"]);
-  assert.deepEqual(Object.keys(removed.gates), []);
+  assert.deepEqual(Object.keys(removed.prerequisites), []);
 });
 
 test("a wrong override is bad usage, found before anything runs", () => {
@@ -472,7 +477,7 @@ test("a wrong override is bad usage, found before anything runs", () => {
   assert.throws(() => overlaid(Overlay.stage("plan:remove_task: x")), /remove_task is not allowed/);
   assert.throws(() => overlaid(Overlay.stage("plan:apend_task: x")), /unknown key "apend_task"/);
   assert.throws(() => overlaid(Overlay.stage("run:append_task: x")), /exactly one of task or run/);
-  assert.throws(() => overlaid(Overlay.stage("plan:append_when: staging")), /names gate "staging"/);
+  assert.throws(() => overlaid(Overlay.stage("plan:append_when: staging")), /names prerequisite "staging"/);
   assert.throws(() => overlaid(Overlay.pipeline("remove_stages: [nope]")), /no stage "nope" to remove/);
   assert.throws(() => Overlay.stage("plan"), /--stage takes ID:YAML/);
   assert.throws(() => Overlay.stage("plan:just text"), /--stage plan takes YAML keys/);
@@ -511,7 +516,7 @@ test("a --gate from the job skips the run before outputs are checked", async () 
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
   await assert.rejects(inRepo(repo, () => new Pipeline({ ...options, sets: { PR: "1" } }).run()), /gh:pr#/);
-  const gated = write(repo, "gated.yml", "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    title: one\n    emoji: 🔹\n    when: [pr]\n    task: One.\n");
+  const gated = write(repo, "gated.yml", "prerequisites:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: one\n    title: one\n    emoji: 🔹\n    when: [pr]\n    task: One.\n");
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: gated, dir, runTask, gates: { pr: "true" } }).run()), /already defines/);
 });
 
