@@ -20,6 +20,19 @@ Chat with a QA agent that works inside your project. It reads your code and
 test files, writes and reviews test cases, runs tests, explores a live app in
 its own browser, and syncs with your Testomat.io project.
 
+Install it with one command, which needs Node 22.19 or newer:
+
+```bash
+npx testeiya install-app
+```
+
+It picks the build for your OS and skips the download if the app is already
+installed; `--force` reinstalls. The app lands in `/Applications` on macOS
+(`~/Applications` without write access), `%LOCALAPPDATA%\Testeiya` on Windows, and
+`~/.local/bin` on Linux, with a menu entry on Windows and Linux.
+
+Or download a build yourself:
+
 | OS | Download |
 |---|---|
 | macOS (Apple Silicon) | [`stable-macos-arm64-Testeiya.dmg`](https://github.com/testomatio/testeiya-app/releases/latest/download/stable-macos-arm64-Testeiya.dmg) |
