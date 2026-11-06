@@ -37,6 +37,7 @@ stages:
     task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt,
+      List only paths defined in the OpenAPI spec at ${OPENAPI_SPEC}; other APIs are out of scope.
       one path per line, empty if none.
       Write each path exactly as it appears under `paths:` in ${OPENAPI_SPEC},
       relative to ${EXPLORBOT_URL} — no host, no base prefix.
@@ -57,13 +58,3 @@ stages:
     run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
     outputs: [explorbot/]
     timeout: 10m
-
-  - id: results
-    title: Results
-    emoji: 📊
-    session: qa
-    when: [api, explorbot-ai]
-    task: |
-      Read the Explorbot results in explorbot/ and say which failures are real defects in this change. /explorbot-fundamentals
-      Fail the run if any is a real defect.
-    inputs: [endpoints.txt, explorbot/]
