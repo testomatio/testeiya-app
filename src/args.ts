@@ -64,6 +64,7 @@ Environment:
   TESTOMATIO                  Testomat.io project API key
   TESTOMATIO_PROJECT_ID       Testomat.io project id, same as --project
   TESTOMATIO_URL              Testomat.io base url, for self-hosted
+  TESTEIYA_MCP_SERVERS        extra MCP servers as JSON, {name: {url, headers}}
 
 Run "testeiya help" for the full guide.`;
 
