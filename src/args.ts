@@ -24,6 +24,7 @@ Usage:
   testeiya skills [pattern]   list the skills bundled with this package
   testeiya sessions           list saved sessions for this folder
   testeiya share [--answer]   share the last session to the Testeiya Hub
+  testeiya install-app        install the desktop app for this OS, if it is not there yet
 
 Options:
   -o, --output <dest>        report destination, repeatable: file.md, file.json, gh:pr-comment
@@ -44,6 +45,7 @@ Options:
       --no-thread            keep out of the comment thread: post nothing, read no comments
       --json                 machine-readable output
       --probe                doctor only: test the key with one request
+      --force                install-app only: reinstall over an existing app
 
 Share options:
       --answer               share the last assistant answer as a public page
@@ -232,7 +234,7 @@ Testomat.io
   the Testomat.io tools. The MCP server needs the id: a token alone does not say
   which project to talk to.`;
 
-export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "share", "help"] as const;
+export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "share", "install-app", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
@@ -278,6 +280,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
   if (values.probe) args.probe = true;
+  if (values.force) args.force = true;
   if (typeof values.model === "string") args.model = values.model;
   if (typeof values.project === "string") args.project = values.project;
   if (typeof values.followup === "string") args.followUp = values.followup;
@@ -373,6 +376,7 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
     json: JSON_FLAG,
     help: HELP_FLAG,
   },
+  "install-app": { json: JSON_FLAG, force: { type: "boolean" }, help: HELP_FLAG },
   help: {},
 };
 
@@ -416,6 +420,7 @@ export interface CliArgs {
   outputs?: string[];
   json?: boolean;
   probe?: boolean;
+  force?: boolean;
   model?: string;
   project?: string;
   followUp?: string;
