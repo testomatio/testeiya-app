@@ -6,7 +6,7 @@ prerequisites:
   api:
     env: [EXPLORBOT_URL, OPENAPI_SPEC]
     message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
-  api_auth:
+  api-auth:
     env: [EXPLORBOT_AUTH]
     message: No auth instructions passed. If your API is publicly available with no auth - add lines explaining this. But EXPLORBOT_AUTH variable must be set
     secret: true
@@ -34,7 +34,7 @@ stages:
     title: API review
     emoji: 🔍
     session: qa
-    when: [api, api_auth]
+    when: [api, api-auth]
     task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt,

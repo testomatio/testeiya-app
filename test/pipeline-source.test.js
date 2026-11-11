@@ -235,3 +235,16 @@ function catchError(fn) {
   }
   assert.fail("expected an error");
 }
+
+test("the bundled sync stages loop over the test case files", () => {
+  for (const name of ["pr-review", "issue-test-cases"]) {
+    const sync = new PipelineSource(BUNDLED_PIPELINES[name]).spec().stages.find((stage) => stage.id === "sync");
+    assert.equal(sync.each_file, "test-cases/*.md", name);
+  }
+});
+
+test("bundled prerequisite names are dash slugs, like stage ids", () => {
+  for (const [name, text] of Object.entries(BUNDLED_PIPELINES)) {
+    for (const gate of Object.keys(new PipelineSource(text).spec().prerequisites)) assert.match(gate, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${name}: ${gate}`);
+  }
+});
