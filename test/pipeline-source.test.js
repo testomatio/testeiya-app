@@ -248,3 +248,11 @@ test("bundled prerequisite names are dash slugs, like stage ids", () => {
     for (const gate of Object.keys(new PipelineSource(text).spec().prerequisites)) assert.match(gate, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${name}: ${gate}`);
   }
 });
+
+test("one source keeps its lines across calls", () => {
+  const source = new PipelineSource("stages:\n  - id: a\n    run: echo\n    model: x\n");
+  source.text();
+  source.text();
+  assert.equal(catchError(() => source.spec()).line, 4);
+  assert.equal(catchError(() => source.spec()).line, 4);
+});

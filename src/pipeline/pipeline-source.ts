@@ -78,13 +78,13 @@ export class PipelineSource {
   // The file's own keys are an overlay on the pipeline it extends.
   // Only this source's own text has lines an error can point at.
   private raw(text: string, chain: string[], own = false): Raw {
-    const document = parseDocument(text, own ? { lineCounter: this.lines } : {});
+    // The own text is parsed once: a LineCounter counts every parse it sees.
+    const document = own ? (this.document ??= parseDocument(text, { lineCounter: this.lines })) : parseDocument(text);
     const [error] = document.errors;
     if (error) {
       const line = own ? error.linePos?.[0]?.line : undefined;
       throw new PipelineError(error.message, { line });
     }
-    if (own) this.document = document;
     const raw: unknown = document.toJS();
     if (!PipelineSource.isRecord(raw)) return this.fail("a pipeline is a YAML mapping");
     if (raw.extends === undefined) return raw;
