@@ -1,6 +1,6 @@
 import { parse } from "yaml";
 
-import { UsageError } from "../model.js";
+import { UsageError } from "../usage-error.js";
 
 type Kind = "text" | "list" | "value" | "map" | Schema;
 type Schema = { [key: string]: Kind };
@@ -9,7 +9,7 @@ type Op = "append" | "prepend" | "remove";
 
 const OPS: Op[] = ["append", "prepend", "remove"];
 const CHANGES: Schema = { paths: "list", ignore: "list", min_files: "value" };
-const GATE: Schema = { env: "list", file: "list", run: "text", message: "text", changes: CHANGES };
+const GATE: Schema = { env: "list", file: "list", run: "text", message: "text", secret: "value", changes: CHANGES };
 const STAGE: Schema = {
   id: "value",
   title: "text",
@@ -165,8 +165,9 @@ export class Overlay {
     this.fail(`${where}: ${op}_${field} is not allowed, set ${field} instead`);
   }
 
+  // No source: the keys are the file's own, and the file names itself.
   private fail(message: string): never {
-    throw new UsageError(`${this.source}: ${message}`);
+    throw new UsageError(this.source ? `${this.source}: ${message}` : message);
   }
 
   private static read(text: string, source: string): Raw {

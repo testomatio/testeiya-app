@@ -14,6 +14,7 @@ prerequisites:
   testomatio:
     env: [TESTOMATIO]
     message: No Testomat.io project. Set TESTOMATIO.
+    secret: true
 
 when: [code-changed]
 

@@ -13,7 +13,7 @@ import { Overlay } from "../dist/src/pipeline/overlay.js";
 import { Packages } from "../dist/src/pipeline/packages.js";
 import { PipelineFile } from "../dist/src/pipeline/pipeline-file.js";
 import { CommandStage } from "../dist/src/pipeline/command-stage.js";
-import { Stage } from "../dist/src/pipeline/stage.js";
+import { Duration } from "../dist/src/pipeline/duration.js";
 import { StageEnv } from "../dist/src/pipeline/stage-env.js";
 import { CrashGuard } from "../dist/src/pipeline/crash-guard.js";
 import { SummaryStage } from "../dist/src/pipeline/summary-stage.js";
@@ -142,11 +142,11 @@ test("an output may not reuse the stage's own file name, nor one of its inputs",
 });
 
 test("durations read seconds, minutes and hours", () => {
-  assert.equal(Stage.duration("90s"), 90_000);
-  assert.equal(Stage.duration("30m"), 1_800_000);
-  assert.equal(Stage.duration("1h"), 3_600_000);
-  assert.equal(Stage.duration(5), 5_000);
-  assert.equal(Stage.duration("soon"), null);
+  assert.equal(Duration.ms("90s"), 90_000);
+  assert.equal(Duration.ms("30m"), 1_800_000);
+  assert.equal(Duration.ms("1h"), 3_600_000);
+  assert.equal(Duration.ms(5), 5_000);
+  assert.equal(Duration.ms("soon"), null);
 });
 
 test("variables expand the shell's way", () => {

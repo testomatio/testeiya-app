@@ -68,7 +68,7 @@ stages:
 | `extends` | no | A bundled pipeline or a `.yml` path to start from. See [Overrides](#overrides) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
-| `target` | no | What starts it: `issue`, `pr`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it |
+| `target` | no | What starts it: `pr`, `issue`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it. See [Targets](#targets) |
 | `summary` | no | Extra instructions for the final summary |
 | `env` | no | Variables for every stage. Values expand `${NAME}` |
 | `packages` | no | npm packages the stages call, name to version. See [Packages](#packages) |
@@ -77,6 +77,20 @@ stages:
 | `stages` | yes | The stages, run in order. At least one |
 
 An unknown key is an error, found before anything runs.
+
+### Targets
+
+`target` is free text, but a host acts on four words:
+
+| Target | Started by |
+|---|---|
+| `pr` | a pull request opened or updated |
+| `issue` | an issue opened |
+| `daily-cron` | a schedule, once a day |
+| `weekly-cron` | a schedule, once a week |
+
+Any other word means the pipeline is started by hand. The list is exported as
+`PIPELINE_TARGETS` from `testeiya/pipeline`.
 
 ## Stages
 
@@ -121,9 +135,21 @@ prerequisites:
 | `run: <command>` | the command exits 0 within 30 seconds. Its output is hidden |
 | `changes: {…}` | the changed files match, see [Changes](#changes) |
 
+`secret: true` marks the variables in `env` as secrets. It checks nothing, it tells
+a host like Testeiya Hub to hide their values and keep them in its vault:
+
+```yaml
+prerequisites:
+  testomatio:
+    env: [TESTOMATIO]
+    message: No Testomat.io project. Set TESTOMATIO to the project's API key.
+    secret: true
+```
+
 - A prerequisite needs a `message` and at least one check. All its checks must pass.
 - Every prerequisite is checked once, before the first stage. `--dry-run` prints them all.
 - A name in `when` that `prerequisites` does not define is an error.
+- `secret` takes `true` or `false`, and only a prerequisite with `env`.
 - `ai` is built in: a model and a provider key resolve. The summary needs it, so
   a pipeline without one exits 2 before anything runs.
 
@@ -494,3 +520,37 @@ command:
       --set "TESTOMATIO_DESCRIPTION=$PR_URL" \
       -o "gh:pr#$PR_NUMBER"
 ```
+
+## Parsing a pipeline in your own code
+
+`testeiya/pipeline` parses, validates and describes a pipeline from its text. It
+reads no file and imports nothing from Node, so it runs in a Worker or a browser
+and checks a file exactly as `testeiya pipeline-check` does.
+
+```js
+import { BUNDLED_PIPELINES, PipelineError, PipelineSource } from "testeiya/pipeline";
+
+const source = new PipelineSource(text, {
+  name: "my-agent",                               // the default for name:
+  resolve: (name) => BUNDLED_PIPELINES[name],     // the text extends names
+});
+try {
+  source.spec();        // the validated PipelineSpec
+  source.text();        // the YAML with extends applied, ready to run
+  source.describe();    // stages, prerequisites and inputs, for a UI
+} catch (err) {
+  if (err instanceof PipelineError) console.log(err.line, err.key, err.message);
+}
+```
+
+- `BUNDLED_PIPELINES` maps each bundled pipeline's name to its text.
+- `describe().inputs` lists every variable a user can set. Required ones come first:
+  the `env` of a prerequisite in the top-level `when`. Then the ones that unlock
+  stages, in stage order. Then the rest by name: any `${NAME}` the runner expands
+  and `$NAME` a `run` command reads. Each has its default, its prerequisite's
+  `message`, and `secret`.
+- The runner's own variables (`BUILTIN_VARIABLES`), `HOME`, `PATH` and the keys of
+  `env:` are never inputs. The exception is an `env:` value that reads its own name,
+  like `BASE_BRANCH: ${BASE_BRANCH:-origin/main}`.
+- `PipelineError` has `line` (1-based) and `key` (like `stages[1].when`) when the
+  problem has a place in the text.

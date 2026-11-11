@@ -9,6 +9,7 @@ prerequisites:
   api_auth:
     env: [EXPLORBOT_AUTH]
     message: No auth instructions passed. If your API is publicly available with no auth - add lines explaining this. But EXPLORBOT_AUTH variable must be set
+    secret: true
   explorbot-ai:
     env: [EXPLORBOT_AI_PROVIDER]
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.

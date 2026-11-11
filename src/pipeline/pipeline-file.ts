@@ -1,27 +1,18 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { parse, stringify } from "yaml";
 
 import { PACKAGE_ROOT } from "../env.js";
 import { UsageError } from "../model.js";
-import { Overlay } from "./overlay.js";
-import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
-import { Stage } from "./stage.js";
-import { Variables } from "./variables.js";
+import type { Overlay } from "./overlay.js";
+import { PipelineError } from "./pipeline-error.js";
+import { PipelineSource } from "./pipeline-source.js";
+import type { PipelineSpec } from "./spec.js";
 
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
-/** `pipeline.json` and the summary's own files live beside the stages' files. */
-const RESERVED_IDS = ["pipeline", "summary"];
-const TOP_KEYS = ["name", "description", "target", "summary", "env", "packages", "prerequisites", "when", "stages"];
-const GATE_KEYS = ["env", "file", "run", "changes", "message"];
-const CHANGES_KEYS = ["paths", "ignore", "min_files"];
-const STAGE_EMOJIS = ["🔹", "🔸", "🧪", "🔍", "🛠️", "📋", "🚀", "🧭", "📦", "🧩", "🎯", "⚙️"];
-const STAGE_KEYS = ["id", "title", "emoji", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "timeout", "each_line", "each_file"];
 
 /**
- * A pipeline file: found by path or bundled name, then parsed and validated
- * into a `PipelineSpec`. Every mistake is bad usage, found before a token is
- * spent, and every message names the file.
+ * A pipeline file, found by path or bundled name. It reads the text and hands
+ * it to a `PipelineSource`, which validates it. Every message names the file.
  */
 export class PipelineFile {
   constructor(readonly path: string) {}
@@ -56,237 +47,36 @@ export class PipelineFile {
 
   /** The spec with `extends` and every overlay applied, and the same as YAML, which needs neither. */
   resolve(overlays: Overlay[] = []): { spec: PipelineSpec; text: string } {
-    let raw = this.raw(this.text(), [resolve(this.path)]);
-    for (const overlay of overlays) raw = overlay.apply(raw);
-    return { spec: this.validate(raw), text: stringify(raw) };
+    const source = this.source(this.text());
+    return this.located(() => ({ spec: source.spec(overlays), text: source.text(overlays) }));
   }
 
   /** Parse text as this file, so a copy keeps the file's name. */
   parse(text: string): PipelineSpec {
-    return this.validate(this.raw(text, [resolve(this.path)]));
+    return this.located(() => this.source(text).spec());
   }
 
-  // The file's own keys are an overlay on the pipeline it extends.
-  private raw(text: string, chain: string[]): Record<string, unknown> {
-    let raw: unknown;
-    try {
-      raw = parse(text);
-    } catch (err) {
-      return this.fail(String((err as Error).message ?? err));
-    }
-    if (!PipelineFile.isRecord(raw)) return this.fail("a pipeline is a YAML mapping");
-    if (raw.extends === undefined) return raw;
-    const { extends: name, ...own } = raw;
-    if (typeof name !== "string" || !name) return this.fail("extends names a bundled pipeline or a .yml path");
-    let path = name;
-    if (PipelineFile.isPath(name)) path = resolve(dirname(this.path), name);
-    const base = PipelineFile.find(path);
+  /** `chain` is every file on the way here, absolute, so a loop is caught across folders. */
+  private source(text: string, chain = [resolve(this.path)], named = true): PipelineSource {
+    const name = named ? basename(this.path).replace(/\.ya?ml$/, "") : undefined;
+    return new PipelineSource(text, { name, resolve: (parent) => this.parent(parent, chain) });
+  }
+
+  // A path is relative to this file. The parent comes back with its own `extends` applied.
+  private parent(name: string, chain: string[]): string {
+    const base = PipelineFile.find(PipelineFile.isPath(name) ? resolve(dirname(this.path), name) : name);
     const at = resolve(base.path);
-    if (chain.includes(at)) return this.fail(`extends ${name} loops back to itself`);
-    const parent = base.raw(base.text(), [...chain, at]);
-    return new Overlay(this.path, own).apply(parent);
+    if (chain.includes(at)) throw new PipelineError(`extends ${name} loops back to itself`, { key: "extends" });
+    return base.located(() => base.source(base.text(), [...chain, at], false).text());
   }
 
-  private validate(raw: Record<string, unknown>): PipelineSpec {
-    if (raw.gates !== undefined) return this.fail("gates is now called prerequisites");
-    this.unknownKeys(raw, TOP_KEYS, "pipeline");
-
-    const prerequisites: Record<string, GateSpec> = {};
-    const rawPrerequisites = raw.prerequisites ?? {};
-    if (!PipelineFile.isRecord(rawPrerequisites)) return this.fail("prerequisites must be a mapping of name to checks");
-    for (const [name, value] of Object.entries(rawPrerequisites)) prerequisites[name] = this.gate(name, value);
-
-    const rawStages = raw.stages;
-    if (!Array.isArray(rawStages) || rawStages.length === 0) return this.fail("stages must be a non-empty list");
-    const stages = rawStages.map((value, index) => this.stage(value, index));
-
-    const spec: PipelineSpec = {
-      name: this.string(raw.name, "name") ?? basename(this.path).replace(/\.ya?ml$/, ""),
-      description: this.string(raw.description, "description") ?? "",
-      target: this.string(raw.target, "target"),
-      summary: this.string(raw.summary, "summary"),
-      env: this.map(raw.env, "env"),
-      packages: this.map(raw.packages, "packages"),
-      prerequisites,
-      when: this.list(raw.when, "when"),
-      stages,
-    };
-    this.checkReferences(spec);
-    this.checkFilters(spec);
-    return spec;
-  }
-
-  private gate(name: string, value: unknown): GateSpec {
-    if (!PipelineFile.isRecord(value)) return this.fail(`prerequisite "${name}" must be a mapping`);
-    this.unknownKeys(value, GATE_KEYS, `prerequisite "${name}"`);
-    const message = this.string(value.message, `prerequisite "${name}" message`);
-    if (!message) return this.fail(`prerequisite "${name}" needs a message`);
-    const gate: GateSpec = { message };
-    if (value.env !== undefined) gate.env = this.list(value.env, `prerequisite "${name}" env`);
-    if (value.file !== undefined) gate.file = this.list(value.file, `prerequisite "${name}" file`);
-    if (value.run !== undefined) gate.run = this.string(value.run, `prerequisite "${name}" run`);
-    if (value.changes !== undefined) gate.changes = this.changes(name, value.changes);
-    if (!gate.env && !gate.file && !gate.run && !gate.changes) {
-      return this.fail(`prerequisite "${name}" needs a check: env, file, run or changes`);
+  private located<T>(read: () => T): T {
+    try {
+      return read();
+    } catch (err) {
+      if (err instanceof PipelineError) throw err.in(this.path);
+      throw err;
     }
-    return gate;
-  }
-
-  private changes(name: string, value: unknown): ChangesSpec {
-    if (!PipelineFile.isRecord(value)) return this.fail(`prerequisite "${name}" changes must be a mapping`);
-    this.unknownKeys(value, CHANGES_KEYS, `prerequisite "${name}" changes`);
-    const rule: ChangesSpec = {};
-    if (value.paths !== undefined) rule.paths = this.list(value.paths, `prerequisite "${name}" paths`);
-    if (value.ignore !== undefined) rule.ignore = this.list(value.ignore, `prerequisite "${name}" ignore`);
-    if (value.min_files !== undefined) {
-      if (!Number.isInteger(value.min_files) || (value.min_files as number) < 1) {
-        return this.fail(`prerequisite "${name}" min_files must be a whole number above 0`);
-      }
-      rule.min_files = value.min_files as number;
-    }
-    return rule;
-  }
-
-  private stage(value: unknown, index: number): StageSpec {
-    if (!PipelineFile.isRecord(value)) return this.fail(`stage ${index + 1} must be a mapping`);
-    const id = value.id;
-    if (typeof id !== "string" || !PipelineFile.isSlug(id)) {
-      return this.fail(`stage ${index + 1} needs an id of lowercase words joined by dashes`);
-    }
-    const where = `stage "${id}"`;
-    this.unknownKeys(value, STAGE_KEYS, where);
-    if (RESERVED_IDS.includes(id)) this.fail(`${where}: "${id}" is reserved`);
-    if ((value.task === undefined) === (value.run === undefined)) this.fail(`${where} needs exactly one of task or run`);
-    if (value.each_line !== undefined && value.each_file !== undefined) {
-      this.fail(`${where} can loop over each_line or each_file, not both`);
-    }
-
-    const title = this.string(value.title, `${where} title`) || PipelineFile.titleOf(id);
-    const emoji = this.string(value.emoji, `${where} emoji`) || PipelineFile.emojiOf(id);
-
-    const stage: StageSpec = {
-      id,
-      title,
-      emoji,
-      inputs: this.list(value.inputs, `${where} inputs`),
-      outputs: this.list(value.outputs, `${where} outputs`),
-      when: this.list(value.when, `${where} when`),
-      stopOn: this.list(value.stopOn, `${where} stopOn`) as StopOn[],
-    };
-    for (const reason of stage.stopOn) {
-      if (reason !== "fail" && reason !== "gate") this.fail(`${where} stopOn takes fail or gate, got "${reason}"`);
-    }
-    if (value.task !== undefined) stage.task = this.string(value.task, `${where} task`);
-    if (value.run !== undefined) stage.run = this.string(value.run, `${where} run`);
-    if (value.session !== undefined) {
-      const session = this.string(value.session, `${where} session`);
-      if (!session || !PipelineFile.isSlug(session)) this.fail(`${where} session must be lowercase words joined by dashes`);
-      stage.session = session;
-    }
-    if (value.each_line !== undefined) stage.each_line = this.string(value.each_line, `${where} each_line`);
-    if (value.each_file !== undefined) stage.each_file = this.string(value.each_file, `${where} each_file`);
-    if (value.timeout !== undefined) {
-      if (!Stage.duration(value.timeout)) this.fail(`${where} timeout must look like 90s, 30m or 1h`);
-      stage.timeout = value.timeout as string | number;
-    }
-    return stage;
-  }
-
-  private checkReferences(spec: PipelineSpec): void {
-    const ids = new Set<string>();
-    for (const stage of spec.stages) {
-      if (ids.has(stage.id)) this.fail(`two stages are called "${stage.id}"`);
-      ids.add(stage.id);
-    }
-    for (const name of spec.when) {
-      if (!spec.prerequisites[name]) this.fail(`when names prerequisite "${name}", which prerequisites does not define`);
-    }
-    for (const stage of spec.stages) {
-      for (const name of stage.when) {
-        if (!spec.prerequisites[name]) this.fail(`stage "${stage.id}" when names prerequisite "${name}", which prerequisites does not define`);
-      }
-    }
-  }
-
-  // Filters run where the runner expands. A shell would fail on them.
-  private checkFilters(spec: PipelineSpec): void {
-    const texts: Array<[string, string]> = Object.entries(spec.env).map(([key, value]) => [`env.${key}`, value]);
-    for (const [name, version] of Object.entries(spec.packages)) texts.push([`packages.${name}`, version]);
-    for (const [name, gate] of Object.entries(spec.prerequisites)) {
-      for (const file of gate.file ?? []) texts.push([`prerequisite "${name}" file`, file]);
-      if (gate.run) texts.push([`prerequisite "${name}" run`, gate.run]);
-    }
-    for (const stage of spec.stages) {
-      if (stage.task) texts.push([`stage "${stage.id}" task`, stage.task]);
-      for (const output of stage.outputs) texts.push([`stage "${stage.id}" outputs`, output]);
-      if (stage.run && Variables.filtered(stage.run)) {
-        this.fail(`stage "${stage.id}" run: a shell command cannot use filters. Set a variable in env and use that`);
-      }
-    }
-    for (const [where, text] of texts) {
-      const problem = Variables.problem(text);
-      if (problem) this.fail(`${where}: ${problem}`);
-    }
-  }
-
-  private unknownKeys(value: Record<string, unknown>, known: string[], where: string): void {
-    for (const key of Object.keys(value)) {
-      if (!known.includes(key)) this.fail(`${where} has an unknown key "${key}"`);
-    }
-  }
-
-  private string(value: unknown, what: string): string | undefined {
-    if (value === undefined || value === null) return undefined;
-    if (typeof value !== "string") return this.fail(`${what} must be text`);
-    return value;
-  }
-
-  // A single value is a list of one, so `stopOn: fail` and `when: staging` read naturally.
-  private list(value: unknown, what: string): string[] {
-    if (value === undefined || value === null) return [];
-    if (typeof value === "string") return [value];
-    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-      return this.fail(`${what} must be a list of text`);
-    }
-    return value as string[];
-  }
-
-  private map(value: unknown, what: string): Record<string, string> {
-    if (value === undefined || value === null) return {};
-    if (!PipelineFile.isRecord(value)) return this.fail(`${what} must be a mapping`);
-    const map: Record<string, string> = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
-        this.fail(`${what}.${key} must be text`);
-      }
-      map[key] = String(item);
-    }
-    return map;
-  }
-
-  private fail(message: string): never {
-    throw new UsageError(`${this.path}: ${message}`);
-  }
-
-  private static isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-  }
-
-  // `browser-testing` reads as "Browser testing".
-  private static titleOf(id: string): string {
-    const words = id.split("-").join(" ");
-    return words.charAt(0).toUpperCase() + words.slice(1);
-  }
-
-  // Picked from the id, so a stage keeps its emoji across runs.
-  private static emojiOf(id: string): string {
-    const sum = [...id].reduce((total, char) => total + char.charCodeAt(0), 0);
-    return STAGE_EMOJIS[sum % STAGE_EMOJIS.length];
-  }
-
-  private static isSlug(value: string): boolean {
-    if (!value || value.startsWith("-") || value.endsWith("-") || value.includes("--")) return false;
-    return [...value].every((char) => (char >= "a" && char <= "z") || (char >= "0" && char <= "9") || char === "-");
   }
 
   private static isPath(name: string): boolean {
