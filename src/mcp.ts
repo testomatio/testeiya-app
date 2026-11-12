@@ -25,33 +25,59 @@ export function hasMcp(): boolean {
   return Boolean(process.env.TESTOMATIO && projectId());
 }
 
+export interface EnvMcpServer {
+  url: string;
+  headers: Record<string, string>;
+}
+
 /**
  * Extra MCP servers handed to a run from outside — the Testeiya Hub passes the
  * company's connected services (Linear, Jira, …) this way. Inline JSON:
  * `{ "<name>": { "url": "…", "headers": { … } } }`. A bad value warns and runs
  * without the servers, the same soft failure as a broken config file.
+ *
+ * Parsed once per value, so the warning prints once however often it is read.
  */
-export function envMcpServers(): Record<string, { url: string; headers: Record<string, string> }> {
-  const raw = process.env.TESTEIYA_MCP_SERVERS;
-  if (!raw) return {};
+export function envMcpServers(): Record<string, EnvMcpServer> {
+  const raw = process.env.TESTEIYA_MCP_SERVERS ?? "";
+  if (parsedFrom !== raw) {
+    parsedFrom = raw;
+    parsed = parseMcpServers(raw);
+  }
+  return parsed;
+}
+
+let parsedFrom: string | null = null;
+let parsed: Record<string, EnvMcpServer> = {};
+
+function parseMcpServers(raw: string): Record<string, EnvMcpServer> {
+  if (!raw.trim()) return {};
+  let value: unknown;
   try {
-    const parsed = JSON.parse(raw) as Record<string, { url?: unknown; headers?: unknown }>;
-    const servers: Record<string, { url: string; headers: Record<string, string> }> = {};
-    for (const [name, entry] of Object.entries(parsed)) {
-      if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) continue;
-      const headers: Record<string, string> = {};
-      if (entry.headers && typeof entry.headers === "object") {
-        for (const [key, value] of Object.entries(entry.headers)) {
-          if (typeof value === "string") headers[key] = value;
-        }
-      }
-      servers[name === SERVER ? `${name}-env` : name] = { url: entry.url, headers };
-    }
-    return servers;
+    value = JSON.parse(raw);
   } catch {
     process.stderr.write("  TESTEIYA_MCP_SERVERS is not valid JSON, ignoring it\n");
     return {};
   }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    process.stderr.write("  TESTEIYA_MCP_SERVERS must be a JSON object of name to {url, headers}, ignoring it\n");
+    return {};
+  }
+  const servers: Record<string, EnvMcpServer> = {};
+  for (const [name, entry] of Object.entries(value as Record<string, { url?: unknown; headers?: unknown }>)) {
+    if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) {
+      process.stderr.write(`  TESTEIYA_MCP_SERVERS: "${name}" has no url, skipping it\n`);
+      continue;
+    }
+    const headers: Record<string, string> = {};
+    if (entry.headers && typeof entry.headers === "object") {
+      for (const [key, header] of Object.entries(entry.headers)) {
+        if (typeof header === "string") headers[key] = header;
+      }
+    }
+    servers[name === SERVER ? `${name}-env` : name] = { url: entry.url, headers };
+  }
+  return servers;
 }
 
 function projectId(): string {
@@ -72,8 +98,11 @@ export function mcpConfig(): LoadedMcpConfig {
   const env: Record<string, string> = {};
   if (process.env.TESTOMATIO_URL) env.TESTOMATIO_BASE_URL = process.env.TESTOMATIO_URL;
 
-  const servers: LoadedMcpConfig["servers"] = [
-    {
+  const servers: LoadedMcpConfig["servers"] = [];
+  // The extension also mounts for env servers alone; without a token and a
+  // project the Testomat.io server would only start to fail.
+  if (hasMcp()) {
+    servers.push({
       name: SERVER,
       source: "testeiya",
       scope: "extension",
@@ -83,8 +112,8 @@ export function mcpConfig(): LoadedMcpConfig {
         env,
         exposure: "direct",
       },
-    },
-  ];
+    });
+  }
   for (const [name, server] of Object.entries(envMcpServers())) {
     servers.push({
       name,

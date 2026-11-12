@@ -12,6 +12,7 @@ export { Pipeline } from "./pipeline-document.js";
 export { PipelineError } from "./pipeline-error.js";
 export { BUILTIN_VARIABLES, type BuiltinVariable } from "./variables.js";
 export { PIPELINE_TARGETS } from "./spec.js";
+export { ENVIRONMENT_VARIABLES, type EnvironmentVariable, type EnvironmentVariableName } from "../environment.js";
 export type {
   ChangesSpec,
   GateSpec,

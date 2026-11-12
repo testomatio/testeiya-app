@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { relative } from "node:path";
 import { PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
-import { hasMcp, hasTestomatio, mcpServerScript } from "./mcp.js";
+import { envMcpServers, hasMcp, hasTestomatio, mcpServerScript } from "./mcp.js";
 import { PROVIDER_KEYS, resolveModel, UsageError } from "./model.js";
 import { loadBundledSkills } from "./skills.js";
 import { BUNDLED_SKILLS_DIR, createRuntime } from "./session.js";
@@ -152,12 +152,17 @@ function langfuseCheck(sources: Map<string, string>): Check {
 }
 
 function mcpCheck(): Check {
-  if (!hasMcp()) return { name: "mcp", status: "ok", detail: "off" };
+  const env = Object.keys(envMcpServers());
+  const extra = env.length ? `, TESTEIYA_MCP_SERVERS: ${env.join(", ")}` : "";
+  if (!hasMcp()) {
+    if (env.length) return { name: "mcp", status: "ok", detail: `TESTEIYA_MCP_SERVERS: ${env.join(", ")}` };
+    return { name: "mcp", status: "ok", detail: "off" };
+  }
   try {
     mcpServerScript();
-    return { name: "mcp", status: "ok", detail: "@testomatio/mcp, direct tools" };
+    return { name: "mcp", status: "ok", detail: `@testomatio/mcp, direct tools${extra}` };
   } catch {
-    return { name: "mcp", status: "fail", detail: "@testomatio/mcp is not installed" };
+    return { name: "mcp", status: "fail", detail: `@testomatio/mcp is not installed${extra}` };
   }
 }
 
