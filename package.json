@@ -17,6 +17,10 @@
       "types": "./dist/prompt/*.d.ts",
       "default": "./dist/prompt/*.js"
     },
+    "./pipeline": {
+      "types": "./dist/src/pipeline/index.d.ts",
+      "default": "./dist/src/pipeline/index.js"
+    },
     "./scripts/vendor-skills.js": "./scripts/vendor-skills.js",
     "./package.json": "./package.json"
   },
@@ -40,7 +44,7 @@
   "scripts": {
     "start": "npm run build && node dist/src/cli.js",
     "dev": "./testeiya",
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json && node scripts/bundle-pipelines.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build",
     "test": "npm run build && node --test test/*.test.js"
@@ -66,6 +70,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
+    "esbuild": "^0.28.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3"
   }

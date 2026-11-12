@@ -2,15 +2,14 @@ import { cpSync, existsSync, globSync, mkdirSync, readFileSync, rmSync, symlinkS
 import { basename, dirname, extname, join, relative } from "node:path";
 
 import type { CrashGuard } from "./crash-guard.js";
+import { Duration } from "./duration.js";
 import type { Launched, Launcher } from "./launcher.js";
 import { log } from "./log.js";
 import type { TaskRunner } from "../run.js";
 import type { Report } from "./report.js";
 import type { StageSpec, StopOn } from "./spec.js";
 import { PipelineState, type ItemRecord, type StageRecord, type StageResult, type Status } from "./state.js";
-import type { Variables } from "./variables.js";
-
-const UNITS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
+import { Variables } from "./variables.js";
 
 /**
  * One step of a pipeline. The base runs what every stage shares: its folder
@@ -27,24 +26,12 @@ export abstract class Stage {
     readonly folder = spec.id
   ) {}
 
-  /** "30m", "90s", "1h", or a bare number of seconds, in milliseconds. */
-  static duration(value: unknown): number | null {
-    if (typeof value === "number" && value > 0) return value * 1000;
-    if (typeof value !== "string") return null;
-    const unit = value.slice(-1);
-    const scale = UNITS[unit];
-    let amount = Number(value);
-    if (scale) amount = Number(value.slice(0, -1));
-    if (!Number.isFinite(amount) || amount <= 0) return null;
-    return amount * (scale ?? 1000);
-  }
-
   get id(): string {
     return this.spec.id;
   }
 
   get timeout(): number | undefined {
-    return Stage.duration(this.spec.timeout) ?? undefined;
+    return Duration.ms(this.spec.timeout) ?? undefined;
   }
 
   /** The files the stage leaves in the pipeline folder on its own. */
@@ -124,9 +111,9 @@ export abstract class Stage {
   }
 
   private runOne(context: StageContext, item: Item): Promise<StageResult> {
-    let vars = context.vars.with({ STAGE_DIR: this.dir(context) });
-    if (item.item !== undefined) vars = vars.with({ ITEM: item.item, ITEM_NAME: basename(item.item, extname(item.item)) });
-    if (item.resumed) vars = vars.with({ PIPELINE_RESUME: "1" });
+    let vars = context.vars.with(Variables.builtins({ STAGE_DIR: this.dir(context) }));
+    if (item.item !== undefined) vars = vars.with(Variables.builtins({ ITEM: item.item, ITEM_NAME: basename(item.item, extname(item.item)) }));
+    if (item.resumed) vars = vars.with(Variables.builtins({ PIPELINE_RESUME: "1" }));
     log.starting(`${this.id}${item.suffix}`, item.item);
     return this.runItem(context, item, vars);
   }

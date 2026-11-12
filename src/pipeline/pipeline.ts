@@ -348,7 +348,7 @@ export class Pipeline {
     const sets = this.options.sets ?? {};
     const branch = await this.git.branch({ ...process.env, ...sets });
     return new Variables({ ...process.env })
-      .with({ ...sets, GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: spec.name, PIPELINE_ROUND: String(round) })
+      .with({ ...sets, ...Variables.builtins({ GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: spec.name, PIPELINE_ROUND: String(round) }) })
       .withExpanded(spec.env)
       .with(sets)
       .without(JOB_ONLY);

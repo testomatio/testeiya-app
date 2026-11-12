@@ -1,5 +1,6 @@
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { SavedModel } from "./sessions.js";
+import { UsageError } from "./usage-error.js";
 
 /** Provider key env vars the CLI picks up from the environment. */
 export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
@@ -11,8 +12,8 @@ export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
   { provider: "cloudflare-workers-ai", env: "CLOUDFLARE_API_KEY" },
 ];
 
-/** Bad usage — the caller prints the message and exits 2, never prompting. */
-export class UsageError extends Error {}
+// Its own module, so the browser-safe pipeline parser can throw it without this one.
+export { UsageError };
 
 /**
  * --model, then TESTEIYA_MODEL, then the model a resumed session was running.
