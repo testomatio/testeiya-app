@@ -3,9 +3,8 @@ import { isMap, isScalar, isSeq, LineCounter, parseDocument, stringify, type Doc
 import { UsageError } from "../usage-error.js";
 import { Duration } from "./duration.js";
 import { Overlay } from "./overlay.js";
-import { PipelineDescriber } from "./pipeline-describer.js";
 import { PipelineError } from "./pipeline-error.js";
-import type { ChangesSpec, GateSpec, PipelineDescription, PipelineSpec, StageSpec, StopOn } from "./spec.js";
+import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
 import { Variables } from "./variables.js";
 
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
@@ -30,7 +29,8 @@ type Raw = Record<string, unknown>;
 type Path = Array<string | number>;
 
 /**
- * A pipeline's text, parsed and validated into a `PipelineSpec`. It reads no
+ * A pipeline's text, parsed and validated into a `PipelineSpec`: the parser
+ * under the CLI's `PipelineFile` and the package's `Pipelines`. It reads no
  * file and imports nothing from Node, so a Worker and a browser run the same
  * checks as the CLI. Every mistake is a `PipelineError`, with the line and key
  * it is about when the file's own text has them.
@@ -55,10 +55,6 @@ export class PipelineSource {
     const raw = this.resolved(overlays);
     if (raw.name === undefined && this.options.name) return stringify({ name: this.options.name, ...raw });
     return stringify(raw);
-  }
-
-  describe(overlays: Overlay[] = []): PipelineDescription {
-    return new PipelineDescriber(this.spec(overlays)).describe();
   }
 
   private resolved(overlays: Overlay[]): Raw {
@@ -92,7 +88,7 @@ export class PipelineSource {
     const { extends: name, ...keys } = raw;
     if (typeof name !== "string" || !name) return this.fail("extends names a pipeline", ["extends"]);
     if (chain.includes(name)) return this.fail(`extends ${name} loops back to itself`, ["extends"]);
-    const parentText = this.options.resolve?.(name);
+    const parentText = this.parentText(name);
     if (parentText === undefined) return this.fail(`no pipeline "${name}" to extend`, ["extends"]);
     let parent: Raw;
     try {
@@ -108,6 +104,18 @@ export class PipelineSource {
       return new Overlay("", keys).apply(parent);
     } catch (err) {
       if (err instanceof UsageError && !(err instanceof PipelineError)) return this.fail(err.message);
+      throw err;
+    }
+  }
+
+  // A resolver's own error, such as a loop it found, is about this text's `extends`.
+  private parentText(name: string): string | undefined {
+    try {
+      return this.options.resolve?.(name);
+    } catch (err) {
+      if (err instanceof PipelineError && err.source === undefined) {
+        throw new PipelineError(err.message, { key: "extends", line: this.lineOf(["extends"]) });
+      }
       throw err;
     }
   }

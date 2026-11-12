@@ -74,7 +74,7 @@ export interface StageSpec {
 
 export type StopOn = "fail" | "gate";
 
-/** A pipeline as a UI shows it: what runs, what it needs, what a user can set. */
+/** A pipeline as a UI shows it: what runs, what it needs, what a user can set. `Pipeline.describe()` returns it. */
 export interface PipelineDescription {
   name: string;
   description: string;

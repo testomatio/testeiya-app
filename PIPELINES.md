@@ -521,36 +521,90 @@ command:
       -o "gh:pr#$PR_NUMBER"
 ```
 
-## Parsing a pipeline in your own code
+## Pipelines in your own code
 
-`testeiya/pipeline` parses, validates and describes a pipeline from its text. It
+`testeiya/pipeline` opens, checks and describes pipelines from their text. It
 reads no file and imports nothing from Node, so it runs in a Worker or a browser
-and checks a file exactly as `testeiya pipeline-check` does.
+and checks a pipeline exactly as `testeiya pipeline-check` does.
 
 ```js
-import { BUNDLED_PIPELINES, PipelineError, PipelineSource } from "testeiya/pipeline";
+import { Pipelines } from "testeiya/pipeline";
 
-const source = new PipelineSource(text, {
-  name: "my-agent",                               // the default for name:
-  resolve: (name) => BUNDLED_PIPELINES[name],     // the text extends names
-});
-try {
-  source.spec();        // the validated PipelineSpec
-  source.text();        // the YAML with extends applied, ready to run
-  source.describe();    // stages, prerequisites and inputs, for a UI
-} catch (err) {
-  if (err instanceof PipelineError) console.log(err.line, err.key, err.message);
-}
+const pipelines = new Pipelines();               // the pipelines bundled with testeiya
+
+pipelines.list();                                // [{ name: "regression", description, target: "pr", bundled: true, valid: true }, ...]
+const pipeline = pipelines.open("regression");   // one of them, by name
+
+pipeline.inputs();       // what a user can set: build the form from it
+pipeline.stages();       // what runs, in order: build the stage view from it
+pipeline.yaml();         // one YAML file to run: testeiya pipeline file.yml
 ```
 
-- `BUNDLED_PIPELINES` maps each bundled pipeline's name to its text.
-- `describe().inputs` lists every variable a user can set. Required ones come first:
-  the `env` of a prerequisite in the top-level `when`. Then the ones that unlock
-  stages, in stage order. Then the rest by name: any `${NAME}` the runner expands
-  and `$NAME` a `run` command reads. Each has its default, its prerequisite's
-  `message`, and `secret`.
+Your own YAML goes through `parse`. It never throws, so call it on every
+keystroke and ask for the errors:
+
+```js
+const pipeline = pipelines.parse(editorText, { name: "my-agent" });
+
+for (const error of pipeline.errors()) {
+  console.log(error.line, error.key, error.message);   // 7 "stages[1].when" "stage "two" when names prerequisite ..."
+}
+if (pipeline.isValid()) save(pipeline.yaml());
+```
+
+Your YAML can `extends:` any bundled pipeline. To extend your saved pipelines
+too, and to list and open them, pass them in as name to YAML:
+
+```js
+const pipelines = new Pipelines({ "team-review": savedYaml, nightly: otherYaml });
+
+pipelines.list();                                             // bundled and yours, by name
+pipelines.open("nightly");
+pipelines.parse("extends: team-review\n", { name: "my-agent" });
+```
+
+**`Pipelines`**, the pipelines you can open and extend:
+
+| Call | Returns |
+|---|---|
+| `new Pipelines(own?)` | The bundled pipelines, plus `own`: your pipelines as `{ name: yaml }` |
+| `list()` | `{ name, description, target, bundled, valid }` for each, sorted by name. A broken one has `valid: false` and an empty description |
+| `names()`, `has(name)` | The names `open` takes |
+| `open(name)` | The `Pipeline` of that name. It throws a `PipelineError` when there is none |
+| `parse(yaml, { name })` | A `Pipeline` from text. `name` is used when the YAML has no `name:` |
+
+**`Pipeline`**, one pipeline:
+
+| Call | Returns |
+|---|---|
+| `source` | The YAML as it was given |
+| `errors()` | A list of `PipelineError`. Empty when the pipeline is valid |
+| `isValid()` | `true` when there are no errors |
+| `inputs()` | Every variable a user can set |
+| `stages()` | The stages in order: `id`, `title`, `emoji`, `kind`, `text`, `when`, `inputs`, `outputs`, `loop` |
+| `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks`, `secret` |
+| `describe()` | All of the above with `name`, `description`, `target` and `summary`, as one plain object for JSON |
+| `yaml()` | The YAML with `extends` and overrides applied. It needs nothing else to run |
+| `spec()` | The pipeline key for key, with defaults filled in |
+| `override(yaml)`, `overrideStage(id, yaml)` | A copy with [overrides](#overrides) applied, as `--pipeline` and `--stage` do |
+
+- Only `errors()` and `isValid()` work on a pipeline with a mistake. Every other
+  call throws that `PipelineError`.
+- A `PipelineError` has `message`, and `line` (1-based) and `key` (like
+  `stages[1].when`) when the problem has a place in the text. Checking stops at
+  the first mistake, so `errors()` has one error at most.
+- `inputs()` lists the required inputs first: the `env` of a prerequisite in the
+  top-level `when`. Then the ones that unlock stages, in stage order. Then the rest
+  by name: any `${NAME}` the runner expands and `$NAME` a `run` command reads.
+  Each input has `name`, `required`, `default`, `message` (its prerequisite's
+  message, for a hint), `secret`, `unlocks` (the stages skipped without it),
+  `prerequisites` and `usedIn`.
 - The runner's own variables (`BUILTIN_VARIABLES`), `HOME`, `PATH` and the keys of
   `env:` are never inputs. The exception is an `env:` value that reads its own name,
   like `BASE_BRANCH: ${BASE_BRANCH:-origin/main}`.
-- `PipelineError` has `line` (1-based) and `key` (like `stages[1].when`) when the
-  problem has a place in the text.
+- Your own pipeline wins over a bundled one of the same name. Inside it,
+  `extends:` with its own name means the bundled one, so your `regression` can
+  start with `extends: regression`.
+- `extends` that loops back, or names a pipeline that is not there, is an error
+  on the `extends` line.
+- `PIPELINE_TARGETS` is the list of [targets](#targets) a host acts on.

@@ -1,12 +1,15 @@
 /**
- * `testeiya/pipeline`: parse, validate and describe a pipeline from its text.
+ * `testeiya/pipeline`: open, check and describe pipelines from their text.
  * Nothing here touches the file system or imports from Node, so a Worker and a
- * browser check a file exactly as the CLI does.
+ * browser check a pipeline exactly as the CLI does.
+ *
+ *   const pipelines = new Pipelines();
+ *   const pipeline = pipelines.open("regression");   // or pipelines.parse(yaml)
+ *   pipeline.errors(); pipeline.inputs(); pipeline.stages(); pipeline.yaml();
  */
-export { PipelineSource, type ExtendsResolver, type PipelineSourceOptions } from "./pipeline-source.js";
+export { Pipelines, type ParseOptions, type PipelineSummary } from "./pipelines.js";
+export { PipelineDocument as Pipeline } from "./pipeline-document.js";
 export { PipelineError } from "./pipeline-error.js";
-export { Overlay } from "./overlay.js";
-export { BUNDLED_PIPELINES } from "./bundled.js";
 export { BUILTIN_VARIABLES, type BuiltinVariable } from "./variables.js";
 export { PIPELINE_TARGETS } from "./spec.js";
 export type {
