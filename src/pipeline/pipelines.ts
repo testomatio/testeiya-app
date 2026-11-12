@@ -1,5 +1,5 @@
 import { BUNDLED_PIPELINES } from "./bundled.js";
-import { PipelineDocument } from "./pipeline-document.js";
+import { Pipeline } from "./pipeline-document.js";
 import { PipelineError } from "./pipeline-error.js";
 import { PipelineSource } from "./pipeline-source.js";
 
@@ -17,7 +17,10 @@ export interface PipelineSummary {
 }
 
 export interface ParseOptions {
-  /** The pipeline's name when the YAML has no `name:`. It is also the name it is saved under in your own pipelines. */
+  /**
+   * The name it is saved under in your own pipelines. It becomes the pipeline's
+   * name when the YAML has no `name:` and the pipeline it extends has none.
+   */
   name?: string;
 }
 
@@ -58,19 +61,19 @@ export class Pipelines {
   }
 
   /** A bundled pipeline, or one of your own, by name. */
-  open(name: string): PipelineDocument {
+  open(name: string): Pipeline {
     if (this.isOwn(name)) return this.parse(this.own[name], { name });
     if (!Object.hasOwn(BUNDLED_PIPELINES, name)) throw new PipelineError(`no pipeline "${name}"`);
     return this.document(BUNDLED_PIPELINES[name], name, [`bundled:${name}`]);
   }
 
   /** A pipeline from YAML text, such as an editor's. It never throws: ask the pipeline for its `errors()`. */
-  parse(yaml: string, options: ParseOptions = {}): PipelineDocument {
+  parse(yaml: string, options: ParseOptions = {}): Pipeline {
     return this.document(yaml, options.name, options.name === undefined ? [] : [`own:${options.name}`]);
   }
 
-  private document(yaml: string, name: string | undefined, chain: string[]): PipelineDocument {
-    return new PipelineDocument(yaml, new PipelineSource(yaml, { name, resolve: (parent) => this.parent(parent, name, chain) }));
+  private document(yaml: string, name: string | undefined, chain: string[]): Pipeline {
+    return new Pipeline(yaml, new PipelineSource(yaml, { name, resolve: (parent) => this.parent(parent, name, chain) }));
   }
 
   /**

@@ -81,7 +81,7 @@ export class PipelineSource {
       const line = own ? error.linePos?.[0]?.line : undefined;
       throw new PipelineError(error.message, { line });
     }
-    const raw: unknown = document.toJS();
+    const raw = PipelineSource.valueOf(document);
     if (!PipelineSource.isRecord(raw)) return this.fail("a pipeline is a YAML mapping");
     if (raw.extends === undefined) return raw;
 
@@ -345,6 +345,15 @@ export class PipelineSource {
     const id = PipelineSource.isRecord(stage) ? stage.id : undefined;
     if (typeof id !== "string") return this.document?.has("extends") ? undefined : items[index];
     return items.find((item) => isMap(item) && item.get("id") === id);
+  }
+
+  // Text that parses can still have no value: an alias to an anchor that is not there.
+  private static valueOf(document: Document): unknown {
+    try {
+      return document.toJS();
+    } catch (err) {
+      throw new PipelineError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   private static keyOf(at: Path): string {

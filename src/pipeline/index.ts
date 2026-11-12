@@ -8,7 +8,7 @@
  *   pipeline.errors(); pipeline.inputs(); pipeline.stages(); pipeline.yaml();
  */
 export { Pipelines, type ParseOptions, type PipelineSummary } from "./pipelines.js";
-export { PipelineDocument as Pipeline } from "./pipeline-document.js";
+export { Pipeline } from "./pipeline-document.js";
 export { PipelineError } from "./pipeline-error.js";
 export { BUILTIN_VARIABLES, type BuiltinVariable } from "./variables.js";
 export { PIPELINE_TARGETS } from "./spec.js";

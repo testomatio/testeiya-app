@@ -571,7 +571,7 @@ pipelines.parse("extends: team-review\n", { name: "my-agent" });
 | `list()` | `{ name, description, target, bundled, valid }` for each, sorted by name. A broken one has `valid: false` and an empty description |
 | `names()`, `has(name)` | The names `open` takes |
 | `open(name)` | The `Pipeline` of that name. It throws a `PipelineError` when there is none |
-| `parse(yaml, { name })` | A `Pipeline` from text. `name` is used when the YAML has no `name:` |
+| `parse(yaml, { name })` | A `Pipeline` from text. `name` is what you save it as. It becomes the pipeline's name when neither the YAML nor the pipeline it extends has a `name:` |
 
 **`Pipeline`**, one pipeline:
 

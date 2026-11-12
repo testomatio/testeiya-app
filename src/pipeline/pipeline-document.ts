@@ -12,12 +12,15 @@ type Override = () => Overlay;
 type Outcome = { spec: PipelineSpec; description: PipelineDescription; yaml: string } | { error: PipelineError };
 
 /**
- * One pipeline, opened or parsed by `Pipelines`. The package exports it as
- * `Pipeline`. It never throws while it is made: `errors()` and `isValid()`
- * answer for any text, so an editor checks on every keystroke. The methods
- * that read a pipeline throw the `PipelineError` when there is one.
+ * One pipeline as text, opened or parsed by `Pipelines`. It never throws while
+ * it is made: `errors()` and `isValid()` answer for any text, so an editor
+ * checks on every keystroke. The methods that read a pipeline throw the
+ * `PipelineError` when there is one.
+ *
+ * This is the `Pipeline` of `testeiya/pipeline`. The CLI's runner in
+ * `pipeline.ts` has the same name and is not exported from the package.
  */
-export class PipelineDocument {
+export class Pipeline {
   private outcome?: Outcome;
 
   /** `Pipelines` makes these: call `pipelines.open(name)` or `pipelines.parse(yaml)`. */
@@ -74,17 +77,17 @@ export class PipelineDocument {
   }
 
   /** A copy with pipeline keys changed, as `--pipeline YAML` does. */
-  override(yaml: string): PipelineDocument {
+  override(yaml: string): Pipeline {
     return this.with(() => Overlay.pipeline(yaml));
   }
 
   /** A copy with one stage changed, as `--stage ID:YAML` does. */
-  overrideStage(id: string, yaml: string): PipelineDocument {
+  overrideStage(id: string, yaml: string): Pipeline {
     return this.with(() => Overlay.stage(`${id}:${yaml}`));
   }
 
-  private with(override: Override): PipelineDocument {
-    return new PipelineDocument(this.source, this.parser, [...this.overrides, override]);
+  private with(override: Override): Pipeline {
+    return new Pipeline(this.source, this.parser, [...this.overrides, override]);
   }
 
   private checked(): Exclude<Outcome, { error: PipelineError }> {

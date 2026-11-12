@@ -80,21 +80,23 @@ export class Overlay {
     return result;
   }
 
-  private stages(base: unknown, value: unknown, op?: Op): Raw[] {
-    const stages = [...(Array.isArray(base) ? (base as Raw[]) : [])];
+  private stages(base: unknown, value: unknown, op?: Op): unknown[] {
+    // A stage that is not a mapping stays as it is, for validation to report.
+    const stages: unknown[] = [...(Array.isArray(base) ? base : [])];
+    const idOf = (stage: unknown) => (Overlay.isRecord(stage) ? stage.id : undefined);
     if (op === "remove") {
       for (const id of Overlay.list(value)) {
-        if (!stages.some((stage) => stage.id === id)) this.fail(`there is no stage "${id}" to remove`);
+        if (!stages.some((stage) => idOf(stage) === id)) this.fail(`there is no stage "${id}" to remove`);
       }
-      return stages.filter((stage) => !Overlay.list(value).includes(stage.id as string));
+      return stages.filter((stage) => !Overlay.list(value).includes(idOf(stage)));
     }
     if (op) this.fail(`stages take changes by id or remove_stages, not ${op}_stages`);
     if (!Array.isArray(value)) this.fail("stages must be a list of stages with an id");
     for (const change of value as unknown[]) {
       if (!Overlay.isRecord(change) || typeof change.id !== "string") this.fail("every stage needs an id");
-      const index = stages.findIndex((stage) => stage.id === change.id);
+      const index = stages.findIndex((stage) => idOf(stage) === change.id);
       if (index >= 0) {
-        stages[index] = this.merge(stages[index], change, STAGE, `stage "${change.id}"`);
+        stages[index] = this.merge(stages[index] as Raw, change, STAGE, `stage "${change.id}"`);
         continue;
       }
       if (change.task === undefined && change.run === undefined) this.fail(`there is no stage "${change.id}" to change`);

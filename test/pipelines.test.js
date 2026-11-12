@@ -284,6 +284,23 @@ test("a pipeline with a mistake answers errors, and throws it from everything th
   assert.deepEqual(JSON.parse(JSON.stringify(valid.describe())).inputs.map((input) => input.name), ["A"]);
 });
 
+test("half-typed text is an error, never a crash", () => {
+  for (const name of pipelines.names()) {
+    const text = pipelines.open(name).source;
+    for (let end = 0; end <= text.length; end++) {
+      const typed = text.slice(0, end);
+      for (const yaml of [typed, `extends: ${name}\n${typed}`]) {
+        const pipeline = parse(yaml, { name });
+        assert.equal(pipeline.errors().length, pipeline.isValid() ? 0 : 1, yaml);
+      }
+    }
+  }
+  assert.match(parse("stages:\n  - id: a\n    run: *nope\n").errors()[0].message, /Unresolved alias/);
+  assert.equal(parse("extends: regression\nstages:\n  -\n").errors()[0].message, "every stage needs an id");
+  const empty = new Pipelines({ base: "stages:\n  -\n  - id: a\n    run: echo\n" });
+  assert.equal(empty.parse("extends: base\nstages:\n  - id: a\n    title: A\n").errors()[0].message, "stage 1 must be a mapping");
+});
+
 test("yaml applies overrides and keeps the name the caller gave", () => {
   const pipeline = parse("stages:\n  - id: a\n    task: Do it.\n", { name: "agent" });
   const changed = pipeline.overrideStage("a", "append_task: Be brief.").override("description: Short.");
