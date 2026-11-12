@@ -9,6 +9,7 @@ prerequisites:
   testomatio:
     env: [TESTOMATIO]
     message: No Testomat.io project. Set TESTOMATIO to the project's API key.
+    secret: true
   local:
     run: test -z "$REMOTE"
     message: Tests run on the Testomat.io CI profile. No local log to read.

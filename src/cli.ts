@@ -2,6 +2,7 @@
 import { chalkStderr as c } from "chalk";
 import { HELP, parseCliArgs, USAGE, WELCOME, type CliArgs } from "./args.js";
 import { runDoctor } from "./doctor.js";
+import { runInstallApp } from "./install-app.js";
 import { loadEnvFiles, VERSION } from "./env.js";
 import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
@@ -53,6 +54,7 @@ async function main(argv: string[]): Promise<void> {
       process.exit(await runDoctor({ envSources, json: args.json, probe: args.probe, model: args.model }));
     }
     if (args.command === "sessions") process.exit(await runSessions(process.cwd(), args.json));
+    if (args.command === "install-app") process.exit(await runInstallApp({ force: args.force, json: args.json }));
     if (args.command === "pipeline") process.exit(await pipeline(args));
     if (args.command === "pipeline-check") process.exit(await pipelineCheck(args));
     process.exit(await task(args));

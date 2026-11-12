@@ -9,6 +9,7 @@ prerequisites:
   testomatio:
     env: [TESTOMATIO]
     message: No Testomat.io project. Set TESTOMATIO API Key to import test cases
+    secret: true
 
 when: [issue]
 
@@ -37,5 +38,6 @@ stages:
     title: Sync to Testomat.io
     emoji: 🔄
     when: [testomatio]
+    each_file: test-cases/*.md
     task: |
       Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
