@@ -46,6 +46,8 @@ async function main(argv: string[]): Promise<void> {
   // --project is a spelling of the env var the MCP server needs, so the rest of
   // the CLI only ever reads the environment.
   if (args.project) process.env.TESTOMATIO_PROJECT_ID = args.project;
+  // --mcp the same way, so a pipeline's stages inherit the servers with the env.
+  if (args.mcp) process.env.TESTEIYA_MCP_SERVERS = args.mcp;
 
   try {
     if (args.command === "models") process.exit(await runModels(args.pattern, args.json));

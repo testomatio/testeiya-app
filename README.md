@@ -690,6 +690,59 @@ comes from `--project` or from `TESTOMATIO_PROJECT_ID`; the MCP server needs it,
 because a token alone does not say which project to talk to. `TESTOMATIO_URL`
 points at a self-hosted instance.
 
+## MCP servers
+
+`TESTEIYA_MCP_SERVERS`, or `--mcp`, gives a run more MCP servers over HTTP. The
+Testeiya Hub passes a company's connected services (Linear, Jira, …) this way.
+The value is JSON that maps a server name to its url and headers:
+
+```bash
+TESTEIYA_MCP_SERVERS='{
+  "linear": { "url": "https://mcp.linear.app/mcp", "headers": { "Authorization": "Bearer lin_xxx" } }
+}' testeiya task "Write test cases for the issues in the current cycle"
+```
+
+- The tools are available in task runs and in every agent stage of a pipeline.
+  They do not need a Testomat.io token.
+- The model is told which servers are connected.
+- Prefer the variable when a header holds a key. Anyone who lists the machine's
+  processes can see a command-line option.
+- Bad JSON prints a warning, and the run continues without the servers. An entry
+  without a url is skipped. A server named `testomatio` becomes `testomatio-env`.
+- A cloned repository cannot add a server of its own: `.pi/mcp.json` is never
+  read, and `TESTEIYA_MCP_SERVERS` in a `.env` in the checkout is ignored with a
+  warning. Set it in the job's environment or in `~/.testeiya/.env`.
+- `testeiya doctor` lists the servers it found.
+
+## Environment
+
+The environment and `.env` files configure Testeiya. `.env` files are read from
+`~/.testeiya/.env` and from the working directory upward. A variable you export
+always overrides one from a file.
+
+| Variable | What it does | Option |
+|---|---|---|
+| `TESTEIYA_MODEL` | model to run, e.g. `openrouter/anthropic/claude-sonnet-5` | `--model` |
+| `TESTEIYA_FOLLOW_UP` | the user's reply; an empty value is ignored | `--followup` |
+| `TESTEIYA_THREAD` | which conversation this is, for posted comments | `--thread` |
+| `TESTEIYA_SESSION_FILE` | where to keep the session | `--session-file` |
+| `TESTEIYA_NO_DEFAULT_FOOTER` | do not sign the report | `--no-default-footer` |
+| `TESTEIYA_MCP_SERVERS` | extra [MCP servers](#mcp-servers) as JSON | `--mcp` |
+| `TESTEIYA_MODELS_JSON` | path to a pi `models.json`, to point providers at a proxy | |
+| `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `CLOUDFLARE_API_KEY` | provider keys | |
+| `TESTOMATIO` | Testomat.io project API key | |
+| `TESTOMATIO_PROJECT_ID` | Testomat.io project id; turns on its MCP tools | `--project` |
+| `TESTOMATIO_URL` | Testomat.io base url, for self-hosted | |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | turn on [tracing](#tracing) | |
+| `LANGFUSE_BASE_URL` | Langfuse url, for self-hosted | |
+| `BASE_BRANCH` | the branch a change is compared to when the CI job does not say; `origin/main` by default | |
+| `GITHUB_TOKEN` | `install-app` only: raises GitHub's download rate limit | |
+| `TESTEIYA_PIPELINE_SPAWN` | `1` runs each agent stage of a pipeline in its own process | |
+
+`testeiya --help` prints the same list. Code can read it as
+`ENVIRONMENT_VARIABLES` from `testeiya/pipeline`. Each entry has `name`,
+`group`, `description`, `flag` and `secret`.
+
 ## Tracing
 
 Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` and every run is sent to

@@ -244,7 +244,8 @@ Every key is optional. All given must hold, and at least one file must count.
 | `PIPELINE_RESUME` | `1` when a command stage is retried |
 
 `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE` are removed:
-they belong to a single task.
+they belong to a single task. `TESTEIYA_MCP_SERVERS` is kept, so every agent stage
+gets the same MCP servers.
 
 ## Packages
 
@@ -608,3 +609,9 @@ pipelines.parse("extends: team-review\n", { name: "my-agent" });
 - `extends` that loops back, or names a pipeline that is not there, is an error
   on the `extends` line.
 - `PIPELINE_TARGETS` is the list of [targets](#targets) a host acts on.
+- `ENVIRONMENT_VARIABLES` lists every variable Testeiya reads, such as
+  `TESTEIYA_MODEL`, `TESTOMATIO` and `TESTEIYA_MCP_SERVERS`. Each entry has
+  `name`, `group`, `description`, `flag` (the CLI option for the same setting)
+  and `secret`. A host sets these on the run itself. They are not pipeline
+  inputs, so `inputs()` lists one only when the pipeline reads it, like a
+  prerequisite on `TESTOMATIO`.

@@ -1,4 +1,5 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import { ENVIRONMENT_VARIABLES, type EnvironmentVariable } from "./environment.js";
 
 export const WELCOME = `
   Testeiya, an AI testing agent.
@@ -11,6 +12,16 @@ export const WELCOME = `
   testeiya --help    options and environment
   testeiya help      the full guide
 `;
+
+/** The `Environment:` block, one line per variable Testeiya reads. */
+function environmentUsage(): string {
+  const width = Math.max(...ENVIRONMENT_VARIABLES.map((variable) => variable.name.length)) + 2;
+  return ENVIRONMENT_VARIABLES.map((variable: EnvironmentVariable) => {
+    let line = `  ${variable.name.padEnd(width)}${variable.description}`;
+    if (variable.flag) line += ` (same as ${variable.flag})`;
+    return line;
+  }).join("\n");
+}
 
 export const USAGE = `testeiya, an AI testing agent
 
@@ -31,6 +42,7 @@ Options:
       --project <id>         Testomat.io project id
       --followup <text>      the user's reply, added to the task as a new message
       --thread <name>        which conversation this is, for posted comments
+      --mcp <json>           extra MCP servers, {"<name>": {"url": "…", "headers": {…}}}
   -c, --continue             continue the last session in this folder
       --resume <id>          continue that session
       --session <label>      continue the session with that name, or start it
@@ -57,15 +69,7 @@ Pipeline options:
   -v, --version              show version
 
 Environment:
-  TESTEIYA_MODEL              model to run, e.g. openrouter/anthropic/claude-sonnet-5
-  TESTEIYA_FOLLOW_UP          the user's reply, same as --followup
-  TESTEIYA_THREAD             which conversation this is, same as --thread
-  TESTEIYA_SESSION_FILE       where to keep the session, same as --session-file
-  TESTEIYA_NO_DEFAULT_FOOTER  do not sign the report
-  OPENROUTER_API_KEY          provider key, also ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
-  TESTOMATIO                  Testomat.io project API key
-  TESTOMATIO_PROJECT_ID       Testomat.io project id, same as --project
-  TESTOMATIO_URL              Testomat.io base url, for self-hosted
+${environmentUsage()}
 
 Run "testeiya help" for the full guide.`;
 
@@ -226,7 +230,23 @@ Testomat.io
   project's tests, suites, runs and plans through check-tests and the REST API.
   Add the project id, with --project or TESTOMATIO_PROJECT_ID, and it also gets
   the Testomat.io tools. The MCP server needs the id: a token alone does not say
-  which project to talk to.`;
+  which project to talk to.
+
+MCP servers
+
+  TESTEIYA_MCP_SERVERS, or --mcp, hands a run more MCP servers over HTTP: the
+  Testeiya Hub passes a company's connected services (Linear, Jira, …) this way.
+  The value is JSON, a server name to its url and headers:
+
+    TESTEIYA_MCP_SERVERS='{"linear": {"url": "https://mcp.linear.app/mcp",
+      "headers": {"Authorization": "Bearer lin_xxx"}}}' testeiya task "…"
+
+  Their tools are on in every stage of a pipeline too, and they need no
+  Testomat.io token. Prefer the variable when a header holds a key: an option is
+  visible to anyone who lists the machine's processes. Bad JSON warns and the run
+  goes on without them; an entry without a url is skipped. A cloned repo cannot
+  add a server of its own: .pi/mcp.json is never read, and the variable in a
+  .env in the checkout is ignored. Set it in the job or in ~/.testeiya/.env.`;
 
 export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "install-app", "help"] as const;
 
@@ -279,6 +299,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (typeof values.project === "string") args.project = values.project;
   if (typeof values.followup === "string") args.followUp = values.followup;
   if (typeof values.thread === "string") args.thread = values.thread;
+  if (typeof values.mcp === "string") args.mcp = values.mcp;
   if (values.continue) args.continueLast = true;
   if (typeof values.resume === "string") args.resume = values.resume;
   if (typeof values.session === "string") args.session = values.session;
@@ -309,6 +330,7 @@ const RUN_OPTIONS: ParseArgsConfig["options"] = {
   project: { type: "string" },
   followup: { type: "string" },
   thread: { type: "string" },
+  mcp: { type: "string" },
   continue: { type: "boolean", short: "c" },
   resume: { type: "string" },
   session: { type: "string" },
@@ -329,6 +351,7 @@ const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
   model: { type: "string" },
   project: { type: "string" },
   thread: { type: "string" },
+  mcp: { type: "string" },
   "exit-zero": { type: "boolean" },
   header: { type: "string" },
   footer: { type: "string" },
@@ -410,6 +433,8 @@ export interface CliArgs {
   project?: string;
   followUp?: string;
   thread?: string;
+  /** TESTEIYA_MCP_SERVERS given on the command line. */
+  mcp?: string;
   continueLast?: boolean;
   resume?: string;
   session?: string;

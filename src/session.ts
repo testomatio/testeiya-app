@@ -17,7 +17,7 @@ import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { pathClis } from "../prompt/clis.js";
 import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
-import { hasMcp, mcpConfig, tmsAccess } from "./mcp.js";
+import { hasMcp, envMcpServers, mcpConfig, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
 import { createSetResultTool, type RunResult } from "./result.js";
 import { sessionModel } from "./sessions.js";
@@ -80,9 +80,13 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
   // pi's CLI loads these as built-ins; SDK sessions only get what is listed here.
   const extensionFactories: ExtensionFactory[] = [createCodemodeExtension({ models: false })];
   const connectedMcps: string[] = [];
-  if (hasMcp()) {
+  // Servers handed in through the environment run without a Testomat.io token,
+  // so the extension mounts whenever either source has something.
+  const envMcps = envMcpServers();
+  if (hasMcp() || Object.keys(envMcps).length > 0) {
     extensionFactories.push(createMcpExtension({ loadConfig: mcpConfig, openUrl: () => {} }));
-    connectedMcps.push("Testomat.io");
+    if (hasMcp()) connectedMcps.push("Testomat.io");
+    connectedMcps.push(...Object.keys(envMcps));
   }
 
   const loader = createLoader({
