@@ -1,5 +1,5 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
-import { environmentUsage } from "./environment.js";
+import { ENVIRONMENT_VARIABLES, type EnvironmentVariable } from "./environment.js";
 
 export const WELCOME = `
   Testeiya, an AI testing agent.
@@ -12,6 +12,16 @@ export const WELCOME = `
   testeiya --help    options and environment
   testeiya help      the full guide
 `;
+
+/** The `Environment:` block, one line per variable Testeiya reads. */
+function environmentUsage(): string {
+  const width = Math.max(...ENVIRONMENT_VARIABLES.map((variable) => variable.name.length)) + 2;
+  return ENVIRONMENT_VARIABLES.map((variable: EnvironmentVariable) => {
+    let line = `  ${variable.name.padEnd(width)}${variable.description}`;
+    if (variable.flag) line += ` (same as ${variable.flag})`;
+    return line;
+  }).join("\n");
+}
 
 export const USAGE = `testeiya, an AI testing agent
 
@@ -234,8 +244,9 @@ MCP servers
   Their tools are on in every stage of a pipeline too, and they need no
   Testomat.io token. Prefer the variable when a header holds a key: an option is
   visible to anyone who lists the machine's processes. Bad JSON warns and the run
-  goes on without them; an entry without a url is skipped. .pi/mcp.json in the
-  checkout is never read, so a cloned repo cannot add a server of its own.`;
+  goes on without them; an entry without a url is skipped. A cloned repo cannot
+  add a server of its own: .pi/mcp.json is never read, and the variable in a
+  .env in the checkout is ignored. Set it in the job or in ~/.testeiya/.env.`;
 
 export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "install-app", "help"] as const;
 

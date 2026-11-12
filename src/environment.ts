@@ -15,7 +15,7 @@ export const ENVIRONMENT_VARIABLES = [
   { name: "TESTEIYA_THREAD", group: "run", flag: "--thread", description: "which conversation this is, for posted comments" },
   { name: "TESTEIYA_SESSION_FILE", group: "run", flag: "--session-file", description: "where to keep the session" },
   { name: "TESTEIYA_NO_DEFAULT_FOOTER", group: "run", flag: "--no-default-footer", description: "do not sign the report" },
-  { name: "TESTEIYA_MCP_SERVERS", group: "mcp", flag: "--mcp", secret: true, description: 'extra MCP servers as JSON, {"<name>": {"url": "…", "headers": {…}}}' },
+  { name: "TESTEIYA_MCP_SERVERS", group: "mcp", flag: "--mcp", secret: true, description: 'extra MCP servers as JSON, {"<name>": {"url": "…", "headers": {…}}}; not read from a checkout .env' },
   { name: "TESTEIYA_MODELS_JSON", group: "provider", description: "path to a pi models.json, to point providers at a proxy" },
   { name: "OPENROUTER_API_KEY", group: "provider", secret: true, description: "OpenRouter key" },
   { name: "ANTHROPIC_API_KEY", group: "provider", secret: true, description: "Anthropic key" },
@@ -44,14 +44,4 @@ export interface EnvironmentVariable {
   flag?: string;
   /** Holds a credential: mask it, never print it. */
   secret?: boolean;
-}
-
-/** The `Environment:` block of `testeiya --help`. */
-export function environmentUsage(): string {
-  const width = Math.max(...ENVIRONMENT_VARIABLES.map((variable) => variable.name.length)) + 2;
-  return ENVIRONMENT_VARIABLES.map((variable: EnvironmentVariable) => {
-    let line = `  ${variable.name.padEnd(width)}${variable.description}`;
-    if (variable.flag) line += ` (same as ${variable.flag})`;
-    return line;
-  }).join("\n");
 }

@@ -36,48 +36,60 @@ export interface EnvMcpServer {
  * `{ "<name>": { "url": "…", "headers": { … } } }`. A bad value warns and runs
  * without the servers, the same soft failure as a broken config file.
  *
- * Parsed once per value, so the warning prints once however often it is read.
+ * Parsed once per value, so a warning prints once however often it is read.
  */
-export function envMcpServers(): Record<string, EnvMcpServer> {
-  const raw = process.env.TESTEIYA_MCP_SERVERS ?? "";
-  if (parsedFrom !== raw) {
-    parsedFrom = raw;
-    parsed = parseMcpServers(raw);
+export class EnvMcpServers {
+  private static parsedFrom: string | null = null;
+  private static parsed: Record<string, EnvMcpServer> = {};
+
+  static read(): Record<string, EnvMcpServer> {
+    const raw = process.env.TESTEIYA_MCP_SERVERS ?? "";
+    if (EnvMcpServers.parsedFrom !== raw) {
+      EnvMcpServers.parsedFrom = raw;
+      EnvMcpServers.parsed = EnvMcpServers.parse(raw);
+    }
+    return EnvMcpServers.parsed;
   }
-  return parsed;
+
+  private static parse(raw: string): Record<string, EnvMcpServer> {
+    if (!raw.trim()) return {};
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      return EnvMcpServers.ignore("is not valid JSON");
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return EnvMcpServers.ignore("must be a JSON object of name to {url, headers}");
+    }
+    const servers: Record<string, EnvMcpServer> = {};
+    for (const [name, entry] of Object.entries(value as Record<string, { url?: unknown; headers?: unknown }>)) {
+      if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) {
+        process.stderr.write(`  TESTEIYA_MCP_SERVERS: "${name}" has no url, skipping it\n`);
+        continue;
+      }
+      servers[name === SERVER ? `${name}-env` : name] = { url: entry.url, headers: EnvMcpServers.headers(entry.headers) };
+    }
+    return servers;
+  }
+
+  private static headers(value: unknown): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (!value || typeof value !== "object") return headers;
+    for (const [key, header] of Object.entries(value)) {
+      if (typeof header === "string") headers[key] = header;
+    }
+    return headers;
+  }
+
+  private static ignore(why: string): Record<string, EnvMcpServer> {
+    process.stderr.write(`  TESTEIYA_MCP_SERVERS ${why}, ignoring it\n`);
+    return {};
+  }
 }
 
-let parsedFrom: string | null = null;
-let parsed: Record<string, EnvMcpServer> = {};
-
-function parseMcpServers(raw: string): Record<string, EnvMcpServer> {
-  if (!raw.trim()) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    process.stderr.write("  TESTEIYA_MCP_SERVERS is not valid JSON, ignoring it\n");
-    return {};
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    process.stderr.write("  TESTEIYA_MCP_SERVERS must be a JSON object of name to {url, headers}, ignoring it\n");
-    return {};
-  }
-  const servers: Record<string, EnvMcpServer> = {};
-  for (const [name, entry] of Object.entries(value as Record<string, { url?: unknown; headers?: unknown }>)) {
-    if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) {
-      process.stderr.write(`  TESTEIYA_MCP_SERVERS: "${name}" has no url, skipping it\n`);
-      continue;
-    }
-    const headers: Record<string, string> = {};
-    if (entry.headers && typeof entry.headers === "object") {
-      for (const [key, header] of Object.entries(entry.headers)) {
-        if (typeof header === "string") headers[key] = header;
-      }
-    }
-    servers[name === SERVER ? `${name}-env` : name] = { url: entry.url, headers };
-  }
-  return servers;
+export function envMcpServers(): Record<string, EnvMcpServer> {
+  return EnvMcpServers.read();
 }
 
 function projectId(): string {

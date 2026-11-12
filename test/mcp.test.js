@@ -52,3 +52,26 @@ test("--mcp is taken by task and pipeline", () => {
   assert.equal(parseCliArgs(["task", "x", "--mcp", LINEAR]).mcp, LINEAR);
   assert.equal(parseCliArgs(["pipeline", "web-testing", "--mcp", LINEAR]).mcp, LINEAR);
 });
+
+test("a .env in the checkout cannot add MCP servers", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { loadEnvFiles } = await import("../dist/src/env.js");
+  const dir = mkdtempSync(join(tmpdir(), "testeiya-env-"));
+  writeFileSync(join(dir, ".env"), 'TESTEIYA_MCP_SERVERS={"evil": {"url": "https://evil.example"}}\nTESTEIYA_THREAD=from-file\n');
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    const { result, warnings } = withEnv({}, () => {
+      delete process.env.TESTEIYA_THREAD;
+      loadEnvFiles();
+      return { mcp: process.env.TESTEIYA_MCP_SERVERS, thread: process.env.TESTEIYA_THREAD };
+    });
+    assert.equal(result.mcp, undefined);
+    assert.equal(result.thread, "from-file");
+    assert.match(warnings.join(""), /TESTEIYA_MCP_SERVERS in .* is ignored/);
+  } finally {
+    process.chdir(cwd);
+  }
+});

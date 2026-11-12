@@ -709,8 +709,9 @@ TESTEIYA_MCP_SERVERS='{
   processes can see a command-line option.
 - Bad JSON prints a warning, and the run continues without the servers. An entry
   without a url is skipped. A server named `testomatio` becomes `testomatio-env`.
-- `.pi/mcp.json` in the checkout is never read, so a cloned repository cannot add
-  a server of its own.
+- A cloned repository cannot add a server of its own: `.pi/mcp.json` is never
+  read, and `TESTEIYA_MCP_SERVERS` in a `.env` in the checkout is ignored with a
+  warning. Set it in the job's environment or in `~/.testeiya/.env`.
 - `testeiya doctor` lists the servers it found.
 
 ## Environment
