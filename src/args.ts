@@ -34,6 +34,7 @@ Usage:
   testeiya models [pattern]   list the models your key can reach
   testeiya skills [pattern]   list the skills bundled with this package
   testeiya sessions           list saved sessions for this folder
+  testeiya share [--answer]   share the last session to the Testeiya Hub
   testeiya install-app        install the desktop app for this OS, if it is not there yet
 
 Options:
@@ -57,6 +58,11 @@ Options:
       --json                 machine-readable output
       --probe                doctor only: test the key with one request
       --force                install-app only: reinstall over an existing app
+
+Share options:
+      --answer               share the last assistant answer as a public page
+      --resume <id>          share that session instead of the last one
+      --title <text>         name the share; default is the session's name
 
 Pipeline options:
       --dir <path>           the pipeline folder; keep it between runs for rounds
@@ -248,7 +254,7 @@ MCP servers
   add a server of its own: .pi/mcp.json is never read, and the variable in a
   .env in the checkout is ignored. Set it in the job or in ~/.testeiya/.env.`;
 
-export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "install-app", "help"] as const;
+export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "share", "install-app", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
@@ -306,6 +312,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (typeof values["session-file"] === "string") args.sessionFile = values["session-file"];
   if (typeof values.name === "string") args.name = values.name;
   if (values["no-session"]) args.noSession = true;
+  if (values.answer) args.answer = true;
+  if (typeof values.title === "string") args.title = values.title;
   if (values["exit-zero"]) args.exitZero = true;
   if (typeof values.header === "string") args.header = values.header;
   if (typeof values.footer === "string") args.footer = values.footer;
@@ -384,6 +392,13 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
   skills: { json: JSON_FLAG, help: HELP_FLAG },
   doctor: { json: JSON_FLAG, probe: { type: "boolean" }, model: { type: "string" }, help: HELP_FLAG },
   sessions: { json: JSON_FLAG, help: HELP_FLAG },
+  share: {
+    answer: { type: "boolean" },
+    resume: { type: "string" },
+    title: { type: "string" },
+    json: JSON_FLAG,
+    help: HELP_FLAG,
+  },
   "install-app": { json: JSON_FLAG, force: { type: "boolean" }, help: HELP_FLAG },
   help: {},
 };
@@ -442,6 +457,10 @@ export interface CliArgs {
   name?: string;
   noSession?: boolean;
   exitZero?: boolean;
+  /** Share command: the last assistant answer, not the transcript. */
+  answer?: boolean;
+  /** Share command: name the share. */
+  title?: string;
   header?: string;
   footer?: string;
   noDefaultFooter?: boolean;
