@@ -27,7 +27,6 @@ stages:
     emoji: 📜
     when: [api]
     run: npx swagger-cli validate "$OPENAPI_SPEC"
-    stopOn: fail
     timeout: 2m
 
   - id: review

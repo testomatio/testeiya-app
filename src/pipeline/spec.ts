@@ -65,7 +65,10 @@ export interface StageSpec {
   outputs: string[];
   /** Prerequisites this stage needs. One fails: the stage is skipped. */
   when: string[];
+  /** When the pipeline stops after this stage. `fail` is there unless the stage is optional or has `continueOn: fail`. */
   stopOn: StopOn[];
+  /** Its fail, break or timeout neither stops the pipeline nor fails the run. */
+  optional: boolean;
   /** "90s", "30m", "1h", or seconds. */
   timeout?: string | number;
   each_line?: string;
@@ -99,6 +102,7 @@ export interface StageView {
   outputs: string[];
   loop?: { each_line: string } | { each_file: string };
   stopOn: StopOn[];
+  optional: boolean;
   timeout?: string | number;
 }
 

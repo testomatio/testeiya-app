@@ -42,6 +42,8 @@ stages:
     run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot test "$STAGE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
+    # Failed scenarios go to the results stage, which says which are real.
+    continueOn: fail
     timeout: 30m
 
   - id: results

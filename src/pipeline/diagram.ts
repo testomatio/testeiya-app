@@ -82,7 +82,9 @@ export class Diagram {
     if (spec.each_line) parts.push(`each line of ${spec.each_line}`);
     if (spec.each_file) parts.push(`each file ${spec.each_file}`);
     if (spec.session) parts.push(`session ${spec.session}`);
-    if (spec.stopOn.length) parts.push(`stops on ${spec.stopOn.join(", ")}`);
+    if (spec.optional) parts.push("optional");
+    else if (!spec.stopOn.includes("fail")) parts.push("goes on after a fail");
+    if (spec.stopOn.includes("gate")) parts.push("stops when skipped");
     const text = this.label(parts.join("<br/>"));
     if (kind === "agent") return `(${text})`;
     return `[${text}]`;

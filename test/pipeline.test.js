@@ -521,7 +521,7 @@ test("a --gate from the job skips the run before outputs are checked", async () 
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: gated, dir, runTask, gates: { pr: "true" } }).run()), /already defines/);
 });
 
-test("stopOn fail stops the stages after it, the summary still runs", async () => {
+test("a failed stage stops the stages after it, the summary still runs", async () => {
   const { repo, log, runTask } = setup();
   const file = write(repo, "pipe.yml", `
 stages:
@@ -529,7 +529,6 @@ stages:
     title: one
     emoji: 🔹
     task: FAIL on purpose.
-    stopOn: fail
   - id: two
     title: two
     emoji: 🔹
@@ -542,6 +541,91 @@ stages:
   assert.deepEqual(state.stages.map((stage) => stage.status), ["fail", "not-run", "pass"]);
   assert.equal(calledWith(log).length, 2);
   assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir: join(repo, ".qb"), runTask, exitZero: true }).run()), 0);
+});
+
+test("continueOn fail runs the stages after a failed stage, and the run still fails", async () => {
+  const { repo, log, runTask } = setup();
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: one
+    title: one
+    emoji: 🔹
+    task: FAIL on purpose.
+    continueOn: fail
+  - id: two
+    title: two
+    emoji: 🔹
+    task: Two.
+`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 1);
+  const state = readJson(join(dir, "pipeline.json"));
+  assert.deepEqual(state.stages.map((stage) => stage.status), ["fail", "pass", "pass"]);
+  assert.equal(state.status, "fail");
+  assert.equal(calledWith(log).length, 3);
+});
+
+test("an optional stage that fails neither stops the pipeline nor fails the run", async () => {
+  const { repo, runTask } = setup();
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: one
+    title: one
+    emoji: 🔹
+    task: One.
+  - id: sync
+    title: sync
+    emoji: 🔹
+    task: FAIL on purpose.
+    optional: true
+  - id: three
+    title: three
+    emoji: 🔹
+    run: exit 1
+    optional: true
+  - id: four
+    title: four
+    emoji: 🔹
+    task: Four.
+`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 0);
+  const state = readJson(join(dir, "pipeline.json"));
+  assert.deepEqual(state.stages.map((stage) => stage.status), ["pass", "fail", "fail", "pass", "pass"]);
+  assert.deepEqual(state.stages.map((stage) => stage.optional ?? false), [false, true, true, false, false]);
+  assert.equal(state.status, "pass");
+});
+
+test("a failed stage before an optional one still stops the run", async () => {
+  const { repo, log, runTask } = setup();
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: one
+    title: one
+    emoji: 🔹
+    task: FAIL on purpose.
+  - id: sync
+    title: sync
+    emoji: 🔹
+    task: Sync.
+    optional: true
+`);
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 1);
+  assert.deepEqual(readJson(join(dir, "pipeline.json")).stages.map((stage) => stage.status), ["fail", "not-run", "pass"]);
+  assert.equal(calledWith(log).length, 2);
+});
+
+test("stopOn holds fail unless the stage is optional or goes on", () => {
+  const stage = (extra) => parse(`stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n${extra}`).stages[0];
+  assert.deepEqual(stage("").stopOn, ["fail"]);
+  assert.deepEqual(stage("    stopOn: gate\n").stopOn, ["fail", "gate"]);
+  assert.deepEqual(stage("    continueOn: fail\n").stopOn, []);
+  assert.deepEqual(stage("    optional: true\n    stopOn: gate\n").stopOn, ["gate"]);
+  assert.equal(stage("    optional: true\n").optional, true);
+  assert.throws(() => stage("    optional: yes please\n"), /optional must be true or false/);
+  assert.throws(() => stage("    continueOn: gate\n"), /continueOn takes fail/);
+  assert.throws(() => stage("    continueOn: fail\n    stopOn: fail\n"), /cannot both stop and go on/);
 });
 
 test("a timed-out round retries from the stage that stopped", async () => {
@@ -704,7 +788,7 @@ test("the summary draft keeps each stage report word for word, its headings unde
   const dir = mkdtempSync(join(tmpdir(), "summary-"));
   mkdirSync(join(dir, "1-req"));
   writeFileSync(join(dir, "1-req", "req.md"), "## Breakdown\n\n- one\n\n```\n# not a heading\n```\n\n### Risks\n\n1. two\n");
-  const spec = (id, extra) => ({ id, title: id, emoji: "🔹", inputs: [], outputs: [], when: [], stopOn: [], ...extra });
+  const spec = (id, extra) => ({ id, title: id, emoji: "🔹", inputs: [], outputs: [], when: [], stopOn: [], optional: false, ...extra });
   const stages = [new TaskStage(spec("req", { task: "Req." }), "1-req"), new TaskStage(spec("cases", { task: "Cases." }), "2-cases")];
   const records = { req: { id: "req", status: "pass", report: "1-req/req.md" }, cases: { id: "cases", status: "skipped", reason: "No tests." } };
   const state = { record: { round: 1, status: "pass" }, stage: (id) => records[id] };

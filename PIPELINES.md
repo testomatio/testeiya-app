@@ -107,7 +107,9 @@ Any other word means the pipeline is started by hand. The list is exported as
 | `outputs` | Files the stage must leave in its folder |
 | `each_line` | Run once per non-empty line of this file. See [Loops](#loops) |
 | `each_file` | Run once per file matching this mask |
-| `stopOn` | `fail`, `gate`, or both as a list. See [Stopping](#stopping) |
+| `stopOn` | `gate`: stop when this stage is skipped. See [Stopping](#stopping) |
+| `continueOn` | `fail`: the stages after it run when it fails. The run still fails |
+| `optional` | `true`: its fail, break or timeout neither stops the pipeline nor fails the run |
 | `timeout` | `90s`, `30m`, `1h`, or seconds. Per item in a loop. Default: none |
 
 - A stage has exactly one of `task` or `run`.
@@ -406,9 +408,19 @@ the file: the runner adds it.
 | `skipped` | a prerequisite in `when` failed, or nothing to loop over | same, or its inputs were skipped |
 | `not-run` | an earlier stage stopped the pipeline | same |
 
-- `broken` and `timeout` always stop the pipeline.
-- `stopOn: fail` stops it when this stage fails.
+- A stage that fails, breaks or times out stops the pipeline. The stages after
+  it are `not-run`, the summary still runs.
+- `continueOn: fail` lets the stages after a failed stage run, as when the next
+  stage triages failing tests. The run still fails. A break or timeout still stops it.
+- `optional: true` marks a stage the run does not depend on, like a sync. Its
+  fail, break or timeout does not stop the pipeline and does not count in the
+  verdict. The summary says it ended badly.
 - `stopOn: gate` stops it when this stage is skipped by a prerequisite.
+
+```yaml
+  - id: sync
+    optional: true # a failed sync still reports the test cases
+```
 
 Exit code: `0` pass or skipped, `1` any fail, broken or timeout, `2` bad usage
 or no AI provider, `130` interrupted. `--exit-zero` forgives `fail` only.
@@ -475,7 +487,7 @@ stages:
   file is laid over it. It inherits the base's `name` unless it sets its own.
 - Order: `extends`, then every `--pipeline`, then every `--stage`.
 
-| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, prerequisite `env` and `file` | Map: `env`, `prerequisites` |
+| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, `continueOn`, prerequisite `env` and `file` | Map: `env`, `prerequisites` |
 |---|---|---|---|
 | `key` | replaces | replaces | merges by key |
 | `append_key` | adds at the end, on a new line | adds at the end | error |

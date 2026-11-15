@@ -13,7 +13,7 @@ const TOP_KEYS = ["name", "description", "target", "summary", "env", "packages",
 const GATE_KEYS = ["env", "file", "run", "changes", "message", "secret"];
 const CHANGES_KEYS = ["paths", "ignore", "min_files"];
 const STAGE_EMOJIS = ["🔹", "🔸", "🧪", "🔍", "🛠️", "📋", "🚀", "🧭", "📦", "🧩", "🎯", "⚙️"];
-const STAGE_KEYS = ["id", "title", "emoji", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "timeout", "each_line", "each_file"];
+const STAGE_KEYS = ["id", "title", "emoji", "task", "run", "session", "inputs", "outputs", "when", "stopOn", "continueOn", "optional", "timeout", "each_line", "each_file"];
 
 /** The text of the pipeline `extends` names, or undefined when there is none. */
 export type ExtendsResolver = (name: string) => string | undefined;
@@ -216,10 +216,23 @@ export class PipelineSource {
       outputs: this.list(value.outputs, `${where} outputs`, [...at, "outputs"]),
       when: this.list(value.when, `${where} when`, [...at, "when"]),
       stopOn: this.list(value.stopOn, `${where} stopOn`, [...at, "stopOn"]) as StopOn[],
+      optional: false,
     };
     for (const reason of stage.stopOn) {
       if (reason !== "fail" && reason !== "gate") this.fail(`${where} stopOn takes fail or gate, got "${reason}"`, [...at, "stopOn"]);
     }
+    if (value.optional !== undefined) {
+      if (typeof value.optional !== "boolean") this.fail(`${where} optional must be true or false`, [...at, "optional"]);
+      stage.optional = value.optional === true;
+    }
+    const continueOn = this.list(value.continueOn, `${where} continueOn`, [...at, "continueOn"]);
+    for (const reason of continueOn) {
+      if (reason !== "fail") this.fail(`${where} continueOn takes fail, got "${reason}"`, [...at, "continueOn"]);
+    }
+    // A failed stage stops the pipeline, unless it is optional or says to go on.
+    const goesOn = stage.optional || continueOn.includes("fail");
+    if (goesOn && stage.stopOn.includes("fail")) this.fail(`${where} cannot both stop and go on after a fail`, [...at, "stopOn"]);
+    if (!goesOn && !stage.stopOn.includes("fail")) stage.stopOn = ["fail", ...stage.stopOn];
     if (value.task !== undefined) stage.task = this.string(value.task, `${where} task`, [...at, "task"]);
     if (value.run !== undefined) stage.run = this.string(value.run, `${where} run`, [...at, "run"]);
     if (value.session !== undefined) {

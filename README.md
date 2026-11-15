@@ -270,8 +270,10 @@ stages:
   No `session` is a fresh one.
 - `each_line: file.txt` and `each_file: cases/*.md` run a stage once per item,
   as `$ITEM`.
-- `stopOn: fail` stops the pipeline when the stage fails, `stopOn: gate` when it
-  was skipped. A broken or timed-out stage always stops it.
+- A stage that fails, breaks or times out stops the pipeline. `continueOn: fail`
+  lets the next stages run after a fail, the run still fails. `optional: true`
+  marks a stage whose failure neither stops nor fails the run. `stopOn: gate`
+  stops the pipeline when the stage was skipped.
 
 The full format is in [PIPELINES.md](PIPELINES.md).
 

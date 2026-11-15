@@ -26,7 +26,7 @@ export class SummaryStage extends TaskStage {
     if (pipeline.summary) lines.push("", pipeline.summary.trim());
     lines.push("", `The verdict is ${state.record.status}.`, `The draft: ${join(dir, "summary", DRAFT_FILE)}`, "", pipelineReport);
     const spec = { id: "summary", title: "Summary", emoji: "🧾", task: lines.join("\n"), session: "summary" };
-    super({ ...spec, inputs: [STATE_FILE], outputs: [], when: [], stopOn: [] });
+    super({ ...spec, inputs: [STATE_FILE], outputs: [], when: [], stopOn: [], optional: false });
   }
 
   files(): string[] {
@@ -57,9 +57,10 @@ export class SummaryStage extends TaskStage {
     if (!record || record.status === "not-run") return "Did not run.";
     if (record.status === "skipped") return `Skipped: ${record.reason}`;
     const lines: string[] = [];
-    if (record.status === "broken" || record.status === "timeout") {
-      lines.push(`Stopped: ${record.reason}. A re-run on the same commit picks up from there.`);
-    }
+    const broke = record.status === "broken" || record.status === "timeout";
+    if (record.optional && (broke || record.status === "fail")) lines.push(`Optional: it ended ${record.status}, which does not fail the run.`);
+    if (broke && record.optional) lines.push(`Broke: ${record.reason}.`);
+    if (broke && !record.optional) lines.push(`Stopped: ${record.reason}. A re-run on the same commit picks up from there.`);
     if (record.status === "fail" && record.reason) lines.push(`Failed: ${record.reason}`);
     if (record.log) lines.push(`\`${stage.spec.run}\` ended ${record.status}. Log: [${record.log}](${record.log})`);
     const report = record.report && join(dir, record.report);
