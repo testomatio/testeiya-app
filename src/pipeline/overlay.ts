@@ -21,6 +21,8 @@ const STAGE: Schema = {
   outputs: "list",
   when: "list",
   stopOn: "list",
+  continueOn: "list",
+  optional: "value",
   timeout: "value",
   each_line: "text",
   each_file: "text",

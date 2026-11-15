@@ -226,7 +226,7 @@ export class Pipeline {
       state.save();
       const status = record.status as Status;
       if (status === "interrupted") break;
-      if (status === "broken" || status === "timeout") stopped = true;
+      if ((status === "broken" || status === "timeout") && !stage.spec.optional) stopped = true;
       if (status === "fail" && stage.stopsOn("fail")) stopped = true;
     }
 
@@ -408,9 +408,11 @@ export class Pipeline {
 
   private keptRecord(stage: Stage, previous: PipelineRecord | null): StageRecord {
     const record = previous?.stages.find((entry) => entry.id === stage.id);
-    if (!record) return { id: stage.id, status: "not-run" };
-    if (record.status === "pass" || record.status === "fail") return record;
-    return { id: stage.id, status: record.status, items: record.items };
+    let kept: StageRecord = { id: stage.id, status: "not-run" };
+    if (record?.status === "pass" || record?.status === "fail") kept = record;
+    else if (record) kept = { id: stage.id, status: record.status, items: record.items };
+    if (stage.spec.optional) kept.optional = true;
+    return kept;
   }
 
   /** The summary is an agent, so a pipeline with one needs a model. */

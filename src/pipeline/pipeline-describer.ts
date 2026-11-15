@@ -39,6 +39,7 @@ export class PipelineDescriber {
       inputs: spec.inputs,
       outputs: spec.outputs,
       stopOn: spec.stopOn,
+      optional: spec.optional,
     };
     if (spec.session !== undefined) view.session = spec.session;
     if (spec.each_line !== undefined) view.loop = { each_line: spec.each_line };

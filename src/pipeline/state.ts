@@ -38,9 +38,9 @@ export class PipelineState {
     }
   }
 
-  /** The worst status wins. */
-  static verdict(records: Array<{ status: Status }>): Status {
-    const statuses = records.map((record) => record.status);
+  /** The worst status wins. An optional stage does not count. */
+  static verdict(records: Array<{ status: Status; optional?: boolean }>): Status {
+    const statuses = records.filter((record) => !record.optional).map((record) => record.status);
     for (const status of ["interrupted", "broken", "timeout", "fail"] as Status[]) {
       if (statuses.includes(status)) return status;
     }
@@ -95,6 +95,8 @@ export interface PipelineRecord {
 
 export interface StageRecord extends StageResult {
   id: string;
+  /** The stage is optional: its status does not count in the verdict. */
+  optional?: boolean;
   seconds?: number;
   items?: ItemRecord[];
 }

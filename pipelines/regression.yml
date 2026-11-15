@@ -31,6 +31,8 @@ stages:
       npx -y @testomatio/reporter run --kind detect --warn \
         --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
         ${REMOTE:+--remote "$REMOTE"} ${TEST_COMMAND:+"$TEST_COMMAND"}
+    # Failing tests fail the run, and the next stage triages them.
+    continueOn: fail
     timeout: 30m
 
   - id: failures
