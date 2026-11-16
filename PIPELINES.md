@@ -482,19 +482,21 @@ stages:
   keys go in one flow map: `--stage 'explore:{timeout: 45m, append_when: staging}'`.
 - The value is YAML, so quote text that holds `: `:
   `--stage 'plan:append_task: "Note: be brief."'`.
-- `--pipeline YAML` changes the top level: `summary`, `env`, `prerequisites`, `when`, `stages`.
+- `--pipeline YAML` changes the top level: `summary`, `env`, `packages`, `prerequisites`, `when`, `stages`.
 - `extends` takes a bundled name or a path relative to the file. The rest of the
   file is laid over it. It inherits the base's `name` unless it sets its own.
 - Order: `extends`, then every `--pipeline`, then every `--stage`.
 
-| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, `continueOn`, prerequisite `env` and `file` | Map: `env`, `prerequisites` |
+| Key | Text: `task`, `run`, `summary`, `message`, `title`, `description` | List: `when`, `inputs`, `outputs`, `stopOn`, `continueOn`, prerequisite `env` and `file` | Map: `env`, `packages`, `prerequisites` |
 |---|---|---|---|
 | `key` | replaces | replaces | merges by key |
 | `append_key` | adds at the end, on a new line | adds at the end | error |
 | `prepend_key` | adds at the start, on a new line | adds at the start | error |
 | `remove_key` | error | drops the items given | drops the keys given |
 
-- Any other key, like `timeout` or `title`, only replaces.
+- Every key that holds text takes `append_` and `prepend_`, every list and map takes what its column says.
+- Any other key, like `timeout`, `optional` or `session`, only replaces.
+- `append_`, `prepend_` or `remove_` on a key that does not exist is an error.
 - Stages match by `id`. An unknown id with a `task` or `run` is a new stage,
   added at the end. Without one it is an error.
 - `remove_stages: [id]` and `remove_prerequisites: [name]` drop a stage or a prerequisite.

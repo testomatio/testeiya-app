@@ -85,6 +85,13 @@ export class Variables {
     return references;
   }
 
+  /** The variables `text` reads, by who expands it. */
+  static referencesIn(text: string, dialect: Dialect): Reference[] {
+    if (dialect === "runner") return Variables.references(text);
+    if (dialect === "shell") return Variables.shellReferences(text);
+    return [...Variables.shellReferences(text), ...Variables.references(text)];
+  }
+
   /** Values only the runner sets. */
   static builtins(values: Partial<Record<BuiltinVariable, string>>): Env {
     return { ...values };
@@ -141,6 +148,9 @@ function url(value: unknown): URL | null {
   if (typeof value !== "string" || !URL.canParse(value)) return null;
   return new URL(value);
 }
+
+/** Who expands a text's variables: the runner, a shell, or the runner and then a shell. */
+export type Dialect = "runner" | "shell" | "both";
 
 export type Env = Record<string, string | undefined>;
 

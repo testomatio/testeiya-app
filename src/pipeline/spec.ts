@@ -1,6 +1,13 @@
+import { Dictionary, Each, Flag, Group, List, Named, OptionalList, Shape, Slug, Text, Timeout, Whole, type Field } from "./field.js";
+
 /**
  * A pipeline file, key for key. PIPELINES.md documents every field.
  * `PipelineSource` validates YAML into these shapes and nothing else reads YAML.
+ *
+ * Every key is declared twice here and nowhere else: in an interface, for its
+ * type and its meaning, and in the table at the end of this file, for how it is
+ * checked, overridden and expanded. The compiler rejects a key that is in one
+ * and not in the other.
  */
 
 /** The targets a host acts on. Any other word is free text and means "started by hand". */
@@ -75,35 +82,23 @@ export interface StageSpec {
   each_file?: string;
 }
 
-export type StopOn = "fail" | "gate";
+export const STOP_ON = ["fail", "gate"] as const;
+
+export type StopOn = (typeof STOP_ON)[number];
 
 /** A pipeline as a UI shows it: what runs, what it needs, what a user can set. `Pipeline.describe()` returns it. */
-export interface PipelineDescription {
-  name: string;
-  description: string;
-  target?: string;
-  summary?: string;
+export interface PipelineDescription extends Pick<PipelineSpec, "name" | "description" | "target" | "summary"> {
   stages: StageView[];
   prerequisites: PrerequisiteView[];
   inputs: PipelineInput[];
 }
 
-export interface StageView {
-  id: string;
-  title: string;
-  emoji: string;
+/** A stage's own keys, with `task` or `run` as `kind` and `text`, and the loop as `loop`. */
+export interface StageView extends Omit<StageSpec, "task" | "run" | "each_line" | "each_file"> {
   kind: "task" | "run";
   /** The task or the command. */
   text: string;
-  session?: string;
-  /** Prerequisite names. */
-  when: string[];
-  inputs: string[];
-  outputs: string[];
   loop?: { each_line: string } | { each_file: string };
-  stopOn: StopOn[];
-  optional: boolean;
-  timeout?: string | number;
 }
 
 export interface PrerequisiteView {
@@ -138,4 +133,57 @@ export interface PipelineInput {
   secret: boolean;
 }
 
-export type InputUse = "prerequisite" | "env" | "packages" | "task" | "run" | "outputs" | "file";
+/** `prerequisite`: a prerequisite's `env` lists it. Any other: the key whose text reads it. */
+export const INPUT_USES = ["prerequisite", "env", "packages", "task", "run", "outputs", "file"] as const;
+
+export type InputUse = (typeof INPUT_USES)[number];
+
+/** A field for every key of `T`, and for the keys only the file has. */
+type Keys<T, FileOnly extends string = never> = Record<keyof T | FileOnly, Field>;
+
+export const CHANGES = new Shape({
+  paths: new OptionalList(),
+  ignore: new OptionalList(),
+  min_files: new Whole(),
+} satisfies Keys<ChangesSpec>);
+
+export const GATE = new Shape({
+  env: new OptionalList(),
+  file: new OptionalList({ expands: "runner" }),
+  // The runner expands it, then a shell runs it.
+  run: new Text({ expands: "both" }),
+  changes: new Group(CHANGES),
+  message: new Text(),
+  secret: new Flag(),
+} satisfies Keys<GateSpec>);
+
+/** `continueOn` is the file's way to say what `stopOn` leaves out. The spec holds `stopOn` only. */
+export const STAGE = new Shape({
+  id: new Slug(),
+  title: new Text(),
+  emoji: new Text(),
+  task: new Text({ expands: "runner" }),
+  run: new Text({ expands: "shell" }),
+  session: new Slug(),
+  inputs: new List(),
+  outputs: new List({ expands: "runner" }),
+  when: new List(),
+  stopOn: new List({ oneOf: STOP_ON }),
+  continueOn: new List({ oneOf: ["fail"] }),
+  optional: new Flag(),
+  timeout: new Timeout(),
+  each_line: new Text(),
+  each_file: new Text(),
+} satisfies Keys<StageSpec, "continueOn">);
+
+export const PIPELINE = new Shape({
+  name: new Text(),
+  description: new Text(),
+  target: new Text(),
+  summary: new Text(),
+  env: new Dictionary({ expands: "runner" }),
+  packages: new Dictionary({ expands: "runner" }),
+  prerequisites: new Named(GATE, "prerequisite"),
+  when: new List(),
+  stages: new Each(STAGE, "stage", ["task", "run"]),
+} satisfies Keys<PipelineSpec>);
