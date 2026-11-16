@@ -1,4 +1,4 @@
-import type { InputUse, PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageView } from "./spec.js";
+import { PIPELINE, type InputUse, type PipelineDescription, type PipelineInput, type PipelineSpec, type PrerequisiteView, type StageSpec, type StageView } from "./spec.js";
 import { BUILTIN_VARIABLES, Variables, type Reference } from "./variables.js";
 
 /** Set by the shell or the machine, never asked of a user. */
@@ -28,23 +28,11 @@ export class PipelineDescriber {
     return description;
   }
 
-  private stage(spec: PipelineSpec["stages"][number]): StageView {
-    const view: StageView = {
-      id: spec.id,
-      title: spec.title,
-      emoji: spec.emoji,
-      kind: spec.run !== undefined ? "run" : "task",
-      text: spec.run ?? spec.task ?? "",
-      when: spec.when,
-      inputs: spec.inputs,
-      outputs: spec.outputs,
-      stopOn: spec.stopOn,
-      optional: spec.optional,
-    };
-    if (spec.session !== undefined) view.session = spec.session;
-    if (spec.each_line !== undefined) view.loop = { each_line: spec.each_line };
-    if (spec.each_file !== undefined) view.loop = { each_file: spec.each_file };
-    if (spec.timeout !== undefined) view.timeout = spec.timeout;
+  private stage(spec: StageSpec): StageView {
+    const { task, run, each_line, each_file, ...own } = spec;
+    const view: StageView = { ...own, kind: run !== undefined ? "run" : "task", text: run ?? task ?? "" };
+    if (each_line !== undefined) view.loop = { each_line };
+    if (each_file !== undefined) view.loop = { each_file };
     return view;
   }
 
@@ -76,26 +64,15 @@ export class PipelineDescriber {
 
   private collect(): void {
     const { spec } = this;
-    for (const [name, gate] of Object.entries(spec.prerequisites)) {
+    for (const gate of Object.values(spec.prerequisites)) {
       for (const variable of gate.env ?? []) this.add({ name: variable }, "prerequisite");
     }
-    for (const [key, value] of Object.entries(spec.env)) {
-      for (const reference of Variables.references(value)) this.add(reference, "env", key);
+    for (const text of PIPELINE.texts(spec)) {
+      // The use is the key that holds the text, and each of those keys is an `InputUse`.
+      const use = text.use as InputUse;
+      const within = use === "env" ? text.key : undefined;
+      for (const reference of Variables.referencesIn(text.text, text.expands)) this.add(reference, use, within);
     }
-    for (const version of Object.values(spec.packages)) this.addAll(Variables.references(version), "packages");
-    for (const gate of Object.values(spec.prerequisites)) {
-      for (const file of gate.file ?? []) this.addAll(Variables.references(file), "file");
-      if (gate.run) this.addAll(Variables.shellReferences(gate.run), "run");
-    }
-    for (const stage of spec.stages) {
-      if (stage.task) this.addAll(Variables.references(stage.task), "task");
-      if (stage.run) this.addAll(Variables.shellReferences(stage.run), "run");
-      for (const output of stage.outputs) this.addAll(Variables.references(output), "outputs");
-    }
-  }
-
-  private addAll(references: Reference[], use: InputUse): void {
-    for (const reference of references) this.add(reference, use);
   }
 
   /** `within` is the `env:` key whose value this is: reading its own name makes it an input. */

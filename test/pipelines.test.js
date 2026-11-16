@@ -359,3 +359,82 @@ test("copies of one pipeline keep its lines", () => {
   assert.equal(pipeline.errors()[0].line, 4);
   assert.equal(pipeline.errors()[0].line, 4);
 });
+
+const OVERRIDDEN = `name: p
+description: Base.
+env: {A: "1", B: "2"}
+packages: {foo: "1", bar: "2"}
+stages:
+  - id: one
+    title: First
+    run: echo hi
+`;
+
+test("an override merges packages by name, as it does env", () => {
+  const base = parse(OVERRIDDEN);
+  assert.deepEqual(base.override("packages: {baz: '3'}").spec().packages, { foo: "1", bar: "2", baz: "3" });
+  assert.deepEqual(base.override("remove_packages: [foo]").spec().packages, { bar: "2" });
+  assert.deepEqual(new Pipelines({ base: OVERRIDDEN }).parse("extends: base\npackages: {baz: '3'}\n").spec().packages, { foo: "1", bar: "2", baz: "3" });
+});
+
+test("every text key takes append_ and prepend_", () => {
+  const base = parse(OVERRIDDEN);
+  assert.equal(base.override("append_description: More.").spec().description, "Base.\nMore.");
+  assert.equal(base.overrideStage("one", "prepend_title: The").spec().stages[0].title, "The\nFirst");
+  assert.match(base.overrideStage("one", "append_optional: true").errors()[0].message, /append_optional is not allowed, set optional instead/);
+});
+
+test("an operation on a key that does not exist names the key as it was written", () => {
+  const base = parse(OVERRIDDEN);
+  assert.match(base.override("append_tasks: x").errors()[0].message, /--pipeline: pipeline has an unknown key "append_tasks"/);
+  assert.match(base.overrideStage("one", "remove_inputz: x").errors()[0].message, /--stage one: stage "one" has an unknown key "remove_inputz"/);
+});
+
+test("a prerequisite's run lists what the runner expands and what the shell reads", () => {
+  const text = `prerequisites:
+  site:
+    run: curl -sf "\${SITE_URL | host}" && test -n "$TOKEN"
+    message: No site.
+stages:
+  - id: one
+    when: site
+    run: echo hi
+`;
+  assert.deepEqual(parse(text).inputs().map((input) => [input.name, input.usedIn]), [
+    ["SITE_URL", ["run"]],
+    ["TOKEN", ["run"]],
+  ]);
+});
+
+test("the override table in PIPELINES.md names each key under the kind its field has", async () => {
+  const { Dictionary, List, Named, OptionalList, Text } = await import("../dist/src/pipeline/field.js");
+  const { GATE, PIPELINE, STAGE } = await import("../dist/src/pipeline/spec.js");
+  const header = readFileSync(join(ROOT, "PIPELINES.md"), "utf8").split("\n").find((line) => line.startsWith("| Key | Text:"));
+  const [, , texts, lists, maps] = header.split("|");
+  const fieldsOf = (key) => [PIPELINE, STAGE, GATE].map((shape) => shape.fields[key]).filter(Boolean);
+  const columns = [
+    [texts, [Text]],
+    [lists, [List, OptionalList]],
+    [maps, [Dictionary, Named]],
+  ];
+  for (const [column, kinds] of columns) {
+    const keys = [...column.matchAll(/`([a-zA-Z_]+)`/g)].map(([, key]) => key);
+    assert.ok(keys.length > 0, column);
+    for (const key of keys) {
+      assert.ok(fieldsOf(key).some((field) => kinds.some((kind) => field instanceof kind)), `${key} is not under its kind:${column}`);
+    }
+  }
+});
+
+test("every key whose text reads variables is a use an input can have", async () => {
+  const { INPUT_USES, PIPELINE } = await import("../dist/src/pipeline/spec.js");
+  const spec = {
+    env: { A: "a" },
+    packages: { tool: "1" },
+    prerequisites: { gate: { file: ["f"], run: "r", message: "m" } },
+    stages: [{ id: "one", title: "t", emoji: "e", task: "t", run: "r", session: "s", inputs: ["i"], outputs: ["o"], each_line: "l", each_file: "f" }],
+  };
+  const uses = new Set(PIPELINE.texts(spec).map((text) => text.use));
+  assert.deepEqual([...uses].filter((use) => !INPUT_USES.includes(use)), []);
+  assert.deepEqual(INPUT_USES.filter((use) => use !== "prerequisite" && !uses.has(use)), []);
+});

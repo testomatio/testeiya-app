@@ -1,33 +1,8 @@
 import { parse } from "yaml";
 
 import { UsageError } from "../usage-error.js";
-
-type Kind = "text" | "list" | "value" | "map" | Schema;
-type Schema = { [key: string]: Kind };
-type Raw = Record<string, unknown>;
-type Op = "append" | "prepend" | "remove";
-
-const OPS: Op[] = ["append", "prepend", "remove"];
-const CHANGES: Schema = { paths: "list", ignore: "list", min_files: "value" };
-const GATE: Schema = { env: "list", file: "list", run: "text", message: "text", secret: "value", changes: CHANGES };
-const STAGE: Schema = {
-  id: "value",
-  title: "text",
-  emoji: "value",
-  task: "text",
-  run: "text",
-  session: "value",
-  inputs: "list",
-  outputs: "list",
-  when: "list",
-  stopOn: "list",
-  continueOn: "list",
-  optional: "value",
-  timeout: "value",
-  each_line: "text",
-  each_file: "text",
-};
-const TOP: Schema = { name: "text", description: "text", summary: "text", env: "map", when: "list" };
+import { Field, type Raw } from "./field.js";
+import { PIPELINE } from "./spec.js";
 
 /**
  * Changes laid over a raw pipeline before it is validated. A plain key
@@ -72,101 +47,7 @@ export class Overlay {
   }
 
   apply(base: Raw): Raw {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(this.raw)) {
-      const [op, field] = Overlay.split(key);
-      if (field === "stages") result.stages = this.stages(result.stages, value, op);
-      else if (field === "prerequisites") result.prerequisites = this.prerequisites(result.prerequisites, value, op);
-      else this.field(result, field, op, value, TOP[field] ?? "value", "pipeline");
-    }
-    return result;
-  }
-
-  private stages(base: unknown, value: unknown, op?: Op): unknown[] {
-    // A stage that is not a mapping stays as it is, for validation to report.
-    const stages: unknown[] = [...(Array.isArray(base) ? base : [])];
-    const idOf = (stage: unknown) => (Overlay.isRecord(stage) ? stage.id : undefined);
-    if (op === "remove") {
-      for (const id of Overlay.list(value)) {
-        if (!stages.some((stage) => idOf(stage) === id)) this.fail(`there is no stage "${id}" to remove`);
-      }
-      return stages.filter((stage) => !Overlay.list(value).includes(idOf(stage)));
-    }
-    if (op) this.fail(`stages take changes by id or remove_stages, not ${op}_stages`);
-    if (!Array.isArray(value)) this.fail("stages must be a list of stages with an id");
-    for (const change of value as unknown[]) {
-      if (!Overlay.isRecord(change) || typeof change.id !== "string") this.fail("every stage needs an id");
-      const index = stages.findIndex((stage) => idOf(stage) === change.id);
-      if (index >= 0) {
-        stages[index] = this.merge(stages[index] as Raw, change, STAGE, `stage "${change.id}"`);
-        continue;
-      }
-      if (change.task === undefined && change.run === undefined) this.fail(`there is no stage "${change.id}" to change`);
-      stages.push(change);
-    }
-    return stages;
-  }
-
-  private prerequisites(base: unknown, value: unknown, op?: Op): Raw {
-    const gates: Raw = { ...(Overlay.isRecord(base) ? base : {}) };
-    if (op === "remove") {
-      for (const name of Overlay.list(value).map(String)) {
-        if (!(name in gates)) this.fail(`there is no prerequisite "${name}" to remove`);
-        delete gates[name];
-      }
-      return gates;
-    }
-    if (op) this.fail(`prerequisites take changes by name or remove_prerequisites, not ${op}_prerequisites`);
-    if (!Overlay.isRecord(value)) this.fail("prerequisites must be a mapping of name to checks");
-    for (const [name, gate] of Object.entries(value)) {
-      if (!Overlay.isRecord(gate)) this.fail(`prerequisite "${name}" must be a mapping`);
-      gates[name] = this.merge(Overlay.isRecord(gates[name]) ? gates[name] : {}, gate, GATE, `prerequisite "${name}"`);
-    }
-    return gates;
-  }
-
-  private merge(base: Raw, change: Raw, schema: Schema, where: string): Raw {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(change)) {
-      const [op, field] = Overlay.split(key);
-      this.field(result, field, op, value, schema[field] ?? "value", where);
-    }
-    return result;
-  }
-
-  private field(target: Raw, field: string, op: Op | undefined, value: unknown, kind: Kind, where: string): void {
-    const current = target[field];
-    if (typeof kind === "object") {
-      if (op) this.fail(`${where}: ${op}_${field} is not allowed, set ${field} instead`);
-      if (!Overlay.isRecord(value)) this.fail(`${where}: ${field} must be a mapping`);
-      target[field] = this.merge(Overlay.isRecord(current) ? current : {}, value, kind, `${where} ${field}`);
-      return;
-    }
-    if (!op) {
-      if (kind === "map" && Overlay.isRecord(current) && Overlay.isRecord(value)) target[field] = { ...current, ...value };
-      else target[field] = value;
-      return;
-    }
-    if (kind === "text" && op !== "remove") {
-      if (typeof value !== "string") this.fail(`${where}: ${op}_${field} must be text`);
-      target[field] = Overlay.join(current, value, op);
-      return;
-    }
-    if (kind === "list") {
-      const items = Overlay.list(value);
-      const list = Overlay.list(current);
-      if (op === "append") target[field] = [...list, ...items];
-      if (op === "prepend") target[field] = [...items, ...list];
-      if (op === "remove") target[field] = list.filter((item) => !items.includes(item));
-      return;
-    }
-    if (kind === "map" && op === "remove") {
-      const map = { ...(Overlay.isRecord(current) ? current : {}) };
-      for (const name of Overlay.list(value).map(String)) delete map[name];
-      target[field] = map;
-      return;
-    }
-    this.fail(`${where}: ${op}_${field} is not allowed, set ${field} instead`);
+    return PIPELINE.merge(base, this.raw, { where: "pipeline", path: [], fail: (message) => this.fail(message) });
   }
 
   // No source: the keys are the file's own, and the file names itself.
@@ -181,30 +62,7 @@ export class Overlay {
     } catch (err) {
       throw new UsageError(`${source}: ${String((err as Error).message ?? err)}`);
     }
-    if (!Overlay.isRecord(raw)) throw new UsageError(`${source} takes YAML keys, like "append_task: Check the login."`);
+    if (!Field.isRecord(raw)) throw new UsageError(`${source} takes YAML keys, like "append_task: Check the login."`);
     return raw;
-  }
-
-  private static split(key: string): [Op | undefined, string] {
-    const op = OPS.find((name) => key.startsWith(`${name}_`));
-    if (!op) return [undefined, key];
-    return [op, key.slice(op.length + 1)];
-  }
-
-  private static join(current: unknown, value: string, op: Op): string {
-    if (typeof current !== "string" || !current.trim()) return value;
-    if (op === "prepend") return `${value.trimEnd()}\n${current}`;
-    return `${current.trimEnd()}\n${value}`;
-  }
-
-  // A single value is a list of one, as in the pipeline file.
-  private static list(value: unknown): unknown[] {
-    if (value === undefined || value === null) return [];
-    if (Array.isArray(value)) return value;
-    return [value];
-  }
-
-  private static isRecord(value: unknown): value is Raw {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 }
