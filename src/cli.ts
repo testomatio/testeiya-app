@@ -11,6 +11,7 @@ import { Pipeline } from "./pipeline/pipeline.js";
 import { runTask } from "./run.js";
 import { createRuntime } from "./session.js";
 import { runSessions } from "./sessions.js";
+import { runShare } from "./share.js";
 
 main(process.argv.slice(2)).catch((err) => {
   process.stderr.write(`${err?.message ?? err}\n`);
@@ -56,6 +57,9 @@ async function main(argv: string[]): Promise<void> {
       process.exit(await runDoctor({ envSources, json: args.json, probe: args.probe, model: args.model }));
     }
     if (args.command === "sessions") process.exit(await runSessions(process.cwd(), args.json));
+    if (args.command === "share") {
+      process.exit(await runShare(process.cwd(), { resume: args.resume, answer: args.answer, title: args.title, json: args.json }));
+    }
     if (args.command === "install-app") process.exit(await runInstallApp({ force: args.force, json: args.json }));
     if (args.command === "pipeline") process.exit(await pipeline(args));
     if (args.command === "pipeline-check") process.exit(await pipelineCheck(args));
