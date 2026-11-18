@@ -213,6 +213,7 @@ testeiya pipeline-check regression --diagram           # also draw it as a Merma
 | `web-testing` | review, an Explorbot plan, `explorbot test`, what broke |
 | `api-testing` | review lists changed endpoints, Explorbot tests each one |
 | `regression` | runs the tests `coverage.tests.yml` maps to the change, explains failures |
+| `useless-tests` | lists the tests a pull request adds or changes that are not worth keeping |
 
 To change one, copy it from `pipelines/` into your repo, edit it, and pass the
 path.

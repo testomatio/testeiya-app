@@ -1,0 +1,34 @@
+name: useless-tests
+description: Find the tests a pull request adds or changes that are not worth keeping.
+target: pr
+
+prerequisites:
+  tests-changed:
+    changes:
+      paths:
+        - "**/*.test.*"
+        - "**/*.spec.*"
+        - "**/*_test.*"
+        - "**/*_spec.*"
+        - "**/test_*.py"
+        - "**/*Test.java"
+        - "**/*Tests.cs"
+        - "**/test/**"
+        - "**/tests/**"
+        - "**/spec/**"
+        - "**/__tests__/**"
+        - "**/e2e/**"
+        - "**/cypress/**"
+      ignore: ["**/*.md", "**/*.snap", "**/__snapshots__/**", "**/fixtures/**"]
+    message: No test files changed.
+
+when: [tests-changed]
+
+stages:
+  - id: useless-tests
+    title: Useless tests
+    emoji: 🧹
+    task: |
+      Check the test files in changes.txt for useless tests, one testing level at a time, against the other tests of that level. /detect-useless-tests
+      Do not edit files. The list is advice for the reviewer, so pass the run.
+    inputs: [changes.txt]

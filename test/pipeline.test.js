@@ -95,12 +95,12 @@ test("process.env stays the same object", async () => {
 
 test("every bundled pipeline loads", () => {
   const names = PipelineFile.bundled().map((pipeline) => pipeline.name);
-  assert.deepEqual(names, ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
+  assert.deepEqual(names, ["api-testing", "issue-test-cases", "pr-review", "regression", "useless-tests", "web-testing"]);
 });
 
 test("every bundled pipeline has a target", () => {
   const targets = PipelineFile.bundled().map((pipeline) => pipeline.target);
-  assert.deepEqual(targets, ["pr", "issue", "pr", "pr", "pr"]);
+  assert.deepEqual(targets, ["pr", "issue", "pr", "pr", "pr", "pr"]);
   assert.throws(() => parse("target: [pr]\nstages:\n  - id: a\n    run: echo\n"), /target must be text/);
 });
 

@@ -32,7 +32,7 @@ function table(name) {
 }
 
 test("the bundled pipelines open by file name", () => {
-  assert.deepEqual(pipelines.names(), ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
+  assert.deepEqual(pipelines.names(), ["api-testing", "issue-test-cases", "pr-review", "regression", "useless-tests", "web-testing"]);
   assert.equal(pipelines.open("regression").source, readFileSync(join(ROOT, "pipelines", "regression.yml"), "utf8"));
   assert.ok(pipelines.open("regression") instanceof Pipeline);
   assert.equal(pipelines.has("regression"), true);
@@ -260,7 +260,7 @@ test("the list has every pipeline by the name it opens with, a broken one too", 
     regression: "extends: regression\ndescription: Ours too.\n",
   });
   const list = own.list();
-  assert.deepEqual(list.map((pipeline) => pipeline.name), ["api-testing", "broken", "issue-test-cases", "nightly", "pr-review", "regression", "web-testing"]);
+  assert.deepEqual(list.map((pipeline) => pipeline.name), ["api-testing", "broken", "issue-test-cases", "nightly", "pr-review", "regression", "useless-tests", "web-testing"]);
   assert.deepEqual(list.find((pipeline) => pipeline.name === "nightly"), { name: "nightly", description: "Ours.", target: "daily-cron", bundled: false, valid: true });
   assert.deepEqual(list.find((pipeline) => pipeline.name === "broken"), { name: "broken", description: "", bundled: false, valid: false });
   assert.deepEqual(list.find((pipeline) => pipeline.name === "regression"), { name: "regression", description: "Ours too.", target: "pr", bundled: false, valid: true });
