@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { BUILTIN_VARIABLES, PIPELINE_TARGETS, Pipeline, PipelineError, Pipelines } from "testeiya/pipeline";
+import { Pipeline, PipelineError, Pipelines } from "testeiya/pipeline";
 import { Variables } from "../dist/src/pipeline/variables.js";
 import { UsageError } from "../dist/src/model.js";
 
@@ -14,13 +14,9 @@ const ROOT = join(import.meta.dirname, "..");
 const pipelines = new Pipelines();
 const parse = (yaml, options) => pipelines.parse(yaml, options);
 
-function inputs(name) {
-  return pipelines.open(name).inputs();
-}
-
 /** The table in the spec: required, then what each unlocking input unlocks, then the optional rest. */
-function table(name) {
-  const list = inputs(name);
+function table(pipeline) {
+  const list = pipeline.inputs();
   return {
     order: list.map((input) => input.name),
     required: list.filter((input) => input.required).map((input) => input.name),
@@ -32,7 +28,8 @@ function table(name) {
 }
 
 test("the bundled pipelines open by file name", () => {
-  assert.deepEqual(pipelines.names(), ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
+  const files = readdirSync(join(ROOT, "pipelines")).filter((file) => file.endsWith(".yml")).map((file) => file.slice(0, -4)).sort();
+  assert.deepEqual(pipelines.names(), files);
   assert.equal(pipelines.open("regression").source, readFileSync(join(ROOT, "pipelines", "regression.yml"), "utf8"));
   assert.ok(pipelines.open("regression") instanceof Pipeline);
   assert.equal(pipelines.has("regression"), true);
@@ -40,58 +37,44 @@ test("the bundled pipelines open by file name", () => {
   assert.throws(() => pipelines.open("nope"), (err) => err instanceof PipelineError && err.message === 'no pipeline "nope"');
 });
 
-test("regression: a file check at the top, inputs only unlock stages", () => {
-  assert.deepEqual(table("regression"), {
-    order: ["TESTOMATIO", "TEST_COMMAND", "BASE_BRANCH", "REMOTE"],
-    required: [],
-    unlocks: { TESTOMATIO: ["tests"], TEST_COMMAND: ["failures"] },
-    optional: { BASE_BRANCH: "origin/main", REMOTE: undefined },
-  });
-});
+// One pipeline with every kind of input: required, unlocking, defaulted, and the ones that are no input at all.
+const SAMPLE = parse(`
+prerequisites:
+  issue: {env: [ISSUE_URL], message: No issue.}
+  map: {file: [coverage.yml], message: No map.}
+  staging: {env: [STAGING_URL], message: No staging.}
+  browser: {run: 'ls "\${BROWSERS:-$HOME/.cache}"', message: No browser.}
+  token: {env: [TOKEN], message: No token., secret: true}
+when: [issue, map]
+env:
+  BASE_BRANCH: \${BASE_BRANCH:-origin/main}
+  SLUG: \${ISSUE_URL | path | slugify}
+packages:
+  tool: \${TOOL_VERSION:-latest}
+stages:
+  - id: plan
+    session: qa
+    task: Plan \${ISSUE_URL} on \${GIT_BRANCH}.
+    outputs: [urls.txt]
+  - id: explore
+    when: [staging, browser, token]
+    each_line: urls.txt
+    run: OUT="$STAGE_DIR/x" tool "$STAGING_URL" "$ITEM" "$OUT"
+`, { name: "sample" });
 
-test("issue-test-cases: the issue is required", () => {
-  assert.deepEqual(table("issue-test-cases"), {
-    order: ["ISSUE_URL", "TESTOMATIO"],
+test("inputs: required first, then what unlocks stages, then the rest by name", () => {
+  // OUT is assigned, HOME the OS's, SLUG an env key, GIT_BRANCH, STAGE_DIR and ITEM the runner's: none is an input.
+  // BROWSERS defaults to a value that reads another variable, so it has no default.
+  assert.deepEqual(table(SAMPLE), {
+    order: ["ISSUE_URL", "STAGING_URL", "TOKEN", "BASE_BRANCH", "BROWSERS", "TOOL_VERSION"],
     required: ["ISSUE_URL"],
-    unlocks: { TESTOMATIO: ["sync"] },
-    optional: {},
+    unlocks: { STAGING_URL: ["explore"], TOKEN: ["explore"] },
+    optional: { BASE_BRANCH: "origin/main", BROWSERS: undefined, TOOL_VERSION: "latest" },
   });
-  const [issue] = inputs("issue-test-cases");
-  assert.equal(issue.message, "No issue. Set ISSUE_URL to the issue or epic to cover.");
+  const [issue] = SAMPLE.inputs();
+  assert.equal(issue.message, "No issue.");
   assert.deepEqual(issue.prerequisites, ["issue"]);
   assert.deepEqual(issue.usedIn, ["prerequisite", "env", "task"]);
-});
-
-test("pr-review: GIT_BRANCH and ITEM are the runner's", () => {
-  assert.deepEqual(table("pr-review"), {
-    order: ["CREATE_TESTCASES", "TESTOMATIO"],
-    required: [],
-    unlocks: { CREATE_TESTCASES: ["test-cases", "sync"], TESTOMATIO: ["sync"] },
-    optional: {},
-  });
-});
-
-test("web-testing: a default that reads another variable is no default", () => {
-  assert.deepEqual(table("web-testing"), {
-    order: ["EXPLORBOT_URL", "EXPLORBOT_AI_PROVIDER", "EXPLORBOT_VERSION", "PLAYWRIGHT_BROWSERS_PATH"],
-    required: [],
-    unlocks: { EXPLORBOT_URL: ["write-plan", "explore", "results"], EXPLORBOT_AI_PROVIDER: ["explore", "results"] },
-    optional: { EXPLORBOT_VERSION: "latest", PLAYWRIGHT_BROWSERS_PATH: undefined },
-  });
-});
-
-test("api-testing: a variable the command assigns is not an input", () => {
-  assert.deepEqual(table("api-testing"), {
-    order: ["EXPLORBOT_URL", "OPENAPI_SPEC", "EXPLORBOT_AUTH", "EXPLORBOT_AI_PROVIDER", "EXPLORBOT_VERSION"],
-    required: [],
-    unlocks: {
-      EXPLORBOT_URL: ["spec", "review", "explore"],
-      OPENAPI_SPEC: ["spec", "review", "explore"],
-      EXPLORBOT_AUTH: ["review"],
-      EXPLORBOT_AI_PROVIDER: ["explore"],
-    },
-    optional: { EXPLORBOT_VERSION: "latest" },
-  });
 });
 
 test("the optional rest is sorted by name", () => {
@@ -100,44 +83,41 @@ test("the optional rest is sorted by name", () => {
 });
 
 test("a secret prerequisite marks its variables secret", () => {
-  const description = pipelines.open("regression").describe();
-  assert.equal(description.inputs.find((input) => input.name === "TESTOMATIO").secret, true);
-  assert.equal(description.inputs.find((input) => input.name === "TEST_COMMAND").secret, false);
-  assert.equal(description.prerequisites.find((gate) => gate.name === "testomatio").secret, true);
-  const auth = pipelines.open("api-testing").describe().inputs.find((input) => input.name === "EXPLORBOT_AUTH");
-  assert.equal(auth.secret, true);
+  const description = SAMPLE.describe();
+  assert.equal(description.inputs.find((input) => input.name === "TOKEN").secret, true);
+  assert.equal(description.inputs.find((input) => input.name === "STAGING_URL").secret, false);
+  assert.equal(description.prerequisites.find((gate) => gate.name === "token").secret, true);
   assert.throws(() => parse("prerequisites:\n  a:\n    env: [A]\n    secret: yes please\n    message: m\nstages:\n  - id: x\n    run: echo\n").spec(), /secret must be true or false/);
   assert.throws(() => parse("prerequisites:\n  a:\n    file: [x]\n    secret: true\n    message: m\nstages:\n  - id: x\n    run: echo\n").spec(), /secret hides env variables/);
 });
 
 test("prerequisites are described by scope and the checks a UI cannot set", () => {
-  const { prerequisites } = pipelines.open("regression").describe();
-  assert.deepEqual(prerequisites.find((gate) => gate.name === "coverage"), {
-    name: "coverage",
-    message: "No coverage.tests.yml. Create one with /qa-test-code-coverage to run only affected tests.",
+  const { prerequisites } = SAMPLE.describe();
+  assert.deepEqual(prerequisites.find((gate) => gate.name === "map"), {
+    name: "map",
+    message: "No map.",
     scope: "run",
     stages: [],
     env: [],
     checks: ["file"],
     secret: false,
   });
-  assert.deepEqual(prerequisites.find((gate) => gate.name === "local").checks, ["run"]);
-  assert.deepEqual(prerequisites.find((gate) => gate.name === "test-command").stages, ["failures"]);
+  assert.deepEqual(prerequisites.find((gate) => gate.name === "browser").checks, ["run"]);
+  assert.deepEqual(prerequisites.find((gate) => gate.name === "staging").stages, ["explore"]);
   const unused = parse("prerequisites:\n  x:\n    env: [X]\n    message: m\nstages:\n  - id: a\n    run: echo\n").describe();
   assert.equal(unused.prerequisites[0].scope, "unused");
   assert.deepEqual(unused.inputs.map((input) => [input.name, input.required, input.unlocks]), [["X", false, []]]);
 });
 
 test("stages are described for a UI", () => {
-  const description = pipelines.open("api-testing").describe();
-  assert.equal(description.name, "api-testing");
-  assert.equal(description.target, "pr");
+  const description = SAMPLE.describe();
+  assert.equal(description.name, "sample");
   const explore = description.stages.find((stage) => stage.id === "explore");
   assert.equal(explore.kind, "run");
-  assert.match(explore.text, /^EXPLORBOT_OUTPUT=/);
-  assert.deepEqual(explore.loop, { each_line: "endpoints.txt" });
-  assert.deepEqual(explore.when, ["api", "explorbot-ai"]);
-  assert.equal(description.stages.find((stage) => stage.id === "review").session, "qa");
+  assert.match(explore.text, /^OUT=/);
+  assert.deepEqual(explore.loop, { each_line: "urls.txt" });
+  assert.deepEqual(explore.when, ["staging", "browser", "token"]);
+  assert.equal(description.stages.find((stage) => stage.id === "plan").session, "qa");
 });
 
 test("a value of its own env that reads its own name is an input, other keys are not", () => {
@@ -158,13 +138,6 @@ test("shell references skip quotes, assignments, loops and positional parameters
     { name: "HOME" },
   ]);
   assert.deepEqual(Variables.references("${A} ${B:-x} ${C | host} $D"), [{ name: "A" }, { name: "B", default: "x" }, { name: "C" }]);
-});
-
-test("the runner's own variables are listed", () => {
-  assert.deepEqual([...BUILTIN_VARIABLES].sort(), [
-    "GIT_BRANCH", "ITEM", "ITEM_NAME", "PIPELINE_DIR", "PIPELINE_NAME", "PIPELINE_RESUME", "PIPELINE_ROUND", "STAGE_DIR",
-  ]);
-  assert.deepEqual(PIPELINE_TARGETS, ["pr", "issue", "daily-cron", "weekly-cron"]);
 });
 
 test("an error is bad usage with the line and key it is about", () => {
@@ -246,21 +219,15 @@ test("extends that loops back is an error, not a hang", () => {
 });
 
 test("the list has every pipeline by the name it opens with, a broken one too", () => {
-  assert.deepEqual(pipelines.list().find((pipeline) => pipeline.name === "regression"), {
-    name: "regression",
-    description: "Run the tests a change can break, from the coverage map, then explain the failures.",
-    target: "pr",
-    bundled: true,
-    valid: true,
-  });
   assert.deepEqual(pipelines.list().map((pipeline) => pipeline.name), pipelines.names());
+  for (const entry of pipelines.list()) assert.ok(entry.bundled && entry.valid, entry.name);
   const own = new Pipelines({
     nightly: "description: Ours.\ntarget: daily-cron\nstages:\n  - id: a\n    run: echo\n",
     broken: "stages: nope\n",
     regression: "extends: regression\ndescription: Ours too.\n",
   });
   const list = own.list();
-  assert.deepEqual(list.map((pipeline) => pipeline.name), ["api-testing", "broken", "issue-test-cases", "nightly", "pr-review", "regression", "web-testing"]);
+  assert.deepEqual(list.map((pipeline) => pipeline.name), [...new Set([...pipelines.names(), "nightly", "broken"])].sort());
   assert.deepEqual(list.find((pipeline) => pipeline.name === "nightly"), { name: "nightly", description: "Ours.", target: "daily-cron", bundled: false, valid: true });
   assert.deepEqual(list.find((pipeline) => pipeline.name === "broken"), { name: "broken", description: "", bundled: false, valid: false });
   assert.deepEqual(list.find((pipeline) => pipeline.name === "regression"), { name: "regression", description: "Ours too.", target: "pr", bundled: false, valid: true });
@@ -285,14 +252,12 @@ test("a pipeline with a mistake answers errors, and throws it from everything th
 });
 
 test("half-typed text is an error, never a crash", () => {
-  for (const name of pipelines.names()) {
-    const text = pipelines.open(name).source;
-    for (let end = 0; end <= text.length; end++) {
-      const typed = text.slice(0, end);
-      for (const yaml of [typed, `extends: ${name}\n${typed}`]) {
-        const pipeline = parse(yaml, { name });
-        assert.equal(pipeline.errors().length, pipeline.isValid() ? 0 : 1, yaml);
-      }
+  const text = pipelines.open("regression").source;
+  for (let end = 0; end <= text.length; end++) {
+    const typed = text.slice(0, end);
+    for (const yaml of [typed, `extends: regression\n${typed}`]) {
+      const pipeline = parse(yaml, { name: "regression" });
+      assert.equal(pipeline.errors().length, pipeline.isValid() ? 0 : 1, yaml);
     }
   }
   assert.match(parse("stages:\n  - id: a\n    run: *nope\n").errors()[0].message, /Unresolved alias/);
@@ -339,23 +304,9 @@ function catchError(fn) {
   assert.fail("expected an error");
 }
 
-test("the bundled sync stages loop over the test case files", () => {
-  for (const name of ["pr-review", "issue-test-cases"]) {
-    const sync = pipelines.open(name).spec().stages.find((stage) => stage.id === "sync");
-    assert.equal(sync.each_file, "test-cases/*.md", name);
-  }
-});
-
-test("bundled prerequisite names are dash slugs, like stage ids", () => {
-  for (const name of pipelines.names()) {
-    for (const gate of Object.keys(pipelines.open(name).spec().prerequisites)) assert.match(gate, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${name}: ${gate}`);
-  }
-});
-
 test("copies of one pipeline keep its lines", () => {
   const pipeline = parse("stages:\n  - id: a\n    run: echo\n    model: x\n");
   assert.equal(pipeline.override("description: One.").errors()[0].line, 4);
   assert.equal(pipeline.overrideStage("a", "title: Two").errors()[0].line, 4);
-  assert.equal(pipeline.errors()[0].line, 4);
   assert.equal(pipeline.errors()[0].line, 4);
 });

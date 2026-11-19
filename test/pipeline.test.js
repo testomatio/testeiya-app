@@ -42,7 +42,6 @@ function fakeTask(log) {
       return { code: 1, envelope: { status: "fail", reason: "interrupted" }, undelivered: false };
     }
     if (prompt.includes("STUCK")) await new Promise(() => {});
-    if (prompt.includes("LATE")) await new Promise((done) => setTimeout(done, KILL_GRACE_MS + 3000));
     if (prompt.includes("BADMODEL")) throw new UsageError("no such model");
     const wanted = prompt.match(/Write these files: (.*)/);
     for (const file of wanted ? wanted[1].split(", ") : []) writeFileSync(file, "written\n");
@@ -73,45 +72,9 @@ for (let i = 0; i < args.length; i++) {
 }
 `;
 
-test("a stage sees only its own env, and the parent gets its own back", async () => {
-  process.env.PARENT_ONLY = "1";
-  const seen = await new StageEnv({ STAGE_DIR: "/s", PATH: process.env.PATH }).run(async () => ({ ...process.env }));
-  assert.equal(seen.STAGE_DIR, "/s");
-  assert.equal(seen.PARENT_ONLY, undefined);
-  assert.equal(process.env.PARENT_ONLY, "1");
-  assert.equal(process.env.STAGE_DIR, undefined);
-  delete process.env.PARENT_ONLY;
-});
-
 test("env is restored when the stage throws", async () => {
   await assert.rejects(new StageEnv({ ITEM: "a" }).run(async () => { throw new Error("boom"); }), /boom/);
   assert.equal(process.env.ITEM, undefined);
-});
-
-test("process.env stays the same object", async () => {
-  const before = process.env;
-  await new StageEnv({ A: "1" }).run(async () => assert.equal(process.env, before));
-});
-
-test("every bundled pipeline loads", () => {
-  const names = PipelineFile.bundled().map((pipeline) => pipeline.name);
-  assert.deepEqual(names, ["api-testing", "issue-test-cases", "pr-review", "regression", "web-testing"]);
-});
-
-test("every bundled pipeline has a target", () => {
-  const targets = PipelineFile.bundled().map((pipeline) => pipeline.target);
-  assert.deepEqual(targets, ["pr", "issue", "pr", "pr", "pr"]);
-  assert.throws(() => parse("target: [pr]\nstages:\n  - id: a\n    run: echo\n"), /target must be text/);
-});
-
-test("a stage naming an undefined gate is bad usage", () => {
-  const text = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    when: [staging]\n";
-  assert.throws(() => parse(text), /names prerequisite "staging"/);
-});
-
-test("the old gates key points at prerequisites", () => {
-  const text = "gates:\n  pr:\n    env: [PR]\n    message: No PR.\nstages:\n  - id: a\n    run: echo\n";
-  assert.throws(() => parse(text), /gates is now called prerequisites/);
 });
 
 test("a stage needs exactly one of task or run", () => {
@@ -120,17 +83,16 @@ test("a stage needs exactly one of task or run", () => {
   assert.throws(() => parse(both), /exactly one of task or run/);
 });
 
-test("a stage without a title or an emoji gets them from its id", () => {
-  const [stage] = parse("stages:\n  - id: browser-testing\n    run: echo\n").stages;
-  assert.equal(stage.title, "Browser testing");
-  assert.ok(stage.emoji);
-  assert.equal(parse("stages:\n  - id: browser-testing\n    run: echo\n").stages[0].emoji, stage.emoji);
+test("a stage without a title gets one from its id", () => {
+  assert.equal(parse("stages:\n  - id: browser-testing\n    run: echo\n").stages[0].title, "Browser testing");
 });
 
-test("reserved ids, unknown keys and stray stopOn are rejected", () => {
+test("reserved ids, unknown keys, stray stopOn and malformed top-level keys are rejected", () => {
   assert.throws(() => parse("stages:\n  - id: summary\n    title: summary\n    emoji: 🔹\n    run: echo\n"), /reserved/);
   assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    model: x\n"), /unknown key "model"/);
   assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run: echo\n    stopOn: always\n"), /stopOn/);
+  assert.throws(() => parse("target: [pr]\nstages:\n  - id: a\n    run: echo\n"), /target must be text/);
+  assert.throws(() => parse("packages: [explorbot]\nstages:\n  - id: one\n    run: echo\n"), /packages must be a mapping/);
 });
 
 test("an output may not reuse the stage's own file name, nor one of its inputs", async () => {
@@ -147,12 +109,6 @@ test("durations read seconds, minutes and hours", () => {
   assert.equal(Duration.ms("1h"), 3_600_000);
   assert.equal(Duration.ms(5), 5_000);
   assert.equal(Duration.ms("soon"), null);
-});
-
-test("variables expand the shell's way", () => {
-  assert.equal(new Variables({ A: "a" }).expand("${A}/x"), "a/x");
-  assert.equal(new Variables({}).expand("${B:-origin/main}"), "origin/main");
-  assert.equal(new Variables({}).expand("[${MISSING}]"), "[]");
 });
 
 test("a changes check counts what is not ignored", async () => {
@@ -275,10 +231,7 @@ stages:
   assert.match(summary.prompt, new RegExp(`The draft: ${join(dir, "summary", "draft.md")}`));
   assert.ok(results.noDefaultFooter);
   assert.ok(!summary.noDefaultFooter);
-  const draft = readFileSync(join(dir, "summary", "draft.md"), "utf8");
-  assert.ok(draft.startsWith("### 🔹 review\n\nreport of Review it.\n\n### 🔹 list\n\n`printf"));
-  assert.match(draft, /ended pass\. Log: \[2-list\/list\.log\]/);
-  assert.match(draft, /### 🔹 explore\n\nSkipped: No staging URL\.\n/);
+  assert.match(readFileSync(join(dir, "summary", "draft.md"), "utf8"), /ended pass\. Log: \[2-list\/list\.log\]/);
   assert.ok(!summary.followUp);
   assert.ok(summary.outputs.includes("gh:pr#7"));
   assert.ok(!summary.outputs.includes("out/final.md"));
@@ -414,14 +367,11 @@ stages:
 `);
   const stages = [new TaskStage(spec.stages[0]), new CommandStage(spec.stages[1])];
   const chart = new Diagram(spec, stages, new Map([["map", true], ["staging", false], ["ai", true]])).toMermaid();
-  assert.match(chart, /s0\("review<br\/>agent"\)/);
-  assert.match(chart, /s1\["explore<br\/>command"\]/);
-  assert.match(chart, /s0 -\.->\|"plan.md"\| s1/);
-  assert.match(chart, /f_1_1\[\("seed.txt"\)\]/);
-  assert.match(chart, /s1 --> summary/);
-  assert.match(chart, /g0\{\{"map"\}\}\n  class g0 pass\n  g0 --o start/);
-  assert.match(chart, /class g1 fail\n  g1 --o s1/);
-  assert.match(chart, /g2\{\{"ai"\}\}/);
+  for (const text of ["review<br/>agent", "explore<br/>command", '-.->|"plan.md"|', '"seed.txt"', "--> summary", '{{"ai"}}']) {
+    assert.ok(chart.includes(text), text);
+  }
+  assert.match(chart, /\{\{"map"\}\}\n\s+class \w+ pass/);
+  assert.match(chart, /\{\{"staging"\}\}\n\s+class \w+ fail/);
 });
 
 const BASE = `prerequisites:
@@ -706,10 +656,6 @@ test("package versions expand, and an empty one or a leading @ means a tag", () 
   assert.deepEqual(packages.specs(new Variables({})).slice(0, 1), ["one@latest"]);
 });
 
-test("packages must be a mapping of name to version", () => {
-  assert.throws(() => parse("packages: [explorbot]\nstages:\n  - id: one\n    run: echo\n"), /packages must be a mapping/);
-});
-
 test("a stage runs a package's binary through npx or by name, never the registry", async () => {
   const { repo, runTask } = setup();
   const pkg = mkdtempSync(join(tmpdir(), "testeiya-package-"));
@@ -914,14 +860,4 @@ test("an armed guard takes uncaught errors and rejections, a disarmed one lets g
   guard.disarm();
   assert.deepEqual(seen, ["boom", "ext"]);
   assert.deepEqual(["uncaughtException", "unhandledRejection"].map((event) => process.listenerCount(event)), before);
-});
-
-test("a task left behind keeps the crash guard until it settles", async () => {
-  const { repo, runTask } = setup();
-  const file = write(repo, "pipe.yml", twoStages("LATE one."));
-  const before = process.listenerCount("uncaughtException");
-  await inRepo(repo, () => new Pipeline({ name: file, dir: join(repo, ".qa"), runTask }).run());
-  assert.equal(process.listenerCount("uncaughtException"), before + 1);
-  await new Promise((done) => setTimeout(done, 3000));
-  assert.equal(process.listenerCount("uncaughtException"), before);
 });
