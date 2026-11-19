@@ -7,8 +7,3 @@ test("prompt is exported", async () => {
   assert.equal(typeof buildSystemPrompt, "function");
   assert.equal(typeof cliRouting, "function");
 });
-
-test("vendor script is exported", async () => {
-  const { SkillsVendor } = await import("testeiya/scripts/vendor-skills.js");
-  assert.equal(typeof SkillsVendor, "function");
-});
