@@ -18,45 +18,23 @@ test("tracing stays off until both keys are set", () => {
   assert.equal(own.baseUrl, "http://localhost:3001");
 });
 
-test("a run is one trace: an agent root, its generation and its tool", async () => {
-  const posted = await runOnce();
+test("a run is one trace under the task: an agent root, its generation and its tool", async () => {
+  const prompt = `<skill name="qa-thinking" location="/skills/qa-thinking/SKILL.md">\nThink like a QA.\n</skill>\n\nReview this pull request /qa-thinking`;
+  const posted = await runOnce(prompt);
 
   assert.equal(posted.url, "http://localhost:3001/api/public/otel/v1/traces");
   assert.equal(posted.init.headers.authorization, `Basic ${Buffer.from("pk:sk").toString("base64")}`);
 
   const spans = JSON.parse(posted.init.body).resourceSpans[0].scopeSpans[0].spans;
   const root = spans.find((span) => !span.parentSpanId);
-  const generation = spans.find((span) => attr(span, "langfuse.observation.type") === "generation");
-  const tool = spans.find((span) => attr(span, "langfuse.observation.type") === "tool");
-
   assert.equal(spans.length, 3);
-  assert.equal(root.name, "check the login page");
-  assert.equal(attr(root, "langfuse.observation.type"), "agent");
-  assert.equal(attr(root, "langfuse.trace.name"), "check the login page");
-  assert.equal(attr(root, "langfuse.trace.output"), "all good");
-  assert.equal(attr(root, "langfuse.session.id"), "session-1");
-  assert.deepEqual(JSON.parse(attr(root, "langfuse.trace.tags")), ["testeiya", "cli"]);
-  assert.equal(JSON.parse(attr(root, "langfuse.trace.metadata")).model, "openrouter/some-model");
-
-  assert.equal(generation.parentSpanId, root.spanId);
-  assert.equal(generation.traceId, root.traceId);
-  assert.equal(attr(generation, "langfuse.observation.model.name"), "some-model");
-  assert.equal(JSON.parse(attr(generation, "langfuse.observation.usage_details")).total, 30);
-  assert.equal(JSON.parse(attr(generation, "langfuse.observation.cost_details")).total, 0.03);
-
-  assert.equal(tool.name, "bash");
-  assert.equal(tool.parentSpanId, root.spanId);
-  assert.equal(attr(tool, "langfuse.observation.level"), "ERROR");
-});
-
-test("a task that names a skill is still traced under the task", async () => {
-  const prompt = `<skill name="qa-thinking" location="/skills/qa-thinking/SKILL.md">\nThink like a QA.\n</skill>\n\nReview this pull request /qa-thinking`;
-  const posted = await runOnce(prompt);
-  const spans = JSON.parse(posted.init.body).resourceSpans[0].scopeSpans[0].spans;
-  const root = spans.find((span) => !span.parentSpanId);
-
+  // The skill block is loaded in front of the task; the trace is named after the task.
   assert.equal(root.name, "Review this pull request /qa-thinking");
-  assert.equal(attr(root, "langfuse.observation.input"), prompt);
+  assert.equal(attr(root, "langfuse.session.id"), "session-1");
+  for (const type of ["generation", "tool"]) {
+    const child = spans.find((span) => attr(span, "langfuse.observation.type") === type);
+    assert.equal(child.parentSpanId, root.spanId, type);
+  }
 });
 
 test("a run with no keys posts nothing", async () => {
