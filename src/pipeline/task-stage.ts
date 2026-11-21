@@ -138,12 +138,17 @@ export class TaskStage extends Stage {
     const present = wanted.filter((input) => existsSync(join(dir, input)));
     const absent = wanted.filter((input) => !present.includes(input));
     if (present.length > 0) lines.push(`Read these first: ${present.map((input) => join(dir, input)).join(", ")}`);
-    const outputs = this.spec.outputs.map((output) => join(dir, vars.expand(output)));
+    const outputs = this.spec.outputs.map((output) => join(dir, output));
     if (outputs.length > 0) lines.push(`Write these files: ${outputs.join(", ")}`);
     for (const input of absent) lines.push(`Not available: ${input} (${context.missing(input)})`);
     const last = this.lastRound(context);
     if (last) lines.push(last);
-    return `${vars.expand(this.spec.task ?? "").trim()}\n\n${lines.join("\n")}`;
+    return `${this.text(context, vars).trim()}\n\n${lines.join("\n")}`;
+  }
+
+  /** The task as written, `{{ }}` filled in with this item's variables. */
+  protected text(context: StageContext, vars: Variables): string {
+    return context.task(this, vars);
   }
 
   /** A new round updates the last one's result instead of starting over. */

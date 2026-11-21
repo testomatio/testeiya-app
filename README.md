@@ -214,22 +214,28 @@ testeiya pipeline-check regression --diagram           # also draw it as a Merma
 | `api-testing` | review lists changed endpoints, Explorbot tests each one |
 | `regression` | runs the tests `coverage.tests.yml` maps to the change, explains failures |
 
-To change one, copy it from `pipelines/` into your repo, edit it, and pass the
-path.
+To change one, extend it: a file that starts with `$extends: <name>` holds only
+the changes, and runs by its path. See [Extending a pipeline](PIPELINES.md#extending-a-pipeline).
 
 ### The file
 
+A pipeline is a [scripted-yaml](https://github.com/DavertMik/scripted-yaml) file:
+YAML where `key!:` is a formula, `{{ }}` in text is filled in, and `run!sh:` is a
+shell command. Its shape is [`pipelines/pipeline.dsl.yml`](pipelines/pipeline.dsl.yml).
+
 ```yaml
+$dsl: ./pipeline.dsl.yml
+
 name: web-testing
 description: Review a pull request, test it in a browser, explain what broke.
 target: pr
 
 prerequisites:
   staging:
-    env: [EXPLORBOT_URL]
+    $value!: vars.EXPLORBOT_URL != null
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
   browser:
-    run: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
+    $value!sh: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
     message: No browser. Run npx playwright install --with-deps chromium.
 
 stages:
@@ -237,13 +243,13 @@ stages:
     title: Review
     emoji: 🔍
     session: qa
-    task: Review this pull request. Write browser scenarios to plan.md. /explorbot-plan
+    task: Review this pull request for {{ vars.EXPLORBOT_URL }}. Write browser scenarios to plan.md. /explorbot-plan
     outputs: [plan.md]
   - id: explore
     title: Browser testing
     emoji: 🌐
-    when: [staging, browser]
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot test "$STAGE_DIR/plan.md" '*'
+    when!: prerequisites.staging and prerequisites.browser
+    run!sh: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx -y explorbot test "$STAGE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
     timeout: 30m
@@ -255,24 +261,28 @@ stages:
     inputs: [explorbot/]
 ```
 
-- A stage is a `task` for the agent or a `run` shell command. Its `title` and
+- A stage is a `task` for the agent or a `run!sh` shell command. Its `title` and
   `emoji` head its section in the final report, `### 🔍 Review`. Both are
   optional: the title defaults to the id, the emoji is picked for you.
 - Each stage keeps its files in a numbered folder, `1-review/`, `2-explore/`, …,
   so a run reads in order. An agent stage writes `<id>.md` and `<id>.json`, a
   command writes `<id>.log`. `outputs` name the rest. `inputs` are linked into
   the folder from the stage that wrote them, as `$STAGE_DIR/<file>`.
-- `prerequisites` are named checks: `env`, `file`, `run`, or `changes` (`paths`,
-  `ignore`, `min_files`). `when:` names the prerequisites a stage needs. One fails and
-  the stage is skipped with its message. In the top-level `when:` it skips the
+- `prerequisites` are named checks. `$value!:` is a formula over variables,
+  `vars.NAME != null` for "is set". `$value!file:`, `$value!sh:` and
+  `$value!changes:` (`paths`, `ignore`, `min_files`) are checks the runner makes.
+  `when!:` is a formula over them. When it is false the stage is skipped with the
+  message of the prerequisite that failed. In the top-level `when!:` it skips the
   whole run.
+- `npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes` checks
+  a file's shape; `npm run validate:pipelines` does it for the bundled ones.
 - `session: <name>` keeps a conversation. Stages with the same name share it.
   No `session` is a fresh one.
 - `each_line: file.txt` and `each_file: cases/*.md` run a stage once per item,
   as `$ITEM`.
 - A stage that fails, breaks or times out stops the pipeline. `continueOn: fail`
   lets the next stages run after a fail, the run still fails. `optional: true`
-  marks a stage whose failure neither stops nor fails the run. `stopOn: gate`
+  marks a stage whose failure neither stops nor fails the run. `stopOn: [gate]`
   stops the pipeline when the stage was skipped.
 
 The full format is in [PIPELINES.md](PIPELINES.md).
@@ -312,10 +322,10 @@ those belong to a single task. Use `--thread` on the pipeline instead.
 check from the CI job: when the command fails, the whole run is skipped and exits
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--stage ID:YAML` and
-`--pipeline YAML` change a pipeline for one run, e.g. `--stage
-'requirements:append_task: Never assume credentials.'`. A plain key replaces,
-`append_` and `prepend_` add, `remove_` drops. A file that starts with
-`extends: <name>` keeps the same changes in the repo. `--dry-run` prints every
+`--pipeline YAML` patch a pipeline for one run, e.g. `--stage
+'requirements:task: { $after: Never assume credentials. }'`. `$replace`
+overwrites, `$add` adds, `$before` and `$after` add text or stages, `$remove`
+drops. A file that starts with `$extends: <name>` keeps the same patch in the repo. `--dry-run` prints every
 prerequisite and stage and spends nothing. `testeiya pipeline-check` checks the file and
 every prerequisite it declares, used or not, and prints the message of each one that
 does not pass. `--diagram` also writes the pipeline as a Mermaid chart.

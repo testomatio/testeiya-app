@@ -1,33 +1,35 @@
+$dsl: ./pipeline.dsl.yml
+
 name: regression
 description: Run the tests a change can break, from the coverage map, then explain the failures.
 target: pr
 
+$vars:
+  BASE_BRANCH: { default: origin/main, about: What the change is compared with. }
+  TESTOMATIO:  { optional: true, secret: true }
+
 prerequisites:
   coverage:
-    file: [coverage.tests.yml]
+    $value!file: [coverage.tests.yml]
     message: No coverage.tests.yml. Create one with /qa-test-code-coverage to run only affected tests.
   testomatio:
-    env: [TESTOMATIO]
+    $value!: vars.TESTOMATIO != null
     message: No Testomat.io project. Set TESTOMATIO to the project's API key.
-    secret: true
   local:
-    run: test -z "$REMOTE"
+    $value!sh: test -z "$REMOTE"
     message: Tests run on the Testomat.io CI profile. No local log to read.
-  test-command:
-    env: [TEST_COMMAND]
+  test_command:
+    $value!: vars.TEST_COMMAND != null
     message: No test command. Set TEST_COMMAND, e.g. "npx playwright test".
 
-when: [coverage]
-
-env:
-  BASE_BRANCH: ${BASE_BRANCH:-origin/main}
+when!: prerequisites.coverage
 
 stages:
   - id: tests
     title: Tests
     emoji: 🧪
-    when: [testomatio]
-    run: |
+    when!: prerequisites.testomatio
+    run!sh: |
       npx -y @testomatio/reporter run --kind detect --warn \
         --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
         ${REMOTE:+--remote "$REMOTE"} ${TEST_COMMAND:+"$TEST_COMMAND"}
@@ -38,9 +40,17 @@ stages:
   - id: failures
     title: Failures
     emoji: 🐞
-    when: [local, test-command]
+    when!: prerequisites.local and prerequisites.test_command
     session: triage
     task: |
       Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
       Fail the run if this change caused a failure.
     inputs: [tests.log]
+
+$tests:
+  - about: A project and a test command run the tests
+    vars: { TESTOMATIO: key, TEST_COMMAND: npx playwright test }
+    expect: { prerequisites.testomatio: true, prerequisites.test_command: true, stages.tests.when: true }
+  - about: Without a project the tests do not run
+    vars: { TEST_COMMAND: npx playwright test }
+    expect: { stages.tests.when: false }

@@ -56,11 +56,6 @@ export abstract class Stage {
     return this.files().includes(file) || this.spec.outputs.includes(file);
   }
 
-  /** The first gate in `when` that failed. */
-  closedGate(results: Map<string, boolean>): string | undefined {
-    return this.spec.when.find((name) => !results.get(name));
-  }
-
   stopsOn(reason: StopOn): boolean {
     return this.spec.stopOn.includes(reason);
   }
@@ -202,6 +197,8 @@ export interface StageContext {
   report: Report | null;
   /** Why an input is not in the folder. */
   missing(input: string): string;
+  /** A stage's task, `{{ }}` filled in with these variables. */
+  task(stage: Stage, vars: Variables): string;
   /** The folder holding an input: the folder of the stage that wrote it, `.` for the top, null when absent. */
   locate(input: string, reader: Stage): string | null;
 }

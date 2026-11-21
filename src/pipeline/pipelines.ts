@@ -5,7 +5,7 @@ import { PipelineSource } from "./pipeline-source.js";
 
 /** One line of `Pipelines.list()`. */
 export interface PipelineSummary {
-  /** What `open` and `extends:` take. */
+  /** What `open` and `$extends:` take. */
   name: string;
   description: string;
   /** What starts it: one of `PIPELINE_TARGETS`, or free text. */
@@ -25,7 +25,7 @@ export interface ParseOptions {
 }
 
 /**
- * The pipelines a pipeline can be opened from and can `extends:`: the ones
+ * The pipelines a pipeline can be opened from and can `$extends`: the ones
  * bundled with testeiya, and your own, as name to YAML. Your own win over a
  * bundled pipeline of the same name. It reads no file, so it works in a Worker
  * and a browser.
@@ -64,37 +64,30 @@ export class Pipelines {
   open(name: string): Pipeline {
     if (this.isOwn(name)) return this.parse(this.own[name], { name });
     if (!Object.hasOwn(BUNDLED_PIPELINES, name)) throw new PipelineError(`no pipeline "${name}"`);
-    return this.document(BUNDLED_PIPELINES[name], name, [`bundled:${name}`]);
+    return this.document(BUNDLED_PIPELINES[name], name, `bundled/${name}.yml`);
   }
 
   /** A pipeline from YAML text, such as an editor's. It never throws: ask the pipeline for its `errors()`. */
   parse(yaml: string, options: ParseOptions = {}): Pipeline {
-    return this.document(yaml, options.name, options.name === undefined ? [] : [`own:${options.name}`]);
+    return this.document(yaml, options.name, options.name === undefined ? "(pipeline)" : `own/${options.name}.yml`);
   }
 
-  private document(yaml: string, name: string | undefined, chain: string[]): Pipeline {
-    return new Pipeline(yaml, new PipelineSource(yaml, { name, resolve: (parent) => this.parent(parent, name, chain) }));
+  private document(yaml: string, name: string | undefined, file: string): Pipeline {
+    return new Pipeline(yaml, new PipelineSource(yaml, { name, file, read: (path, from) => this.read(path, from) }));
   }
 
   /**
-   * The YAML that `extends: name` stands for, with its own `extends` applied.
-   * `child` is the pipeline asking: its own name means the bundled pipeline,
-   * so your `regression` can extend the bundled `regression`.
+   * The text that `$extends: name` stands for. A pipeline's own name means the
+   * bundled one, so your `regression` can extend the bundled `regression`.
+   * scripted-yaml applies the parent's own `$extends` and finds a loop.
    */
-  private parent(name: string, child: string | undefined, chain: string[]): string | undefined {
-    const own = name !== child && this.isOwn(name);
-    if (!own && !Object.hasOwn(BUNDLED_PIPELINES, name)) return undefined;
-    const key = `${own ? "own" : "bundled"}:${name}`;
-    if (chain.includes(key)) throw new PipelineError(`extends ${name} loops back to itself`, { key: "extends" });
-    const text = own ? this.own[name] : BUNDLED_PIPELINES[name];
-    try {
-      // Not validated: a parent can be a partial file that only its children complete.
-      return new PipelineSource(text, { resolve: (parent) => this.parent(parent, name, [...chain, key]) }).text();
-    } catch (err) {
-      // The parent's lines are not the child's.
-      if (err instanceof PipelineError) throw new PipelineError(`extends ${name}: ${err.message}`, { key: "extends" });
-      throw err;
-    }
+  private read(path: string, from: string): { file: string; text: string } | undefined {
+    const name = path.replace(/^\.\//, "").replace(/\.ya?ml$/, "");
+    const own = this.isOwn(name) && from !== `own/${name}.yml`;
+    if (own) return { file: `own/${name}.yml`, text: this.own[name] };
+    if (Object.hasOwn(BUNDLED_PIPELINES, name)) return { file: `bundled/${name}.yml`, text: BUNDLED_PIPELINES[name] };
+    // There is no disk to look on.
+    throw new PipelineError(`no pipeline "${name}" to extend`);
   }
 
   private isOwn(name: string): boolean {

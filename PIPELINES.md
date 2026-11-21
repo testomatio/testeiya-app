@@ -10,9 +10,26 @@ testeiya pipeline <name|path.yml> [options]
 This page is the reference for the file. The [README](README.md#pipelines) shows
 how to use pipelines in CI.
 
+A pipeline file is a [scripted-yaml](https://github.com/DavertMik/scripted-yaml)
+file. Four markers say what is not plain data:
+
+| You write | It means |
+|---|---|
+| `key: text` | data; in text, each `{{ formula }}` is filled in |
+| `key!: formula` | the value is one [FEEL](https://docs.camunda.io/docs/components/modeler/feel/what-is-feel/) formula |
+| `key!sh: command` | a shell command (`run!sh`), or a check the runner makes (`$value!sh`, `$value!file`, `$value!changes`) |
+| `$keyword:` | a word of the language: `$vars`, `$value`, `$functions`, `$extends`, `$tests` |
+
+Its shape, the keys a pipeline may have, is
+[`pipelines/pipeline.dsl.yml`](pipelines/pipeline.dsl.yml). Testeiya checks
+every pipeline against it, so `$dsl: ./pipeline.dsl.yml` at the top of a file
+is only for `npx scripted-yaml validate`.
+
 ## A complete example
 
 ```yaml
+$dsl: ./pipeline.dsl.yml
+
 name: regression
 description: Run the tests a change can break, then explain the failures.
 target: pr
@@ -20,31 +37,32 @@ target: pr
 summary: |
   Lead with failures this change caused. Flaky tests go last.
 
-env:
-  BASE_BRANCH: ${BASE_BRANCH:-origin/main}
+$vars:
+  BASE_BRANCH: { default: origin/main }
+  TESTOMATIO:  { optional: true, secret: true }
 
 prerequisites:
   coverage:
-    file: [coverage.tests.yml]
+    $value!file: [coverage.tests.yml]
     message: No coverage.tests.yml. Create one with /qa-test-code-coverage.
   testomatio:
-    env: [TESTOMATIO]
+    $value!: vars.TESTOMATIO != null
     message: No Testomat.io project. Set TESTOMATIO to the project's API key.
   local:
-    run: test -z "$REMOTE"
+    $value!sh: test -z "$REMOTE"
     message: Tests run on the Testomat.io CI profile. No local log to read.
-  test-command:
-    env: [TEST_COMMAND]
+  test_command:
+    $value!: vars.TEST_COMMAND != null
     message: No test command. Set TEST_COMMAND, e.g. "npx playwright test".
 
-when: [coverage]
+when!: prerequisites.coverage
 
 stages:
   - id: tests
     title: Tests
     emoji: 🧪
-    when: [testomatio]
-    run: |
+    when!: prerequisites.testomatio
+    run!sh: |
       npx -y @testomatio/reporter run --kind detect --warn \
         --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
         ${REMOTE:+--remote "$REMOTE"} ${TEST_COMMAND:+"$TEST_COMMAND"}
@@ -53,30 +71,38 @@ stages:
   - id: failures
     title: Failures
     emoji: 🐞
-    when: [local, test-command]
+    when!: prerequisites.local and prerequisites.test_command
     session: triage
     task: |
       Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
       Fail the run if this change caused a failure.
     inputs: [tests.log]
+
+$tests:
+  - about: Without a project the tests do not run
+    vars: { TEST_COMMAND: npx playwright test }
+    expect: { stages.tests.when: false }
 ```
 
 ## Top level
 
 | Key | Required | Meaning |
 |---|---|---|
-| `extends` | no | A bundled pipeline or a `.yml` path to start from. See [Overrides](#overrides) |
+| `$extends` | no | A bundled pipeline or a `.yml` path to patch. See [Extending a pipeline](#extending-a-pipeline) |
+| `$vars` | no | Variables the file declares: a `default`, `secret: true`. See [Variables](#variables) |
+| `$functions` | no | Formulas used more than once: `slug(text)!: …`. See [Variables](#variables) |
+| `$tests` | no | Checks of the formulas: `vars` in, `expect` out. See [Checking a pipeline](#checking-a-pipeline) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
 | `target` | no | What starts it: `pr`, `issue`, `daily-cron`, `weekly-cron`, or your own word. `testeiya pipeline` groups by it. See [Targets](#targets) |
-| `summary` | no | Extra instructions for the final summary |
-| `env` | no | Variables for every stage. Values expand `${NAME}` |
+| `summary` | no | Extra instructions for the final summary. `{{ }}` is filled in |
+| `env` | no | Variables for every stage: text, or `KEY!:` a formula |
 | `packages` | no | npm packages the stages call, name to version. See [Packages](#packages) |
 | `prerequisites` | no | Named checks, defined once. See [Prerequisites](#prerequisites) |
-| `when` | no | Prerequisites for the whole run. One fails: nothing runs, exit 0 |
+| `when!` | no | A formula: false skips the whole run, exit 0 |
 | `stages` | yes | The stages, run in order. At least one |
 
-An unknown key is an error, found before anything runs.
+A key the DSL does not know is an error, found before anything runs.
 
 ### Targets
 
@@ -97,77 +123,89 @@ Any other word means the pipeline is started by hand. The list is exported as
 | Key | Meaning |
 |---|---|
 | `id` | Required. Lowercase words joined by dashes. Unique. Names the stage's files. `pipeline` and `summary` are reserved |
-| `title` | Required. The stage's heading in the final report |
-| `emoji` | Required. Shown before the title in the final report |
-| `task` | An agent stage: the task text. `/skill` names expand |
-| `run` | A command stage: a shell command, run with `sh` in the checkout |
-| `when` | Prerequisites this stage needs. One fails: the stage is skipped with its message |
+| `title` | The stage's heading in the final report. Default: the id, `browser-testing` is "Browser testing" |
+| `emoji` | Shown before the title in the final report. Default: one picked from the id |
+| `task` | An agent stage: the task text. `{{ }}` is filled in, `/skill` names expand |
+| `run!sh` | A command stage: a shell command, run with `sh` in the checkout |
+| `when!` | A formula over prerequisites and variables. False: the stage is skipped with the message of the prerequisite that failed |
 | `session` | A named, persistent conversation. See [Sessions](#sessions) |
 | `inputs` | Files the stage reads, linked into its folder. See [Files](#files) |
 | `outputs` | Files the stage must leave in its folder |
 | `each_line` | Run once per non-empty line of this file. See [Loops](#loops) |
 | `each_file` | Run once per file matching this mask |
-| `stopOn` | `gate`: stop when this stage is skipped. See [Stopping](#stopping) |
+| `stopOn` | `[gate]`: stop when this stage is skipped. See [Stopping](#stopping) |
 | `continueOn` | `fail`: the stages after it run when it fails. The run still fails |
 | `optional` | `true`: its fail, break or timeout neither stops the pipeline nor fails the run |
 | `timeout` | `90s`, `30m`, `1h`, or seconds. Per item in a loop. Default: none |
 
-- A stage has exactly one of `task` or `run`.
+- A stage has exactly one of `task` or `run!sh`.
 - A stage has at most one of `each_line` or `each_file`.
-- A list key also takes a single value: `when: staging` is `when: [staging]`.
-- Explorbot, the reporter and test runners are plain `run` commands. They have
+- `inputs`, `outputs` and `stopOn` are lists: `inputs: [plan.md]`. File names
+  are plain text, no `{{ }}`.
+- Explorbot, the reporter and test runners are plain `run!sh` commands. They have
   no stage type of their own.
 
 ## Prerequisites
 
-A prerequisite is a named check with a message. It is defined once under `prerequisites:` and
-named in `when:`, at the top level or in a stage.
+A prerequisite is a named check with a message. It is defined once under
+`prerequisites:` and read in `when!:`, at the top level or in a stage, as
+`prerequisites.<name>`. A name is lowercase words joined by underscores, so a
+formula can read it: `explorbot_ai`, not `explorbot-ai`.
 
 ```yaml
 prerequisites:
   staging:
-    env: [EXPLORBOT_URL]
+    $value!: vars.EXPLORBOT_URL != null
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
 ```
 
+Its `$value` is one of:
+
 | Check | Passes when |
 |---|---|
-| `env: [A, B]` | every variable is set and not empty |
-| `file: [path]` | every path exists, relative to the checkout |
-| `run: <command>` | the command exits 0 within 30 seconds. Its output is hidden |
-| `changes: {…}` | the changed files match, see [Changes](#changes) |
+| `$value!: formula` | the formula is true. It reads variables (`vars.A != null and vars.B != null`) and other prerequisites (`prerequisites.staging and vars.CI = null`) |
+| `$value!file: [path]` | every path exists, relative to the checkout |
+| `$value!sh: <command>` | the command exits 0 within 30 seconds. Its output is hidden |
+| `$value!changes: {…}` | the changed files match, see [Changes](#changes) |
 
-`secret: true` marks the variables in `env` as secrets. It checks nothing, it tells
-a host like Testeiya Hub to hide their values and keep them in its vault:
-
-```yaml
-prerequisites:
-  testomatio:
-    env: [TESTOMATIO]
-    message: No Testomat.io project. Set TESTOMATIO to the project's API key.
-    secret: true
-```
-
-- A prerequisite needs a `message` and at least one check. All its checks must pass.
-- Every prerequisite is checked once, before the first stage. `--dry-run` prints them all.
-- A name in `when` that `prerequisites` does not define is an error.
-- `secret` takes `true` or `false`, and only a prerequisite with `env`.
+- A prerequisite needs a `$value` and a `message`.
+- Every check is made once, before the first stage. `--dry-run` prints them all.
+- A formula that gives anything but true or false is an error when it is
+  computed. `vars.NAME and …` is null when NAME is unset: compare with null,
+  `vars.NAME != null`.
+- Reading a prerequisite the file does not define is an error, found before
+  anything runs.
+- A `when!` that is false skips with the message of the first prerequisite it
+  reads that did not pass. A `when!` that reads only variables says so instead.
 - `ai` is built in: a model and a provider key resolve. The summary needs it, so
   a pipeline without one exits 2 before anything runs.
 
+A variable is a secret when `$vars` says so. A host like Testeiya Hub hides its
+value and keeps it in its vault, and a prerequisite that reads it is marked secret:
+
+```yaml
+$vars:
+  TESTOMATIO: { optional: true, secret: true }
+
+prerequisites:
+  testomatio:
+    $value!: vars.TESTOMATIO != null
+    message: No Testomat.io project. Set TESTOMATIO to the project's API key.
+```
+
 ### Prerequisites from the CI job
 
-The job can add a prerequisite without editing the file:
+The job can add a check without editing the file:
 
 ```bash
 testeiya pipeline regression --gate 'pr:test -n "$PR_NUMBER"'
 ```
 
-- `--gate NAME:COMMAND` splits on the first colon. It is a `run` prerequisite added to
-  the top-level `when`.
+- `--gate NAME:COMMAND` splits on the first colon. It is a shell check made with
+  the top-level `when!`.
 - When it fails the whole run is skipped and exits 0.
 - It is checked before `--output`, so `-o "gh:pr#$PR_NUMBER"` is fine when the
-  number only exists when the prerequisite passes.
+  number only exists when the check passes.
 - A name the file already defines is an error.
 
 ### Checking a pipeline
@@ -186,12 +224,30 @@ testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
   chart of the stages in order, the files they pass on (dotted), and the prerequisites
   each one needs, green when it passes and red when it does not.
 
+scripted-yaml checks the shape of a file, and runs its `$tests`, without Testeiya:
+
+```bash
+npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes
+npm run validate:pipelines      # the bundled ones, in this repository
+```
+
+`$tests` hold one case per branch of the formulas: the variables in, the values
+out, as paths. A check the runner makes (`$value!sh`, `$value!file`,
+`$value!changes`) reads as false in a test.
+
+```yaml
+$tests:
+  - about: The issue names the Testomat.io branch
+    vars: { ISSUE_URL: "https://github.com/org/repo/issues/42" }
+    expect: { when: true, env.TESTOMATIO_BRANCH: org-repo-issues-42, stages.sync.when: false }
+```
+
 ### Changes
 
 ```yaml
 prerequisites:
-  api-changed:
-    changes:
+  api_changed:
+    $value!changes:
       paths: ["src/api/**", "openapi.yaml"]   # at least one changed file matches
       ignore: ["**/*.md", "**/*.lock"]        # these never count
       min_files: 3                            # at least this many count
@@ -210,28 +266,46 @@ Every key is optional. All given must hold, and at least one file must count.
 
 ## Variables
 
-- `${NAME}` and `${NAME:-default}` expand in `task`, `env`, `outputs` and prerequisite
-  values. Unset is empty. `run` goes to the shell, which uses the same rules and
-  more, like `${NAME:+word}`.
-- `${NAME | filter}` runs [Liquid filters](https://liquidjs.com/filters/overview.html)
-  on the value: `strip`, `downcase`, `capitalize`, `replace: "/", "-"`,
-  `slugify`, `default: "x"`, and the rest. Two more are for URLs: `host` and
-  `path`. Filters chain left to right.
-- A shell command cannot use filters. Set a variable in `env:` and use that:
+Every environment variable of the job, every `--set KEY=VALUE` and the runner's
+own variables are `vars.NAME` in a formula and in `{{ }}`. Unset or empty is
+null; `{{ vars.NAME }}` of null is empty text.
+
+```yaml
+$vars:
+  BASE_BRANCH: { default: origin/main, about: What the change is compared with. }
+  EXPLORBOT_AUTH: { optional: true, secret: true }
+
+stages:
+  - id: plan
+    task: Plan a check of {{ vars.EXPLORBOT_URL }} against {{ vars.BASE_BRANCH }}.
+```
+
+- `$vars` declares a variable: its `default`, `secret: true`, an `about` for a
+  UI. A default reaches every stage's shell too, so `$BASE_BRANCH` is
+  `origin/main` when no one set it. Undeclared variables are read the same way.
+- `run!sh` goes to the shell as written: no `{{ }}`. The shell reads `$NAME`,
+  `${NAME:-default}`, `${NAME:+word}`, with the same variables.
+- `env:` sets variables for every stage. A value is text, or `KEY!:` a formula
+  over `vars` and the other keys of `env`. A formula that gives null leaves the
+  variable unset. `--set` wins over `env:`.
 
   ```yaml
+  $functions:
+    slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
+
   env:
-    SITE: ${STAGING_URL | host}          # staging.example.com
-    PAGE: ${STAGING_URL | path | slugify} # users-settings
-    NAME: ${SITE}-${PAGE}
+    SITE!: replace(vars.STAGING_URL, "^[a-z]+://([^/]+).*$", "$1")        # staging.example.com
+    PAGE!: slug(replace(vars.STAGING_URL, "^[a-z]+://[^/]*|[?#].*$", "")) # users-settings
+    NAME!: env.SITE + "-" + env.PAGE
   stages:
     - id: explore
-      run: explorbot explore "$STAGING_URL" --output "$STAGE_DIR/$NAME"
+      run!sh: explorbot explore "$STAGING_URL" --output "$STAGE_DIR/$NAME"
   ```
 
-- An unknown filter fails the file, so `pipeline-check` catches it.
-- `--set KEY=VALUE` and the job's own environment reach every stage. `--set` wins
-  over `env:`.
+- `$functions` names a formula a file uses more than once. FEEL has text
+  functions (`replace`, `upper case`, `substring`, `string join`) and no
+  filters: a slug or a URL's host is a formula like the ones above.
+- An unknown name or function is an error, so `pipeline-check` catches a typo.
 - The runner sets:
 
 | Variable | Value |
@@ -258,19 +332,21 @@ global prefix (`npm_config_prefix`) and its binaries first on `PATH`, so
 `npx explorbot` and plain `explorbot` both run the installed copy:
 
 ```yaml
+$vars:
+  EXPLORBOT_VERSION: { default: latest }
 packages:
-  explorbot: ${EXPLORBOT_VERSION:-latest}
+  explorbot!: vars.EXPLORBOT_VERSION
   "@apidevtools/swagger-cli": ^4
 stages:
   - id: explore
-    run: npx explorbot api explore /users
+    run!sh: npx explorbot api explore /users
 ```
 
-- Values expand `${NAME}`, so the job picks the version: `EXPLORBOT_VERSION=0.6.0`.
+- A version is text, or a formula, so the job picks it: `EXPLORBOT_VERSION=0.6.0`.
 - An empty value means `latest`, and a leading `@` is dropped: `@latest` works.
 - Anything `npm install name@...` takes works: `file:../explorbot`, `github:org/repo`.
 - Tags re-resolve every run, so `latest` is the newest release, never a stale cache.
-- Prerequisite `run` checks run before the install and cannot call these binaries.
+- Prerequisite `$value!sh` checks run before the install and cannot call these binaries.
 - A stage's `npm install --global` lands in `.packages/` too, not the machine's own prefix.
 - A failed install stops the run before any stage. The npm log is
   `.packages/install.log`.
@@ -338,13 +414,13 @@ Each stage leaves its own files:
   title: API exploration
   emoji: 🤖
   each_line: endpoints.txt
-  run: npx -y explorbot api explore "$ITEM"
+  run!sh: npx -y explorbot api explore "$ITEM"
 
 - id: sync
   title: Sync to Testomat.io
   emoji: 🔄
   each_file: test-cases/*.md
-  task: Sync ${ITEM} to Testomat.io. /sync-test-cases-with-tms
+  task: Sync {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
 ```
 
 - `each_line` runs once per non-empty line. `each_file` runs once per matching
@@ -415,7 +491,7 @@ the file: the runner adds it.
 - `optional: true` marks a stage the run does not depend on, like a sync. Its
   fail, break or timeout does not stop the pipeline and does not count in the
   verdict. The summary says it ended badly.
-- `stopOn: gate` stops it when this stage is skipped by a prerequisite.
+- `stopOn: [gate]` stops it when this stage is skipped by a prerequisite.
 
 ```yaml
   - id: sync
@@ -449,60 +525,117 @@ runs, as a CI cache per pull request, and each run is a round:
 `pipeline.json` in the folder holds the round, each stage's status and the
 round history. `--json` prints it.
 
-## Overrides
+## Extending a pipeline
 
-Change a pipeline without copying it. Two ways in, one set of rules.
-
-From the command line, for one run:
-
-```bash
-testeiya pipeline issue-test-cases \
-  --stage 'requirements:append_task: Never assume user credentials. Ask for them.' \
-  --stage 'sync:append_when: [release]' \
-  --pipeline 'prerequisites: {release: {env: [RELEASE], message: Not a release.}}'
-```
-
-From a file, to keep in the repo:
+Change a pipeline without copying it. A file that starts with `$extends` is a
+patch of another pipeline: it says what it changes and holds nothing else. It
+runs by its path, and a bundled pipeline update reaches it.
 
 ```yaml
 # .github/testeiya/issue-test-cases.yml
-extends: issue-test-cases
+$extends: issue-test-cases
+
+$vars:
+  RELEASE: { optional: true }
+
 prerequisites:
-  release:
-    env: [RELEASE]
-    message: Not a release.
+  $add:
+    release:
+      $value!: vars.RELEASE != null
+      message: Not a release.
+
 stages:
-  - id: requirements
-    append_task: Never assume user credentials. Ask for them.
-  - id: sync
-    append_when: [release]
+  $before:
+    lint:
+      title: Lint
+      run!sh: npm run lint
+      timeout: 5m
+
+  requirements:
+    task:
+      $after: Never assume user credentials. Ask for them.
+
+  sync:
+    $replace:
+      when!: base and prerequisites.release
+
+  $after:
+    notify:
+      title: Notify
+      when!: vars.SLACK_HOOK != null
+      run!sh: curl -fsS "$SLACK_HOOK" -d "test cases for $ISSUE_URL are ready"
 ```
 
-- `--stage ID:YAML` changes one stage. It splits on the first colon. Several
-  keys go in one flow map: `--stage 'explore:{timeout: 45m, append_when: staging}'`.
+The result runs `lint`, `requirements`, `test-cases`, `sync`, `notify`.
+
+Every change says what it does:
+
+| Write | It does |
+|---|---|
+| `$replace: { key: value }` | overwrites keys that exist: `title`, `timeout`, `when!`, `run!sh`, `description` |
+| `$add: { key: value }` | adds keys that do not exist yet: a prerequisite, a `timeout`, an `env` variable |
+| `task: { $after: text }` | adds text at the end of a text, on a new line; `$before` at the start. `summary` and `message` too |
+| `stages: { $before: { id: {…} } }` | adds stages, each under its id, before the first; `$after` after the last |
+| `stages: { id: { $after: { new: {…} } } }` | adds a stage right after the stage `id`; `$before` right before it |
+| `stages: { $remove: [id] }` | drops stages; `prerequisites: { $remove: [name] }` drops prerequisites; `$remove: [when]` drops a top-level key |
+| `base` in a formula | the value it replaces: `when!: base and prerequisites.release` |
+
+- Stages match by `id`, prerequisites by name. Reaching into a stage is a map
+  under its id: `stages: { requirements: { … } }`.
+- A plain key in a patch is an error: `timeout: 45m` under a stage must be
+  `$replace: { timeout: 45m }`, or `$add` when the stage has none. A key the base
+  does not have is an error too. So a typo, or a stage the base renamed, fails
+  before anything runs.
+- `$vars`, `$functions` and `$tests` are merged into the base's.
+- `$extends` takes a bundled name (`issue-test-cases`) or a path relative to the
+  file (`./base.yml`). A file named like a bundled pipeline extends the bundled one,
+  so your `regression.yml` can start with `$extends: regression`.
+- The base's `name` stays unless the patch replaces it: `$replace: { name: … }`.
+- A patch can extend a patch. One that comes back to itself is an error.
+
+### For one run: `--stage` and `--pipeline`
+
+The command line takes the same patch:
+
+```bash
+testeiya pipeline issue-test-cases \
+  --pipeline 'prerequisites: { $add: { release: { $value!: vars.RELEASE != null, message: Not a release. } } }' \
+  --stage 'requirements:task: { $after: Never assume user credentials. Ask for them. }' \
+  --stage 'sync:$replace: { when!: base and prerequisites.release }'
+```
+
+- `--stage ID:YAML` patches one stage. It splits on the first colon. Several
+  changes go in one flow map: `--stage 'review:{$add: {timeout: 45m}, task: {$after: Be brief.}}'`.
+- `--pipeline YAML` patches the pipeline, as a file under `$extends` does.
 - The value is YAML, so quote text that holds `: `:
-  `--stage 'plan:append_task: "Note: be brief."'`.
-- `--pipeline YAML` changes the top level: `summary`, `env`, `prerequisites`, `when`, `stages`.
-- `extends` takes a bundled name or a path relative to the file. The rest of the
-  file is laid over it. It inherits the base's `name` unless it sets its own.
-- Order: `extends`, then every `--pipeline`, then every `--stage`.
-
-| Key | Text: `task`, `run`, `summary`, `message` | List: `when`, `inputs`, `outputs`, `stopOn`, `continueOn`, prerequisite `env` and `file` | Map: `env`, `prerequisites` |
-|---|---|---|---|
-| `key` | replaces | replaces | merges by key |
-| `append_key` | adds at the end, on a new line | adds at the end | error |
-| `prepend_key` | adds at the start, on a new line | adds at the start | error |
-| `remove_key` | error | drops the items given | drops the keys given |
-
-- Any other key, like `timeout` or `title`, only replaces.
-- Stages match by `id`. An unknown id with a `task` or `run` is a new stage,
-  added at the end. Without one it is an error.
-- `remove_stages: [id]` and `remove_prerequisites: [name]` drop a stage or a prerequisite.
-- The result is checked like any pipeline file, before anything runs. A typo,
-  a missing stage or a prerequisite no one defines is an error and exits 2.
+  `--stage 'plan:task: { $after: "Note: be brief." }'`.
+- Order: `$extends`, then every `--pipeline`, then every `--stage`, so a
+  `--stage` can patch a stage a `--pipeline` added.
+- The result is checked like any pipeline file, before anything runs. A mistake
+  exits 2.
 - `--dry-run` and `pipeline-check` print every override and the keys it changes.
-- `pipeline.yml` in the folder holds the pipeline with every override applied.
-  A retry runs that copy, so it repeats the round it started.
+- `pipeline.yml` in the folder holds the pipeline with `$extends` and every
+  override applied: one file, `base` written out. A retry runs that copy, so it
+  repeats the round it started.
+
+### From the old format
+
+A file in the format before scripted-yaml fails with the new spelling:
+
+| Before | Now |
+|---|---|
+| `extends: name` + `append_task: …` | `$extends: name` + `task: { $after: … }` |
+| `when: [a, b]` | `when!: prerequisites.a and prerequisites.b` |
+| `run: <command>` | `run!sh: <command>` |
+| prerequisite `env: [A, B]` | `$value!: vars.A != null and vars.B != null` |
+| prerequisite `file:`, `run:`, `changes:` | `$value!file:`, `$value!sh:`, `$value!changes:` |
+| prerequisite `secret: true` | `$vars: { A: { optional: true, secret: true } }` |
+| `${NAME}` in a task | `{{ vars.NAME }}` |
+| `${NAME:-x}` in `env:` | `$vars: { NAME: { default: x } }` |
+| `${URL \| host}`, `\| slugify` | a FEEL formula, see [Variables](#variables) |
+| `remove_stages: [id]` | `stages: { $remove: [id] }` |
+| a prerequisite called `api-auth` | `api_auth` |
+| `stopOn: gate` | `stopOn: [gate]` |
 
 ## In CI
 
@@ -538,7 +671,8 @@ command:
 
 `testeiya/pipeline` opens, checks and describes pipelines from their text. It
 reads no file and imports nothing from Node, so it runs in a Worker or a browser
-and checks a pipeline exactly as `testeiya pipeline-check` does.
+and checks a pipeline exactly as `testeiya pipeline-check` does: scripted-yaml
+reads `$extends` and the DSL from memory there.
 
 ```js
 import { Pipelines } from "testeiya/pipeline";
@@ -565,7 +699,7 @@ for (const error of pipeline.errors()) {
 if (pipeline.isValid()) save(pipeline.yaml());
 ```
 
-Your YAML can `extends:` any bundled pipeline. To extend your saved pipelines
+Your YAML can `$extends` any bundled pipeline. To extend your saved pipelines
 too, and to list and open them, pass them in as name to YAML:
 
 ```js
@@ -573,7 +707,7 @@ const pipelines = new Pipelines({ "team-review": savedYaml, nightly: otherYaml }
 
 pipelines.list();                                             // bundled and yours, by name
 pipelines.open("nightly");
-pipelines.parse("extends: team-review\n", { name: "my-agent" });
+pipelines.parse("$extends: team-review\n", { name: "my-agent" });
 ```
 
 **`Pipelines`**, the pipelines you can open and extend:
@@ -597,29 +731,32 @@ pipelines.parse("extends: team-review\n", { name: "my-agent" });
 | `stages()` | The stages in order: `id`, `title`, `emoji`, `kind`, `text`, `when`, `inputs`, `outputs`, `loop` |
 | `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks`, `secret` |
 | `describe()` | All of the above with `name`, `description`, `target` and `summary`, as one plain object for JSON |
-| `yaml()` | The YAML with `extends` and overrides applied. It needs nothing else to run |
+| `yaml()` | The YAML with `$extends` and overrides applied, `base` written out. It needs nothing else to run |
 | `spec()` | The pipeline key for key, with defaults filled in |
-| `override(yaml)`, `overrideStage(id, yaml)` | A copy with [overrides](#overrides) applied, as `--pipeline` and `--stage` do |
+| `override(yaml)`, `overrideStage(id, yaml)` | A copy with a [patch](#extending-a-pipeline) applied, as `--pipeline` and `--stage` do |
 
 - Only `errors()` and `isValid()` work on a pipeline with a mistake. Every other
   call throws that `PipelineError`.
 - A `PipelineError` has `message`, and `line` (1-based) and `key` (like
-  `stages[1].when`) when the problem has a place in the text. Checking stops at
-  the first mistake, so `errors()` has one error at most.
-- `inputs()` lists the required inputs first: the `env` of a prerequisite in the
-  top-level `when`. Then the ones that unlock stages, in stage order. Then the rest
-  by name: any `${NAME}` the runner expands and `$NAME` a `run` command reads.
+  `stages.two.when!`) when the problem has a place in the text. `errors()` has
+  every problem scripted-yaml finds; the runner's own checks, like a duplicate
+  stage id, stop at the first.
+- `inputs()` lists the required inputs first: a variable a prerequisite of the
+  top-level `when!` reads. Then the ones that unlock stages, in stage order. Then
+  the rest by name: any `vars.NAME` a formula or `{{ }}` reads, `$NAME` a shell
+  command reads, and what `$vars` declares. `default` is the `$vars` default.
   Each input has `name`, `required`, `default`, `message` (its prerequisite's
   message, for a hint), `secret`, `unlocks` (the stages skipped without it),
   `prerequisites` and `usedIn`.
 - The runner's own variables (`BUILTIN_VARIABLES`), `HOME`, `PATH` and the keys of
   `env:` are never inputs. The exception is an `env:` value that reads its own name,
-  like `BASE_BRANCH: ${BASE_BRANCH:-origin/main}`.
+  like `BASE_BRANCH!: vars.BASE_BRANCH`.
+- `stages()` gives each stage's `when` as the prerequisites it reads, also
+  through other prerequisites, and `condition` as the formula written.
 - Your own pipeline wins over a bundled one of the same name. Inside it,
-  `extends:` with its own name means the bundled one, so your `regression` can
-  start with `extends: regression`.
-- `extends` that loops back, or names a pipeline that is not there, is an error
-  on the `extends` line.
+  `$extends` with its own name means the bundled one, so your `regression` can
+  start with `$extends: regression`.
+- `$extends` that loops back, or names a pipeline that is not there, is an error.
 - `PIPELINE_TARGETS` is the list of [targets](#targets) a host acts on.
 - `ENVIRONMENT_VARIABLES` lists every variable Testeiya reads, such as
   `TESTEIYA_MODEL`, `TESTOMATIO` and `TESTEIYA_MCP_SERVERS`. Each entry has

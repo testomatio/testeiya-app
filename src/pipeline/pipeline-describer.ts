@@ -1,18 +1,24 @@
+import type { InputRead, PipelineDefinition } from "./pipeline-definition.js";
 import type { InputUse, PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageView } from "./spec.js";
-import { BUILTIN_VARIABLES, Variables, type Reference } from "./variables.js";
+import { BUILTIN_VARIABLES } from "./variables.js";
 
 /** Set by the shell or the machine, never asked of a user. */
 const SHELL_VARIABLES = ["HOME", "PATH", "PWD", "USER", "SHELL", "TMPDIR"];
 
 /**
  * A validated pipeline as a UI shows it. The inputs are every variable a user
- * can set, read from the file: prerequisite `env` lists first, then the
- * `${NAME}` the runner expands and the `$NAME` the shell reads.
+ * can set: the `vars.NAME` its formulas and `{{ }}` read, the `$NAME` its
+ * shell commands read, and what `$vars` declares.
  */
 export class PipelineDescriber {
   private readonly found = new Map<string, PipelineInput>();
+  private readonly spec: PipelineSpec;
+  private readonly declared: Map<string, { default?: string; secret: boolean }>;
 
-  constructor(private readonly spec: PipelineSpec) {}
+  constructor(private readonly definition: PipelineDefinition) {
+    this.spec = definition.spec;
+    this.declared = new Map(definition.variables().map((variable) => [variable.name, variable]));
+  }
 
   describe(): PipelineDescription {
     const { spec } = this;
@@ -41,6 +47,7 @@ export class PipelineDescriber {
       stopOn: spec.stopOn,
       optional: spec.optional,
     };
+    if (spec.condition !== undefined) view.condition = spec.condition;
     if (spec.session !== undefined) view.session = spec.session;
     if (spec.each_line !== undefined) view.loop = { each_line: spec.each_line };
     if (spec.each_file !== undefined) view.loop = { each_file: spec.each_file };
@@ -58,7 +65,7 @@ export class PipelineDescriber {
     if (gate.file) checks.push("file");
     if (gate.run) checks.push("run");
     if (gate.changes) checks.push("changes");
-    return { name, message: gate.message, scope, stages, env: gate.env ?? [], checks, secret: gate.secret ?? false };
+    return { name, message: gate.message, scope, stages, env: gate.env, checks, secret: gate.secret };
   }
 
   /** Required first, then the ones that unlock stages, in stage order, then the rest by name. */
@@ -75,41 +82,22 @@ export class PipelineDescriber {
   }
 
   private collect(): void {
-    const { spec } = this;
-    for (const [name, gate] of Object.entries(spec.prerequisites)) {
-      for (const variable of gate.env ?? []) this.add({ name: variable }, "prerequisite");
-    }
-    for (const [key, value] of Object.entries(spec.env)) {
-      for (const reference of Variables.references(value)) this.add(reference, "env", key);
-    }
-    for (const version of Object.values(spec.packages)) this.addAll(Variables.references(version), "packages");
-    for (const gate of Object.values(spec.prerequisites)) {
-      for (const file of gate.file ?? []) this.addAll(Variables.references(file), "file");
-      if (gate.run) this.addAll(Variables.shellReferences(gate.run), "run");
-    }
-    for (const stage of spec.stages) {
-      if (stage.task) this.addAll(Variables.references(stage.task), "task");
-      if (stage.run) this.addAll(Variables.shellReferences(stage.run), "run");
-      for (const output of stage.outputs) this.addAll(Variables.references(output), "outputs");
-    }
+    for (const read of this.definition.reads) this.add(read, read.use, read.within);
+    for (const name of this.declared.keys()) this.add({ name }, undefined);
   }
 
-  private addAll(references: Reference[], use: InputUse): void {
-    for (const reference of references) this.add(reference, use);
-  }
-
-  /** `within` is the `env:` key whose value this is: reading its own name makes it an input. */
-  private add(reference: Reference, use: InputUse, within?: string): void {
-    const { name } = reference;
+  /** `within` is the `env:` key whose value this is: reading its own name makes it an input. No `use`: declared, not read. */
+  private add(read: Pick<InputRead, "name" | "default">, use: InputUse | undefined, within?: string): void {
+    const { name } = read;
     if (!this.isInput(name, within)) return;
     let input = this.found.get(name);
     if (!input) {
       input = this.input(name);
       this.found.set(name, input);
     }
-    if (!input.usedIn.includes(use)) input.usedIn.push(use);
+    if (use && !input.usedIn.includes(use)) input.usedIn.push(use);
     // A default that reads another variable is the shell's to work out.
-    const fallback = reference.default;
+    const fallback = read.default;
     if (input.default === undefined && fallback !== undefined && !fallback.includes("$")) input.default = fallback;
   }
 
@@ -123,18 +111,24 @@ export class PipelineDescriber {
     const { spec } = this;
     const asking = Object.entries(spec.prerequisites).filter(([, gate]) => gate.env?.includes(name));
     const required = asking.filter(([gate]) => spec.when.includes(gate));
+    const whens = this.definition.reads.filter((read) => read.name === name && read.use === "when");
     const unlocking = asking.filter(([gate]) => !spec.when.includes(gate)).map(([gate]) => gate);
-    const unlocks = required.length
+    const isRequired = required.length > 0 || whens.some((read) => read.stage === undefined);
+    const unlocks = isRequired
       ? []
-      : spec.stages.filter((stage) => stage.when.some((gate) => unlocking.includes(gate))).map((stage) => stage.id);
+      : spec.stages
+          .filter((stage) => stage.when.some((gate) => unlocking.includes(gate)) || whens.some((read) => read.stage === stage.id))
+          .map((stage) => stage.id);
+    const declared = this.declared.get(name);
     const input: PipelineInput = {
       name,
-      required: required.length > 0,
+      required: isRequired,
       prerequisites: asking.map(([gate]) => gate),
       unlocks,
       usedIn: [],
-      secret: asking.some(([, gate]) => gate.secret),
+      secret: declared?.secret ?? false,
     };
+    if (declared?.default !== undefined) input.default = declared.default;
     const message = (required[0] ?? asking[0])?.[1].message;
     if (message !== undefined) input.message = message;
     return input;

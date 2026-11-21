@@ -13,8 +13,9 @@ import { Diagram } from "./diagram.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
-import { Overlay } from "./overlay.js";
+import { Override } from "./override.js";
 import { Packages } from "./packages.js";
+import type { PipelineDefinition, PipelineValues } from "./pipeline-definition.js";
 import { PipelineFile } from "./pipeline-file.js";
 import { Report } from "./report.js";
 import type { PipelineSpec, StageSpec } from "./spec.js";
@@ -37,8 +38,9 @@ import { Variables } from "./variables.js";
 const JOB_ONLY = ["TESTEIYA_FOLLOW_UP", "TESTEIYA_THREAD", "TESTEIYA_SESSION_FILE"];
 
 /**
- * One run of a pipeline file. It picks the round, checks the gates, runs the
- * stages in order through one folder, then a summary that is the only report.
+ * One run of a pipeline file. It picks the round, makes the checks, computes
+ * the formulas, runs the stages in order through one folder, then a summary
+ * that is the only report.
  */
 export class Pipeline {
   private readonly cwd = process.cwd();
@@ -47,13 +49,13 @@ export class Pipeline {
   private readonly cli: string;
   private readonly runTask: TaskRunner;
 
-  private readonly overlays: Overlay[];
+  private readonly overrides: Override[];
 
   constructor(private readonly options: PipelineOptions) {
     this.cli = options.cli ?? fileURLToPath(new URL("../cli.js", import.meta.url));
     this.runTask = options.runTask ?? runTask;
     // --pipeline first, so --stage can change a stage it adds.
-    this.overlays = [...(options.pipelineOverrides ?? []).map(Overlay.pipeline), ...(options.stageOverrides ?? []).map(Overlay.stage)];
+    this.overrides = [...(options.pipelineOverrides ?? []).map(Override.pipeline), ...(options.stageOverrides ?? []).map(Override.stage)];
   }
 
   static list(json?: boolean): number {
@@ -76,9 +78,8 @@ export class Pipeline {
   async run(): Promise<number> {
     const { options, cwd } = this;
     const file = PipelineFile.find(options.name);
-    const resolved = file.resolve(this.overlays);
-    const named = resolved.spec;
-    const dir = this.folder(named.name);
+    const named = file.definition(this.overrides);
+    const dir = this.folder(named.spec.name);
     if (dir === cwd || cwd.startsWith(dir + sep)) {
       throw new UsageError("--dir must be a folder of its own, not the checkout or a folder above it");
     }
@@ -89,8 +90,9 @@ export class Pipeline {
     const retry = Boolean(previous && previous.commit === commit && PipelineState.STOPPED.includes(previous.status));
     const again = Boolean(previous && !retry && previous.status !== "skipped" && previous.commit === commit);
 
-    const spec = this.spec(file, named, dir, retry);
-    const gates = this.gates(spec);
+    const definition = this.definition(file, named, dir, retry);
+    const { spec } = definition;
+    const gates = this.gates(definition);
     const stages = this.stages(spec.stages);
 
     let round = history.length + 1;
@@ -104,15 +106,17 @@ export class Pipeline {
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
-    const vars = await this.variables(spec, dir, round);
+    const vars = await this.variables(definition, dir, round);
     const changes = await this.git.changes(since, vars.toEnv());
-    const results = await this.checkGates(gates, [spec.when, ...stages.map((stage) => stage.spec.when)].flat(), vars, changes);
+    const used = [...spec.when, ...stages.flatMap((stage) => stage.spec.when), ...Object.keys(this.options.gates ?? {})];
+    const results = await this.checkGates(gates, used, vars, changes);
+    const values = definition.values(vars.toEnv());
+    for (const name of new Set(used)) if (!results.has(name)) results.set(name, values.passes(name));
     log.header(spec.name, round, changes, dir);
-    if (!retry) log.overlays(this.overlays);
+    if (!retry) log.overrides(this.overrides);
 
-    const blocked = spec.when.find((name) => !results.get(name));
-    if (blocked) {
-      const reason = gates.get(blocked)!.message;
+    const reason = this.blocked(spec, values, gates, results);
+    if (reason) {
       log.skipped(reason);
       if (options.dryRun) return 0;
       const state = new PipelineState(dir, { name: spec.name, round, commit, since, status: "skipped", reason, stages: [], rounds: history });
@@ -123,18 +127,18 @@ export class Pipeline {
 
     // After the skip: a job gated on a pull request may name one that only exists when the gate passes.
     const report = await Report.prepare(options);
-    if (options.dryRun) return this.dryRun(stages, gates, results, aiProblem);
+    if (options.dryRun) return this.dryRun(spec, stages, values, results, aiProblem);
 
     let created = previous?.created ?? [];
     mkdirSync(dir, { recursive: true });
-    const stageVars = await new Packages(spec.packages).install(dir, this.launcher, vars);
+    const stageVars = await new Packages(values.packages()).install(dir, this.launcher, vars);
     if (!retry) {
       // A new round moves what the last one wrote to .last, and keeps the sessions.
       rmSync(join(dir, LAST_DIR), { recursive: true, force: true });
       mkdirSync(join(dir, LAST_DIR));
       for (const name of created.filter((entry) => existsSync(join(dir, entry)))) renameSync(join(dir, name), join(dir, LAST_DIR, name));
       created = [];
-      writeFileSync(join(dir, COPY_FILE), resolved.text);
+      writeFileSync(join(dir, COPY_FILE), definition.text);
     }
     if (changes.files) writeFileSync(join(dir, CHANGES_FILE), `${changes.files.join("\n")}\n`);
     this.checkInputs(stages, dir);
@@ -152,29 +156,33 @@ export class Pipeline {
       created,
     });
     state.trackFiles();
-    return this.runStages({ spec, stages, gates, results, state, vars: stageVars, report, dir });
+    return this.runStages({ definition, spec, stages, values, state, vars: stageVars, report, dir });
   }
 
-  /** Validates the file, then checks every gate it declares. Runs no stage. */
+  /** Validates the file, then checks every prerequisite it declares. Runs no stage. */
   async check(): Promise<number> {
     const file = PipelineFile.find(this.options.name);
-    const named = file.read(this.overlays);
-    const dir = this.folder(named.name, false);
-    const spec = this.spec(file, named, dir, false);
-    const gates = this.gates(spec);
+    const named = file.definition(this.overrides);
+    const dir = this.folder(named.spec.name, false);
+    const definition = this.definition(file, named, dir, false);
+    const { spec } = definition;
+    const gates = this.gates(definition);
     const stages = this.stages(spec.stages);
     this.checkInputs(stages, dir);
     log.valid(spec.name, file.path);
-    log.overlays(this.overlays);
+    log.overrides(this.overrides);
 
     let aiProblem: string | null = null;
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
-    const vars = await this.variables(spec, dir, 1);
+    const vars = await this.variables(definition, dir, 1);
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
-    const results = await this.checkGates(gates, [...gates.keys()], vars, changes);
+    const names = [...Object.keys(spec.prerequisites), ...Object.keys(this.options.gates ?? {})];
+    const results = await this.checkGates(gates, names, vars, changes);
+    const values = definition.values(vars.toEnv());
+    for (const name of names) if (!results.has(name)) results.set(name, values.passes(name));
 
-    const checked = [...results].map(([name, passed]) => ({ name, passed, message: gates.get(name)!.message }));
+    const checked = names.map((name) => ({ name, passed: results.get(name)!, message: this.message(spec, gates, name) }));
     if (this.needsAi(stages)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
     const failed = checked.filter((gate) => !gate.passed).length;
     if (this.options.json) {
@@ -193,7 +201,7 @@ export class Pipeline {
   }
 
   private async runStages(run: Run): Promise<number> {
-    const { stages, state, results, gates } = run;
+    const { stages, state, values } = run;
     this.launcher.watchInterrupt();
     state.save();
 
@@ -209,9 +217,8 @@ export class Pipeline {
         continue;
       }
 
-      const closed = stage.closedGate(results);
-      if (closed) {
-        stage.skip(record, gates.get(closed)!.message);
+      if (!values.stageRuns(stage.id)) {
+        stage.skip(record, values.reason(stage.spec.when, stage.spec.condition));
         stopped = stage.stopsOn("gate");
         state.save();
         continue;
@@ -252,7 +259,8 @@ export class Pipeline {
     const { state } = run;
     const record: StageRecord = { id: "summary", status: "not-run" };
     state.record.stages.push(record);
-    await new SummaryStage(run.spec, run.stages, run.state, run.dir).run(this.context(run, true), record);
+    const summary = run.definition.values(run.vars.toEnv()).summary();
+    await new SummaryStage(run.spec, summary, run.stages, run.state, run.dir).run(this.context(run, true), record);
     // The verdict came from the stages; the summary only explains it.
     if (record.status === "fail") {
       record.status = "pass";
@@ -274,6 +282,7 @@ export class Pipeline {
       model: this.options.model,
       report,
       missing: (input) => this.whyMissing(input, run),
+      task: (stage, vars) => run.definition.values(vars.toEnv()).task(stage.id),
       locate: (input, reader) => this.locate(input, reader, run),
     };
   }
@@ -302,25 +311,38 @@ export class Pipeline {
   }
 
   /** A retry finishes the round it started, so a file edited since cannot reorder the stages half-way through. */
-  private spec(file: PipelineFile, named: PipelineSpec, dir: string, retry: boolean): PipelineSpec {
-    let spec = named;
+  private definition(file: PipelineFile, named: PipelineDefinition, dir: string, retry: boolean): PipelineDefinition {
+    let definition = named;
     const copy = join(dir, COPY_FILE);
     if (retry && existsSync(copy)) {
-      spec = file.parse(readFileSync(copy, "utf8"));
-      if (spec.name !== named.name) throw new UsageError(`${dir} holds a run of "${spec.name}", not "${named.name}"`);
+      definition = file.parse(readFileSync(copy, "utf8"));
+      if (definition.spec.name !== named.spec.name) throw new UsageError(`${dir} holds a run of "${definition.spec.name}", not "${named.spec.name}"`);
     }
-    // Gates passed with --gate join `when`: the CI job decides if the run happens at all.
+    // Gates passed with --gate are checked with the top-level when: the CI job decides if the run happens at all.
     for (const name of Object.keys(this.options.gates ?? {})) {
-      if (spec.prerequisites[name]) throw new UsageError(`--gate ${name}: the pipeline already defines this gate`);
+      if (definition.spec.prerequisites[name]) throw new UsageError(`--gate ${name}: the pipeline already defines this prerequisite`);
     }
-    return { ...spec, when: [...spec.when, ...Object.keys(this.options.gates ?? {})] };
+    return definition;
   }
 
-  private gates(spec: PipelineSpec): Map<string, Gate> {
+  /** The checks the runner makes itself: each prerequisite's marker, and every --gate. */
+  private gates(definition: PipelineDefinition): Map<string, Gate> {
+    const { prerequisites } = definition.spec;
     const gates = new Map<string, Gate>();
-    for (const [name, gate] of Object.entries(spec.prerequisites)) gates.set(name, new Gate(name, gate));
+    for (const [name, check] of definition.checks()) gates.set(name, new Gate(name, prerequisites[name]!.message, check, prerequisites[name]!.changes));
     for (const [name, run] of Object.entries(this.options.gates ?? {})) gates.set(name, Gate.command(name, run));
     return gates;
+  }
+
+  /** Why nothing runs: the top-level when, then a --gate. Null when the run goes on. */
+  private blocked(spec: PipelineSpec, values: PipelineValues, gates: Map<string, Gate>, results: Map<string, boolean>): string | null {
+    if (!values.runs()) return values.reason(spec.when, spec.condition);
+    const gate = Object.keys(this.options.gates ?? {}).find((name) => !results.get(name));
+    return gate ? gates.get(gate)!.message : null;
+  }
+
+  private message(spec: PipelineSpec, gates: Map<string, Gate>, name: string): string {
+    return spec.prerequisites[name]?.message ?? gates.get(name)!.message;
   }
 
   /**
@@ -344,19 +366,25 @@ export class Pipeline {
     return stages;
   }
 
-  private async variables(spec: PipelineSpec, dir: string, round: number): Promise<Variables> {
+  /**
+   * The job's environment, `--set`, the runner's own, the `$vars` defaults no
+   * one set, then `env:` computed from all of them. `--set` wins over `env:`.
+   */
+  private async variables(definition: PipelineDefinition, dir: string, round: number): Promise<Variables> {
     const sets = this.options.sets ?? {};
     const branch = await this.git.branch({ ...process.env, ...sets });
-    return new Variables({ ...process.env })
-      .with({ ...sets, ...Variables.builtins({ GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: spec.name, PIPELINE_ROUND: String(round) }) })
-      .withExpanded(spec.env)
-      .with(sets)
-      .without(JOB_ONLY);
+    let vars = new Variables({ ...process.env }).with({
+      ...sets,
+      ...Variables.builtins({ GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: definition.spec.name, PIPELINE_ROUND: String(round) }),
+    });
+    const unset = Object.entries(definition.defaults()).filter(([name]) => !vars.get(name));
+    vars = vars.with(Object.fromEntries(unset));
+    return vars.with(definition.values(vars.toEnv()).env()).with(sets).without(JOB_ONLY);
   }
 
-  /** Each gate once. A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request. */
+  /** Each check once. A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request. */
   private async checkGates(gates: Map<string, Gate>, names: string[], vars: Variables, changes: Changes): Promise<Map<string, boolean>> {
-    const used = [...new Set(names)];
+    const used = [...new Set(names)].filter((name) => gates.has(name));
     if (!changes.files && used.some((name) => gates.get(name)!.readsChanges)) {
       throw new UsageError(`cannot read the changes: ${changes.error}. Check out with full history (fetch-depth: 0)`);
     }
@@ -437,9 +465,9 @@ export class Pipeline {
     return mkdtempSync(join(tmpdir(), `testeiya-${name}-`));
   }
 
-  private dryRun(stages: Stage[], gates: Map<string, Gate>, results: Map<string, boolean>, aiProblem: string | null): number {
+  private dryRun(spec: PipelineSpec, stages: Stage[], values: PipelineValues, results: Map<string, boolean>, aiProblem: string | null): number {
     if (this.needsAi(stages)) log.aiGate(aiProblem);
-    for (const [name, passed] of results) log.gate(name, passed, gates.get(name)!.message);
+    for (const [name, passed] of results) log.gate(name, passed, spec.prerequisites[name]?.message ?? `The ${name} gate did not pass.`);
     log.note("");
     let stopped = false;
     for (const stage of stages) {
@@ -447,9 +475,8 @@ export class Pipeline {
         log.plan(stage.id, "not-run", "not run");
         continue;
       }
-      const closed = stage.closedGate(results);
-      if (closed) {
-        log.plan(stage.id, "skipped", `skipped: ${gates.get(closed)!.message}`);
+      if (!values.stageRuns(stage.id)) {
+        log.plan(stage.id, "skipped", `skipped: ${values.reason(stage.spec.when, stage.spec.condition)}`);
         stopped = stage.stopsOn("gate");
         continue;
       }
@@ -469,9 +496,9 @@ export interface PipelineOptions {
   sets?: Record<string, string>;
   /** Gate name to a shell check, from --gate. */
   gates?: Record<string, string>;
-  /** YAML laid over the pipeline, from --pipeline. */
+  /** A patch of the pipeline, from --pipeline. */
   pipelineOverrides?: string[];
-  /** ID:YAML laid over one stage, from --stage. */
+  /** ID:YAML, a patch of one stage, from --stage. */
   stageOverrides?: string[];
   outputs?: string[];
   thread?: string;
@@ -490,10 +517,10 @@ export interface PipelineOptions {
 }
 
 interface Run {
+  definition: PipelineDefinition;
   spec: PipelineSpec;
   stages: Stage[];
-  gates: Map<string, Gate>;
-  results: Map<string, boolean>;
+  values: PipelineValues;
   state: PipelineState;
   vars: Variables;
   report: Report;

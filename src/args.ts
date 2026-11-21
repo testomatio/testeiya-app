@@ -63,8 +63,8 @@ Pipeline options:
       --dry-run              show prerequisites and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
-      --stage ID:YAML        change one stage, e.g. 'plan:append_task: Be brief.'
-      --pipeline YAML        change the pipeline, e.g. 'append_summary: Be brief.'
+      --stage ID:YAML        patch one stage, e.g. 'plan:task: { $after: Be brief. }'
+      --pipeline YAML        patch the pipeline, e.g. '$replace: { summary: Be brief. }'
   -h, --help                 show this
   -v, --version              show version
 
@@ -206,13 +206,14 @@ Pipelines
   --gate adds a check from the CI job, e.g. --gate 'pr:test -n "$PR_NUMBER"'.
   When it fails the whole run is skipped and exits 0.
 
-  --stage and --pipeline change a pipeline without copying it. Their value is
-  YAML: a plain key replaces, append_ and prepend_ add, remove_ drops.
+  --stage and --pipeline change a pipeline without copying it. Their value is a
+  scripted-yaml patch: $replace overwrites, $add adds a key, $before and $after
+  add text or stages, $remove drops.
 
-    testeiya pipeline issue-test-cases --stage 'requirements:append_task: Never assume credentials.'
-    testeiya pipeline web-testing --stage 'explore:{timeout: 45m, append_when: [staging]}'
+    testeiya pipeline issue-test-cases --stage 'requirements:task: { $after: Never assume credentials. }'
+    testeiya pipeline web-testing --stage 'explore:$replace: { timeout: 45m }'
 
-  A file of your own can start with "extends: <name>" and hold only the changes.
+  A file of your own can start with "$extends: <name>" and hold the same patch.
 
   A stage whose prerequisite fails is skipped with its message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a

@@ -1,18 +1,20 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import { PACKAGE_ROOT } from "../env.js";
 import { UsageError } from "../model.js";
-import type { Overlay } from "./overlay.js";
+import type { Override } from "./override.js";
+import type { PipelineDefinition } from "./pipeline-definition.js";
 import { PipelineError } from "./pipeline-error.js";
-import { PipelineSource } from "./pipeline-source.js";
+import { DSL_FILE, PipelineSource } from "./pipeline-source.js";
 import type { PipelineSpec } from "./spec.js";
 
 const BUNDLED_DIR = join(PACKAGE_ROOT, "pipelines");
 
 /**
  * A pipeline file, found by path or bundled name. It reads the text and hands
- * it to a `PipelineSource`, which validates it. Every message names the file.
+ * it to a `PipelineSource`, which validates it. `$extends: name` is a bundled
+ * pipeline; `$extends: ./path.yml` a file beside it. Every message names the file.
  */
 export class PipelineFile {
   constructor(readonly path: string) {}
@@ -30,7 +32,7 @@ export class PipelineFile {
 
   static bundled(): Array<{ name: string; description: string; target?: string }> {
     if (!existsSync(BUNDLED_DIR)) return [];
-    const files = readdirSync(BUNDLED_DIR).filter((file) => file.endsWith(".yml")).sort();
+    const files = readdirSync(BUNDLED_DIR).filter((file) => file.endsWith(".yml") && file !== DSL_FILE).sort();
     return files.map((file) => {
       const spec = new PipelineFile(join(BUNDLED_DIR, file)).read();
       return { name: basename(file, ".yml"), description: spec.description, target: spec.target };
@@ -41,33 +43,35 @@ export class PipelineFile {
     return readFileSync(this.path, "utf8");
   }
 
-  read(overlays: Overlay[] = []): PipelineSpec {
-    return this.resolve(overlays).spec;
+  read(overrides: Override[] = []): PipelineSpec {
+    return this.definition(overrides).spec;
   }
 
-  /** The spec with `extends` and every overlay applied, and the same as YAML, which needs neither. */
-  resolve(overlays: Overlay[] = []): { spec: PipelineSpec; text: string } {
+  /** The pipeline with `$extends` and every override applied, ready to run. */
+  definition(overrides: Override[] = []): PipelineDefinition {
     const source = this.source(this.text());
-    return this.located(() => ({ spec: source.spec(overlays), text: source.text(overlays) }));
+    return this.located(() => source.definition(overrides));
   }
 
-  /** Parse text as this file, so a copy keeps the file's name. */
-  parse(text: string): PipelineSpec {
-    return this.located(() => this.source(text).spec());
+  /** Parse text as this file, so a copy keeps the file's name and finds what it extends. */
+  parse(text: string): PipelineDefinition {
+    return this.located(() => this.source(text).definition());
   }
 
-  /** `chain` is every file on the way here, absolute, so a loop is caught across folders. */
-  private source(text: string, chain = [resolve(this.path)], named = true): PipelineSource {
-    const name = named ? basename(this.path).replace(/\.ya?ml$/, "") : undefined;
-    return new PipelineSource(text, { name, resolve: (parent) => this.parent(parent, chain) });
+  private source(text: string): PipelineSource {
+    const name = basename(this.path).replace(/\.ya?ml$/, "");
+    return new PipelineSource(text, { name, file: this.path, read: (path, from) => PipelineFile.parent(path, from) });
   }
 
-  // A path is relative to this file. The parent comes back with its own `extends` applied.
-  private parent(name: string, chain: string[]): string {
-    const base = PipelineFile.find(PipelineFile.isPath(name) ? resolve(dirname(this.path), name) : name);
-    const at = resolve(base.path);
-    if (chain.includes(at)) throw new PipelineError(`extends ${name} loops back to itself`, { key: "extends" });
-    return base.located(() => base.source(base.text(), [...chain, at], false).text());
+  /** A bundled pipeline by its name. A path is read from the disk by scripted-yaml, relative to the file that names it. */
+  private static parent(name: string, from: string): { file: string; text: string } | undefined {
+    if (PipelineFile.isPath(name)) return undefined;
+    const bundled = join(BUNDLED_DIR, `${name}.yml`);
+    if (!existsSync(bundled)) throw new PipelineError(`no pipeline "${name}" to extend`);
+    const file = new PipelineFile(bundled);
+    // The bundled one: a file called regression may extend the bundled regression.
+    if (resolve(file.path) === resolve(from)) return undefined;
+    return { file: file.path, text: file.text() };
   }
 
   private located<T>(read: () => T): T {

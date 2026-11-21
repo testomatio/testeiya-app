@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(import.meta.dirname, "..");
 
-/** Reads pipelines/*.yml and writes `BUNDLED_PIPELINES` as a module and its types. */
+const DSL_FILE = "pipeline.dsl.yml";
+
+/** Reads pipelines/*.yml and writes `BUNDLED_PIPELINES`, and the DSL they are checked against as `BUNDLED_DSL`. */
 export class PipelineBundle {
   constructor({ sourceDir = join(ROOT, "pipelines"), outputDir = join(ROOT, "dist", "src", "pipeline") } = {}) {
     this.sourceDir = sourceDir;
@@ -19,16 +21,18 @@ export class PipelineBundle {
 
   /** File name without `.yml` to the file's text, sorted by name. */
   read() {
-    const files = readdirSync(this.sourceDir).filter((file) => file.endsWith(".yml")).sort();
+    const files = readdirSync(this.sourceDir).filter((file) => file.endsWith(".yml") && file !== DSL_FILE).sort();
     return Object.fromEntries(files.map((file) => [basename(file, ".yml"), readFileSync(join(this.sourceDir, file), "utf8")]));
   }
 
   write() {
     const pipelines = this.read();
     const header = "// Written by scripts/bundle-pipelines.js from pipelines/*.yml. Do not edit.\n";
-    const body = `export const BUNDLED_PIPELINES = ${JSON.stringify(pipelines, null, 2)};\n`;
+    const dsl = readFileSync(join(this.sourceDir, DSL_FILE), "utf8");
+    const body = `export const BUNDLED_PIPELINES = ${JSON.stringify(pipelines, null, 2)};\nexport const BUNDLED_DSL = ${JSON.stringify(dsl)};\n`;
     writeFileSync(join(this.outputDir, "bundled.js"), header + body);
-    writeFileSync(join(this.outputDir, "bundled.d.ts"), `${header}export declare const BUNDLED_PIPELINES: Record<string, string>;\n`);
+    const types = "export declare const BUNDLED_PIPELINES: Record<string, string>;\nexport declare const BUNDLED_DSL: string;\n";
+    writeFileSync(join(this.outputDir, "bundled.d.ts"), header + types);
     return Object.keys(pipelines);
   }
 }

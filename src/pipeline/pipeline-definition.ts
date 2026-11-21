@@ -1,0 +1,137 @@
+import { ResolveFailed, type Document } from "scripted-yaml";
+
+import type { Marked } from "./markers.js";
+import { PipelineError } from "./pipeline-error.js";
+import type { InputUse, PipelineSpec } from "./spec.js";
+
+/** Where the file reads a variable. `within` is the `env:` key whose value reads it. */
+export interface InputRead {
+  name: string;
+  use: InputUse;
+  /** A shell `${NAME:-default}`. */
+  default?: string;
+  within?: string;
+  /** A `when` read: the stage it is in. None for the top-level `when`. */
+  stage?: string;
+}
+
+type Raw = Record<string, unknown>;
+
+/**
+ * A checked pipeline: its spec, the one YAML file it runs from, and the
+ * loaded scripted-yaml document that computes its formulas for a run.
+ */
+export class PipelineDefinition {
+  constructor(
+    readonly spec: PipelineSpec,
+    /** The file with `$extends` and overrides applied. It needs nothing else to run. */
+    readonly text: string,
+    /** Every variable the file reads, and where. */
+    readonly reads: InputRead[],
+    private readonly document: Document,
+    private readonly markers: Map<string, Marked>,
+  ) {}
+
+  /** The checks the runner makes before the first stage, by prerequisite: `$value!sh`, `$value!file`, `$value!changes`. */
+  checks(): Map<string, Marked> {
+    return new Map(this.markers);
+  }
+
+  /** The variables `$vars` declares, with what a UI needs to ask for one. */
+  variables(): Array<{ name: string; default?: string; secret: boolean }> {
+    return this.document.variables
+      .filter((variable) => !variable.host)
+      .map((variable) => {
+        const declared: { name: string; default?: string; secret: boolean } = { name: variable.name, secret: variable.secret };
+        if (variable.default !== undefined && variable.default !== null) declared.default = String(variable.default);
+        return declared;
+      });
+  }
+
+  /** The `default` of each variable `$vars` declares: a stage's shell sees it when no one set the variable. */
+  defaults(): Record<string, string> {
+    return Object.fromEntries(this.variables().flatMap((variable) => (variable.default === undefined ? [] : [[variable.name, variable.default]])));
+  }
+
+  /** Every formula and `{{ }}` computed with these variables. Checks the runner has not made read as false. */
+  values(vars: Record<string, string | undefined>): PipelineValues {
+    try {
+      return new PipelineValues(this.spec, this.document.resolveSync({ vars }) as Raw);
+    } catch (err) {
+      if (err instanceof ResolveFailed) throw new PipelineError(err.message);
+      throw err;
+    }
+  }
+}
+
+/** One run's values of a pipeline: what passes, what runs, the texts with `{{ }}` filled in. */
+export class PipelineValues {
+  constructor(
+    private readonly spec: PipelineSpec,
+    private readonly data: Raw,
+  ) {}
+
+  passes(name: string): boolean {
+    const gate = (this.data.prerequisites as Raw | undefined)?.[name];
+    const value = PipelineValues.isRecord(gate) ? gate.$value : gate;
+    return this.truth(value, `prerequisite "${name}"`, this.spec.prerequisites[name]?.formula);
+  }
+
+  /** The top-level `when`. */
+  runs(): boolean {
+    return this.truth(this.data.when ?? true, "when", this.spec.condition);
+  }
+
+  stageRuns(id: string): boolean {
+    const stage = this.stage(id);
+    return this.truth(stage.when ?? true, `stage "${id}" when`, this.spec.stages.find((spec) => spec.id === id)?.condition);
+  }
+
+  /** Why `when` is false: the message of the first prerequisite it reads that does not pass. */
+  reason(names: string[], formula: string | undefined): string {
+    const closed = names.find((name) => !this.passes(name));
+    if (closed) return this.spec.prerequisites[closed]!.message;
+    return `when is false: ${formula ?? ""}`.trim();
+  }
+
+  task(id: string): string {
+    return String(this.stage(id).task ?? "");
+  }
+
+  summary(): string | undefined {
+    const summary = this.data.summary;
+    return summary === undefined || summary === null ? undefined : String(summary);
+  }
+
+  /** `env:` as the shell gets it. A value that is null is not set. */
+  env(): Record<string, string> {
+    return PipelineValues.texts(this.data.env);
+  }
+
+  packages(): Record<string, string> {
+    return PipelineValues.texts(this.data.packages);
+  }
+
+  private stage(id: string): Raw {
+    const stages = Array.isArray(this.data.stages) ? (this.data.stages as Raw[]) : [];
+    return stages.find((stage) => stage.id === id) ?? {};
+  }
+
+  // A check reads as "1" or "0"; a formula has to say true or false.
+  private truth(value: unknown, what: string, formula?: string): boolean {
+    if (value === true || value === "1") return true;
+    if (value === false || value === "0") return false;
+    throw new PipelineError(`${what} is ${JSON.stringify(value ?? null)}, not true or false: ${formula ?? ""}. Compare a variable with null: vars.NAME != null`);
+  }
+
+  private static texts(value: unknown): Record<string, string> {
+    if (!PipelineValues.isRecord(value)) return {};
+    const texts: Record<string, string> = {};
+    for (const [key, item] of Object.entries(value)) if (item !== null && item !== undefined) texts[key] = String(item);
+    return texts;
+  }
+
+  private static isRecord(value: unknown): value is Raw {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+}

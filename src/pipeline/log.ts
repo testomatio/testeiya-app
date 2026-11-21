@@ -1,7 +1,7 @@
 import { chalkStderr as c } from "chalk";
 
 import type { Changes } from "../git.js";
-import type { Overlay } from "./overlay.js";
+import type { Override } from "./override.js";
 import type { StageRecord } from "./state.js";
 
 const MARKS: Record<string, string> = {
@@ -26,8 +26,8 @@ export class PipelineLog {
   }
 
   /** One line per override: where it came from and the keys it changes. */
-  overlays(overlays: Overlay[]): void {
-    for (const overlay of overlays) this.note(`  ${c.magenta("±")} ${overlay.source}${c.dim(`  ${overlay.keys().join(", ")}`)}`);
+  overrides(overrides: Override[]): void {
+    for (const override of overrides) this.note(`  ${c.magenta("±")} ${override.source}${c.dim(`  ${override.keys().join(", ")}`)}`);
   }
 
   checked(failed: number): void {
