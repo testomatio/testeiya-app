@@ -331,8 +331,10 @@ test("half-typed text is an error, never a crash", () => {
     // Every line, and every few characters: a check is a whole parse.
     for (let end = 0; end <= text.length; end += 7) {
       const typed = text.slice(0, end);
-      const pipeline = parse(typed, { name });
-      assert.equal(pipeline.errors().length > 0, !pipeline.isValid(), typed);
+      for (const yaml of [typed, `$extends: ${name}\n${typed}`]) {
+        const pipeline = parse(yaml, { name });
+        assert.equal(pipeline.errors().length > 0, !pipeline.isValid(), yaml);
+      }
     }
   }
   assert.ok(parse("stages:\n  - id: a\n    run!sh: *nope\n").errors().length > 0);
@@ -423,4 +425,33 @@ test("scripted-yaml validates every bundled pipeline against the DSL", () => {
   const files = pipelines.names().map((name) => join(ROOT, "pipelines", `${name}.yml`));
   const out = execFileSync(join(ROOT, "node_modules", ".bin", "scripted-yaml"), ["validate", ...files, "--markers", "sh,file,changes"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   assert.equal(out.trim().split("\n").filter((line) => line.startsWith("ok")).length, files.length, out);
+});
+
+test("a file that starts with --- is still checked against the DSL", () => {
+  const [error] = parse("---\nstages:\n  - id: a\n    run!sh: echo\n    model: x\n").errors();
+  assert.match(error.message, /"model" is not a field of the schema/);
+  assert.equal(error.line, 5);
+});
+
+test("a formula cannot take the place of a check through base", () => {
+  const patch = "$extends: regression\nprerequisites:\n  local:\n    $replace:\n      $value!: base and vars.X != null\n";
+  assert.match(parse(patch).errors()[0].message, /base is a marked value/);
+});
+
+test("a $vars variable with no default and not optional is a required input", () => {
+  const [issue] = parse("$vars:\n  ISSUE: { about: The issue to cover. }\nstages:\n  - id: a\n    task: Cover {{ vars.ISSUE }}.\n").inputs();
+  assert.deepEqual([issue.name, issue.required, issue.message], ["ISSUE", true, "The issue to cover."]);
+});
+
+test("a bundled pipeline opens and describes where Node gives no modules, as in a browser", () => {
+  const saved = process.getBuiltinModule;
+  process.getBuiltinModule = undefined;
+  try {
+    const own = new Pipelines({ mine: "$extends: regression\n$replace:\n  description: Ours.\n" });
+    assert.equal(own.open("mine").describe().description, "Ours.");
+    assert.deepEqual(own.open("mine").stages().map((stage) => stage.id), ["tests", "failures"]);
+    assert.ok(new Pipelines().open("web-testing").isValid());
+  } finally {
+    process.getBuiltinModule = saved;
+  }
 });

@@ -30,6 +30,13 @@ export class PipelineLog {
     for (const override of overrides) this.note(`  ${c.magenta("±")} ${override.source}${c.dim(`  ${override.keys().join(", ")}`)}`);
   }
 
+  /** One line per `$tests` case of the file, and what did not hold. */
+  test(about: string, failures: string[]): void {
+    if (failures.length === 0) return this.note(`  ${c.green("✓")} test ${about}`);
+    this.note(`  ${c.red("✗")} test ${about}`);
+    for (const failure of failures) this.note(c.dim(`      ${failure}`));
+  }
+
   checked(failed: number): void {
     if (!failed) return this.note("\n  All gates pass.");
     if (failed === 1) return this.note("\n  1 gate does not pass.");

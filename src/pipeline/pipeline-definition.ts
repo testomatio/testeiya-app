@@ -15,6 +15,15 @@ export interface InputRead {
   stage?: string;
 }
 
+/** A variable of `$vars`. Required: neither `optional: true` nor a `default`, so a run without it is bad usage. */
+export interface DeclaredVariable {
+  name: string;
+  required: boolean;
+  default?: string;
+  about?: string;
+  secret: boolean;
+}
+
 type Raw = Record<string, unknown>;
 
 /**
@@ -38,12 +47,13 @@ export class PipelineDefinition {
   }
 
   /** The variables `$vars` declares, with what a UI needs to ask for one. */
-  variables(): Array<{ name: string; default?: string; secret: boolean }> {
+  variables(): DeclaredVariable[] {
     return this.document.variables
       .filter((variable) => !variable.host)
       .map((variable) => {
-        const declared: { name: string; default?: string; secret: boolean } = { name: variable.name, secret: variable.secret };
+        const declared: DeclaredVariable = { name: variable.name, required: variable.required, secret: variable.secret };
         if (variable.default !== undefined && variable.default !== null) declared.default = String(variable.default);
+        if (variable.about !== undefined) declared.about = variable.about;
         return declared;
       });
   }
@@ -51,6 +61,14 @@ export class PipelineDefinition {
   /** The `default` of each variable `$vars` declares: a stage's shell sees it when no one set the variable. */
   defaults(): Record<string, string> {
     return Object.fromEntries(this.variables().flatMap((variable) => (variable.default === undefined ? [] : [[variable.name, variable.default]])));
+  }
+
+  /**
+   * Runs the file's `$tests`: each gives variables and the values it expects.
+   * Call it before the checks: an unchecked check reads as false, as a test says.
+   */
+  async test(): Promise<Array<{ about: string; failures: string[] }>> {
+    return (await this.document.test()).map(({ about, failures }) => ({ about, failures }));
   }
 
   /** Every formula and `{{ }}` computed with these variables. Checks the runner has not made read as false. */

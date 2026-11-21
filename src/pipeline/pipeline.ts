@@ -109,9 +109,10 @@ export class Pipeline {
     const vars = await this.variables(definition, dir, round);
     const changes = await this.git.changes(since, vars.toEnv());
     const used = [...spec.when, ...stages.flatMap((stage) => stage.spec.when), ...Object.keys(this.options.gates ?? {})];
-    const results = await this.checkGates(gates, used, vars, changes);
+    const made = await this.checkGates(gates, used, vars, changes);
     const values = definition.values(vars.toEnv());
-    for (const name of new Set(used)) if (!results.has(name)) results.set(name, values.passes(name));
+    // In the order the file reads them, a check the runner made or a formula.
+    const results = new Map([...new Set(used)].map((name) => [name, made.get(name) ?? values.passes(name)]));
     log.header(spec.name, round, changes, dir);
     if (!retry) log.overrides(this.overrides);
 
@@ -171,6 +172,7 @@ export class Pipeline {
     this.checkInputs(stages, dir);
     log.valid(spec.name, file.path);
     log.overrides(this.overrides);
+    await this.test(definition);
 
     let aiProblem: string | null = null;
     if (this.needsAi(stages)) aiProblem = await this.aiProblem();
@@ -178,9 +180,9 @@ export class Pipeline {
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
     const names = [...Object.keys(spec.prerequisites), ...Object.keys(this.options.gates ?? {})];
-    const results = await this.checkGates(gates, names, vars, changes);
+    const made = await this.checkGates(gates, names, vars, changes);
     const values = definition.values(vars.toEnv());
-    for (const name of names) if (!results.has(name)) results.set(name, values.passes(name));
+    const results = new Map(names.map((name) => [name, made.get(name) ?? values.passes(name)]));
 
     const checked = names.map((name) => ({ name, passed: results.get(name)!, message: this.message(spec, gates, name) }));
     if (this.needsAi(stages)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
@@ -332,6 +334,14 @@ export class Pipeline {
     for (const [name, check] of definition.checks()) gates.set(name, new Gate(name, prerequisites[name]!.message, check, prerequisites[name]!.changes));
     for (const [name, run] of Object.entries(this.options.gates ?? {})) gates.set(name, Gate.command(name, run));
     return gates;
+  }
+
+  /** The file's `$tests`, before any check is made. One that fails makes the file wrong: bad usage. */
+  private async test(definition: PipelineDefinition): Promise<void> {
+    const results = await definition.test();
+    for (const result of results) log.test(result.about, result.failures);
+    const failed = results.filter((result) => result.failures.length > 0).length;
+    if (failed) throw new UsageError(`${failed} of the pipeline's $tests ${failed === 1 ? "fails" : "fail"}`);
   }
 
   /** Why nothing runs: the top-level when, then a --gate. Null when the run goes on. */

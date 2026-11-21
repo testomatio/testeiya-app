@@ -22,7 +22,7 @@ when!: prerequisites.issue
 
 env:
   # https://github.com/org/repo/issues/42 → org-repo-issues-42
-  TESTOMATIO_BRANCH!: slug(replace(vars.ISSUE_URL, "^[a-z]+://[^/]*|[?#].*$", ""))
+  TESTOMATIO_BRANCH!: 'if matches(vars.ISSUE_URL, "^[a-z]+://") then slug(replace(vars.ISSUE_URL, "^[a-z]+://[^/]*|[?#].*$", "")) else null'
 
 stages:
   - id: requirements
@@ -54,6 +54,9 @@ $tests:
   - about: The issue names the Testomat.io branch
     vars: { ISSUE_URL: "https://github.com/org/repo/issues/42" }
     expect: { when: true, env.TESTOMATIO_BRANCH: org-repo-issues-42, stages.sync.when: false }
+  - about: An issue that is no URL names no branch
+    vars: { ISSUE_URL: PROJ-42 }
+    expect: { when: true, env.TESTOMATIO_BRANCH: null }
   - about: Without an issue nothing runs
     vars: {}
     expect: { when: false, env.TESTOMATIO_BRANCH: null }

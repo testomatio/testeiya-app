@@ -1,4 +1,4 @@
-import type { InputRead, PipelineDefinition } from "./pipeline-definition.js";
+import type { DeclaredVariable, InputRead, PipelineDefinition } from "./pipeline-definition.js";
 import type { InputUse, PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageView } from "./spec.js";
 import { BUILTIN_VARIABLES } from "./variables.js";
 
@@ -13,7 +13,7 @@ const SHELL_VARIABLES = ["HOME", "PATH", "PWD", "USER", "SHELL", "TMPDIR"];
 export class PipelineDescriber {
   private readonly found = new Map<string, PipelineInput>();
   private readonly spec: PipelineSpec;
-  private readonly declared: Map<string, { default?: string; secret: boolean }>;
+  private readonly declared: Map<string, DeclaredVariable>;
 
   constructor(private readonly definition: PipelineDefinition) {
     this.spec = definition.spec;
@@ -113,13 +113,13 @@ export class PipelineDescriber {
     const required = asking.filter(([gate]) => spec.when.includes(gate));
     const whens = this.definition.reads.filter((read) => read.name === name && read.use === "when");
     const unlocking = asking.filter(([gate]) => !spec.when.includes(gate)).map(([gate]) => gate);
-    const isRequired = required.length > 0 || whens.some((read) => read.stage === undefined);
+    const declared = this.declared.get(name);
+    const isRequired = required.length > 0 || whens.some((read) => read.stage === undefined) || Boolean(declared?.required);
     const unlocks = isRequired
       ? []
       : spec.stages
           .filter((stage) => stage.when.some((gate) => unlocking.includes(gate)) || whens.some((read) => read.stage === stage.id))
           .map((stage) => stage.id);
-    const declared = this.declared.get(name);
     const input: PipelineInput = {
       name,
       required: isRequired,
@@ -129,7 +129,7 @@ export class PipelineDescriber {
       secret: declared?.secret ?? false,
     };
     if (declared?.default !== undefined) input.default = declared.default;
-    const message = (required[0] ?? asking[0])?.[1].message;
+    const message = (required[0] ?? asking[0])?.[1].message ?? declared?.about;
     if (message !== undefined) input.message = message;
     return input;
   }

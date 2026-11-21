@@ -214,17 +214,21 @@ testeiya pipeline regression --gate 'pr:test -n "$PR_NUMBER"'
 testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
 ```
 
-- Validates the file the way a run does, then checks every prerequisite it declares,
-  used or not, plus `ai` and any `--gate`.
+- Validates the file the way a run does and runs its `$tests`, then checks every
+  prerequisite it declares, used or not, plus `ai` and any `--gate`.
 - Prints each prerequisite as passed or not, with its `message` when it does not pass.
 - Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--stage`,
   `--pipeline`, `--dir`, `--model` and `--json`.
-- Exit code: `0` every prerequisite passes, `1` one does not, `2` the file is invalid.
+- Exit code: `0` every prerequisite passes, `1` one does not, `2` the file is
+  invalid or one of its `$tests` fails.
 - `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
   chart of the stages in order, the files they pass on (dotted), and the prerequisites
   each one needs, green when it passes and red when it does not.
 
-scripted-yaml checks the shape of a file, and runs its `$tests`, without Testeiya:
+scripted-yaml checks the shape of a file without Testeiya. It finds the DSL
+beside the file, so it suits the bundled pipelines and a copy of them that keeps
+`pipeline.dsl.yml` next to it; a file that `$extends` a bundled pipeline by name
+is for `testeiya pipeline-check`:
 
 ```bash
 npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes
@@ -283,6 +287,10 @@ stages:
 - `$vars` declares a variable: its `default`, `secret: true`, an `about` for a
   UI. A default reaches every stage's shell too, so `$BASE_BRANCH` is
   `origin/main` when no one set it. Undeclared variables are read the same way.
+- A declared variable with neither `optional: true` nor a `default` is required:
+  a run without it is bad usage and exits 2, and `inputs()` lists it as required
+  with its `about` as the message. A prerequisite, `$value!: vars.NAME != null`,
+  skips with a message instead.
 - `run!sh` goes to the shell as written: no `{{ }}`. The shell reads `$NAME`,
   `${NAME:-default}`, `${NAME:+word}`, with the same variables.
 - `env:` sets variables for every stage. A value is text, or `KEY!:` a formula

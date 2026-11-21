@@ -72,7 +72,7 @@ export class PipelineSource {
     OldFormat.check(this.raw(), (message, at) => this.fail(message, at));
     let document = this.load(this.source, this.file);
     for (const override of overrides) document = this.apply(override, document);
-    const merged = document.merged();
+    const merged = this.merged(document, this.file);
     if (merged.name === undefined && this.options.name) merged.name = this.options.name;
     const text = stringify(merged);
     // What runs is the one file: a formula that read `base` has the base's formula in it now.
@@ -82,9 +82,9 @@ export class PipelineSource {
 
   /** A warning stops a pipeline too: a field the DSL does not know is a typo. `lines` false: the text is not this file's own. */
   private load(text: string, file: string, lines = true): Document {
-    // The DSL is checked whether the file names it or not; a line before the text moves every line by one.
+    // The DSL is checked whether the file names it or not; a line put in moves every line after it by one.
     const shift = PipelineSource.namesDsl(text) ? 0 : 1;
-    const input = shift ? DSL_LINE + text : text;
+    const input = shift ? PipelineSource.withDsl(text) : text;
     const scripted = this.scripted();
     try {
       const problems = scripted.validateTextSync(input, { file });
@@ -101,7 +101,7 @@ export class PipelineSource {
     OldFormat.check(override.patch, (message) => {
       throw new PipelineError(`${override.source}: ${message}`, { source: override.source });
     });
-    const before = stringify(document.merged());
+    const before = stringify(this.merged(document, override.source));
     const read: Reader = (path) => (path === BEFORE_OVERRIDE ? { file: `${override.source} (before)`, text: before } : this.read(path, override.source));
     const patch = { $extends: BEFORE_OVERRIDE, ...override.patch };
     const scripted = this.scripted(read);
@@ -137,6 +137,16 @@ export class PipelineSource {
       throw new PipelineError(`$extends ${path}: ${message}`, { key: "$extends", line: this.lineOf(["$extends"]) });
     });
     return found;
+  }
+
+  /** The file with `$extends` applied, keys as written. A formula cannot hold a marked `base`: that is the file's mistake. */
+  private merged(document: Document, file: string): Record<string, unknown> {
+    try {
+      return document.merged();
+    } catch (err) {
+      if (err instanceof ValidationFailed) throw this.problems(err.problems, file, Number.POSITIVE_INFINITY);
+      throw err;
+    }
   }
 
   /** scripted-yaml's problems as pipeline errors. Only this text's own problems have a line here. */
@@ -221,7 +231,14 @@ export class PipelineSource {
   }
 
   private static namesDsl(text: string): boolean {
-    return /^\$dsl\s*:/m.test(text) || /^\s*(%|---)/.test(text);
+    return /^\$dsl\s*:/m.test(text);
+  }
+
+  /** `$dsl` first, or right after the `---` that starts the document. */
+  private static withDsl(text: string): string {
+    const start = text.match(/^(?:[ \t]*(?:#.*|%.*)?\r?\n)*---[^\n]*\n/);
+    if (!start) return DSL_LINE + text;
+    return start[0] + DSL_LINE + text.slice(start[0].length);
   }
 
   static isRecord(value: unknown): value is Raw {
