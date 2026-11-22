@@ -1,4 +1,4 @@
-import { Expression, type Document } from "scripted-yaml";
+import { Expression, type Document } from "scripted-yaml/core";
 
 import { parseExtractFields } from "../extract-fields.js";
 import { Duration } from "./duration.js";

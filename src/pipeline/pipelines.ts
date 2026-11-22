@@ -1,3 +1,5 @@
+import type { FileText } from "scripted-yaml/core";
+
 import { BUNDLED_PIPELINES } from "./bundled.js";
 import { Pipeline } from "./pipeline-document.js";
 import { PipelineError } from "./pipeline-error.js";
@@ -81,7 +83,7 @@ export class Pipelines {
    * bundled one, so your `regression` can extend the bundled `regression`.
    * scripted-yaml applies the parent's own `$extends` and finds a loop.
    */
-  private read(path: string, from: string): { file: string; text: string } | undefined {
+  private read(path: string, from: string | undefined): FileText | undefined {
     const name = path.replace(/^\.\//, "").replace(/\.ya?ml$/, "");
     const own = this.isOwn(name) && from !== `own/${name}.yml`;
     if (own) return { file: `own/${name}.yml`, text: this.own[name] };

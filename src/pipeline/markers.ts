@@ -1,4 +1,4 @@
-import type { Marker } from "scripted-yaml";
+import type { Marker } from "scripted-yaml/core";
 
 /**
  * A value a pipeline writes with a marker: `run!sh:`, or a prerequisite's

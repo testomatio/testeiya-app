@@ -1,4 +1,4 @@
-import { ResolveFailed, type Document } from "scripted-yaml";
+import { ResolveFailed, type Document } from "scripted-yaml/core";
 
 import type { Marked } from "./markers.js";
 import { PipelineError } from "./pipeline-error.js";
@@ -74,7 +74,7 @@ export class PipelineDefinition {
   /** Every formula and `{{ }}` computed with these variables. Checks the runner has not made read as false. */
   values(vars: Record<string, string | undefined>): PipelineValues {
     try {
-      return new PipelineValues(this.spec, this.document.resolveSync({ vars }) as Raw);
+      return new PipelineValues(this.spec, this.document.resolve({ vars }) as Raw);
     } catch (err) {
       if (err instanceof ResolveFailed) throw new PipelineError(err.message);
       throw err;

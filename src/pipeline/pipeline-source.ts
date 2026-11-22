@@ -1,5 +1,5 @@
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document as YamlDocument, type Node as YamlNode } from "yaml";
-import { ScriptedYaml, ValidationFailed, type Document, type Problem, type Reader } from "scripted-yaml";
+import { Files, ScriptedYaml, ValidationFailed, type Document, type FileText, type Problem } from "scripted-yaml/core";
 
 import { BUNDLED_DSL } from "./bundled.js";
 import { PIPELINE_MARKERS } from "./markers.js";
@@ -20,9 +20,14 @@ export interface PipelineSourceOptions {
   name?: string;
   /** What the text is called: problems name it, and its `$extends` paths start from it. */
   file?: string;
-  /** Reads what `$extends` names, by name or path. Undefined: the disk is read. The DSL is always found. */
+  /** Reads what `$extends` names, by name or path. Undefined: `files` is asked. The DSL is always found. */
   read?: Reader;
+  /** Where a name `read` leaves goes next, such as the disk (`DiskFiles`). None: there is no such file. */
+  files?: Files;
 }
+
+/** The text a name stands for, or undefined when someone else should look. */
+export type Reader = (path: string, from: string | undefined) => FileText | undefined;
 
 type Raw = Record<string, unknown>;
 /** Where a value sits in the pipeline: `["stages", 2, "when"]`. */
@@ -85,9 +90,11 @@ export class PipelineSource {
     // The DSL is checked whether the file names it or not; a line put in moves every line after it by one.
     const shift = PipelineSource.namesDsl(text) ? 0 : 1;
     const input = shift ? PipelineSource.withDsl(text) : text;
-    const scripted = this.scripted();
+    const files = this.files();
+    const scripted = this.scripted(files);
     try {
-      const problems = scripted.validateTextSync(input, { file });
+      const problems = scripted.validateText(input, { file });
+      files.check();
       if (problems.length > 0) throw new ValidationFailed(problems);
       return scripted.loadTextSync(input, { file });
     } catch (err) {
@@ -104,9 +111,11 @@ export class PipelineSource {
     const before = stringify(this.merged(document, override.source));
     const read: Reader = (path) => (path === BEFORE_OVERRIDE ? { file: `${override.source} (before)`, text: before } : this.read(path, override.source));
     const patch = { $extends: BEFORE_OVERRIDE, ...override.patch };
-    const scripted = this.scripted(read);
+    const files = this.files(read);
+    const scripted = this.scripted(files);
     try {
-      const problems = scripted.validateTextSync(patch, { file: override.source });
+      const problems = scripted.validateText(patch, { file: override.source });
+      files.check();
       if (problems.length > 0) throw new ValidationFailed(problems);
       return scripted.loadTextSync(patch, { file: override.source });
     } catch (err) {
@@ -116,23 +125,26 @@ export class PipelineSource {
     }
   }
 
-  private scripted(read: Reader = (path, from) => this.read(path, from)): ScriptedYaml {
-    return new ScriptedYaml({ markers: PIPELINE_MARKERS, read });
+  private files(read: Reader = (path, from) => this.read(path, from)): ReaderFiles {
+    return new ReaderFiles(read, this.options.files);
+  }
+
+  private scripted(files: Files): ScriptedYaml {
+    return new ScriptedYaml({ markers: PIPELINE_MARKERS, files });
   }
 
   /** The DSL wherever a file names it; anything else as the options read it, checked for the old format first. */
-  private read(path: string, from: string): ReturnType<Reader> {
+  private read(path: string, from: string | undefined): FileText | undefined {
     if (path.split("/").at(-1) === DSL_FILE) return { file: DSL_FILE, text: BUNDLED_DSL };
-    let found: ReturnType<Reader>;
+    let found: FileText | undefined;
     try {
-      found = this.options.read?.(path, from);
+      found = this.options.read?.(path, from) ?? this.options.files?.read(path, from);
     } catch (err) {
       if (err instanceof PipelineError && err.line === undefined) throw new PipelineError(err.message, { key: "$extends", line: this.lineOf(["$extends"]) });
       throw err;
     }
     if (found === undefined) return undefined;
-    const text = typeof found === "string" ? found : found.text;
-    const parsed = parseDocument(text);
+    const parsed = parseDocument(found.text);
     OldFormat.check(PipelineSource.isRecord(parsed.toJS()) ? parsed.toJS() : {}, (message) => {
       throw new PipelineError(`$extends ${path}: ${message}`, { key: "$extends", line: this.lineOf(["$extends"]) });
     });
@@ -142,7 +154,7 @@ export class PipelineSource {
   /** The file with `$extends` applied, keys as written. A formula cannot hold a marked `base`: that is the file's mistake. */
   private merged(document: Document, file: string): Record<string, unknown> {
     try {
-      return document.merged();
+      return MergedBase.inline(document.merged(), (message, at) => this.fail(message, at));
     } catch (err) {
       if (err instanceof ValidationFailed) throw this.problems(err.problems, file, Number.POSITIVE_INFINITY);
       throw err;
@@ -243,6 +255,108 @@ export class PipelineSource {
 
   static isRecord(value: unknown): value is Raw {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+}
+
+/**
+ * scripted-yaml's `Files` over a `Reader`: names it does not know go to `fallback`, which also says
+ * when two names are one file. scripted-yaml reports what a reader refuses as a problem of its own;
+ * `check` throws the pipeline's error as it was, line and all.
+ */
+class ReaderFiles extends Files {
+  private refused?: PipelineError;
+
+  constructor(
+    private readonly reader: Reader,
+    private readonly fallback?: Files,
+  ) {
+    super();
+  }
+
+  read(path: string, from: string | undefined): FileText | undefined {
+    try {
+      return this.reader(path, from);
+    } catch (err) {
+      if (err instanceof PipelineError) this.refused ??= err;
+      throw err;
+    }
+  }
+
+  check(): void {
+    if (this.refused) throw this.refused;
+  }
+
+  key(file: string): string {
+    return this.fallback ? this.fallback.key(file) : super.key(file);
+  }
+}
+
+/**
+ * `merged()` keeps the entry a formula's `base` replaced under `$base`. A pipeline shows its condition
+ * and finds the prerequisites a stage needs from the formula's text, so each `base` is written out
+ * there, in brackets, and `$base` goes.
+ */
+class MergedBase {
+  static inline(data: Raw, fail: (message: string, at?: Path) => never): Raw {
+    return new MergedBase(fail).value(data, []) as Raw;
+  }
+
+  private constructor(private readonly fail: (message: string, at?: Path) => never) {}
+
+  private value(value: unknown, at: Path): unknown {
+    if (Array.isArray(value)) return value.map((item, index) => this.value(item, [...at, PipelineSource.isRecord(item) && typeof item.id === "string" ? item.id : index]));
+    if (!PipelineSource.isRecord(value)) return value;
+    const base = PipelineSource.isRecord(value.$base) ? value.$base : undefined;
+    const data: Raw = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "$base") continue;
+      data[key] = base && MergedBase.isFormula(key) && typeof item === "string" ? this.formula(key, item, base, [...at, key]) : this.value(item, [...at, key]);
+    }
+    return data;
+  }
+
+  /** The formula with `base` replaced by what it stood for. */
+  private formula(key: string, source: string, base: Raw, at: Path): string {
+    if (!MergedBase.readsBase(source)) return source;
+    const name = MergedBase.name(key);
+    const replaced = Object.keys(base).find((other) => other !== "$base" && MergedBase.name(other) === name);
+    const value = replaced === undefined ? undefined : base[replaced];
+    let inlined: string;
+    if (replaced !== undefined && MergedBase.isFormula(replaced) && typeof value === "string") {
+      inlined = PipelineSource.isRecord(base.$base) ? this.formula(replaced, value, base.$base, at) : value;
+    } else if (replaced !== undefined && !replaced.includes("!") && (value === null || typeof value !== "object")) {
+      inlined = JSON.stringify(value ?? null);
+    } else {
+      const what = replaced?.includes("!") ? "a marked value" : "a map or a list";
+      return this.fail(`${PipelineSource.keyOf(at)}: base is ${what}, which a formula cannot hold: the file cannot be written without its base`, at);
+    }
+    return MergedBase.replace(source, `(${inlined})`);
+  }
+
+  /** `when!` is a formula; `run!sh` is marked. */
+  private static isFormula(key: string): boolean {
+    return key.endsWith("!");
+  }
+
+  private static name(key: string): string {
+    const at = key.indexOf("!");
+    return at < 0 ? key : key.slice(0, at);
+  }
+
+  private static readsBase(source: string): boolean {
+    return MergedBase.outsideText(source).some((part) => /(?<![\w.])base(?![\w])/.test(part));
+  }
+
+  /** Every `base` that is a name, not part of a longer name, a field or a text. */
+  private static replace(source: string, by: string): string {
+    return source
+      .split(/("(?:[^"\\]|\\.)*")/)
+      .map((part, index) => (index % 2 ? part : part.replace(/(?<![\w.])base(?![\w])/g, by)))
+      .join("");
+  }
+
+  private static outsideText(source: string): string[] {
+    return source.split(/("(?:[^"\\]|\\.)*")/).filter((_, index) => index % 2 === 0);
   }
 }
 

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { DiskFiles, type FileText } from "scripted-yaml";
 
 import { PACKAGE_ROOT } from "../env.js";
 import { UsageError } from "../model.js";
@@ -60,17 +61,17 @@ export class PipelineFile {
 
   private source(text: string): PipelineSource {
     const name = basename(this.path).replace(/\.ya?ml$/, "");
-    return new PipelineSource(text, { name, file: this.path, read: (path, from) => PipelineFile.parent(path, from) });
+    return new PipelineSource(text, { name, file: this.path, read: (path, from) => PipelineFile.parent(path, from), files: new DiskFiles() });
   }
 
-  /** A bundled pipeline by its name. A path is read from the disk by scripted-yaml, relative to the file that names it. */
-  private static parent(name: string, from: string): { file: string; text: string } | undefined {
+  /** A bundled pipeline by its name. A path is left to the disk, relative to the file that names it. */
+  private static parent(name: string, from: string | undefined): FileText | undefined {
     if (PipelineFile.isPath(name)) return undefined;
     const bundled = join(BUNDLED_DIR, `${name}.yml`);
     if (!existsSync(bundled)) throw new PipelineError(`no pipeline "${name}" to extend`);
     const file = new PipelineFile(bundled);
     // The bundled one: a file called regression may extend the bundled regression.
-    if (resolve(file.path) === resolve(from)) return undefined;
+    if (from !== undefined && resolve(file.path) === resolve(from)) return undefined;
     return { file: file.path, text: file.text() };
   }
 
