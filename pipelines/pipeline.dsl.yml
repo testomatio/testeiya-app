@@ -1,7 +1,7 @@
 # The shape of a pipeline file. Testeiya checks every pipeline against it, so `$dsl: ./pipeline.dsl.yml`
 # at the top of a file is only for `npx scripted-yaml validate`. PIPELINES.md documents every field.
 #
-# The runner checks what a shape cannot say: a stage has exactly one of task or run, ids are unique,
+# The runner checks what a shape cannot say: a stage has exactly one of task, run, decide or extract, ids are unique,
 # a timeout reads like 30m. Markers: `run!sh:` is a shell command; a prerequisite's `$value!sh:` (exits 0), `$value!file:` (paths
 # exist) and `$value!changes:` (changed files match) are checks the runner makes before the first stage.
 
@@ -23,6 +23,6 @@ $schema:
   Stage:
     key: id
     required: [id]
-    optional: [title, emoji, task, run, session, when, inputs*, outputs*, each_line, each_file, stopOn*:StopOn, continueOn:ContinueOn, optional, timeout]
+    optional: [title, emoji, task, run, decide, threshold, extract, format*, session, when, inputs*, outputs*, each_line, each_file, stopOn*:StopOn, continueOn:ContinueOn, optional, timeout]
   StopOn: [fail, gate]
   ContinueOn: [fail]

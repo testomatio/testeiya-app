@@ -11,6 +11,7 @@
  */
 export const ENVIRONMENT_VARIABLES = [
   { name: "TESTEIYA_MODEL", group: "run", flag: "--model", description: "model to run, e.g. openrouter/anthropic/claude-sonnet-5" },
+  { name: "TESTEIYA_DECISION_MODEL", group: "run", flag: "--model", description: "decision model decide asks, e.g. openrouter/cloudflare/clef" },
   { name: "TESTEIYA_FOLLOW_UP", group: "run", flag: "--followup", description: "the user's reply; an empty value is ignored" },
   { name: "TESTEIYA_THREAD", group: "run", flag: "--thread", description: "which conversation this is, for posted comments" },
   { name: "TESTEIYA_SESSION_FILE", group: "run", flag: "--session-file", description: "where to keep the session" },
@@ -21,6 +22,7 @@ export const ENVIRONMENT_VARIABLES = [
   { name: "ANTHROPIC_API_KEY", group: "provider", secret: true, description: "Anthropic key" },
   { name: "OPENAI_API_KEY", group: "provider", secret: true, description: "OpenAI key" },
   { name: "GEMINI_API_KEY", group: "provider", secret: true, description: "Google Gemini key" },
+  { name: "TYPESAFE_API_KEY", group: "provider", secret: true, description: "TypeSafe key, for Jev" },
   { name: "CLOUDFLARE_API_KEY", group: "provider", secret: true, description: "Cloudflare AI Gateway or Workers AI key" },
   { name: "TESTOMATIO", group: "testomatio", secret: true, description: "Testomat.io project API key" },
   { name: "TESTOMATIO_PROJECT_ID", group: "testomatio", flag: "--project", description: "Testomat.io project id, turns on its MCP tools" },

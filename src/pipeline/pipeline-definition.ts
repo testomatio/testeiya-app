@@ -112,8 +112,10 @@ export class PipelineValues {
     return `when is false: ${formula ?? ""}`.trim();
   }
 
+  /** The stage's text: its task, its question or what it extracts. */
   task(id: string): string {
-    return String(this.stage(id).task ?? "");
+    const stage = this.stage(id);
+    return String(stage.task ?? stage.decide ?? stage.extract ?? "");
   }
 
   summary(): string | undefined {

@@ -353,4 +353,6 @@ export interface RunEnvelope {
   tokens: { input: number; output: number };
   durationMs: number;
   sessionId: string | null;
+  /** `extract` only: the values found, by field name. */
+  values?: Record<string, string>;
 }

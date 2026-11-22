@@ -1,5 +1,6 @@
 import { Expression, type Document } from "scripted-yaml";
 
+import { parseExtractFields } from "../extract-fields.js";
 import { Duration } from "./duration.js";
 import { ChangesMarker, FileMarker, Marked, ShellMarker } from "./markers.js";
 import { PipelineDefinition, type InputRead } from "./pipeline-definition.js";
@@ -113,7 +114,11 @@ export class PipelineBuilder {
     const at: Path = ["stages", id];
     const where = `stage "${id}"`;
     if (RESERVED_IDS.includes(id)) this.fail(`${where}: "${id}" is reserved`, [...at, "id"]);
-    if ((value.task === undefined) === (value.run === undefined)) this.fail(`${where} needs exactly one of task or run!sh`, at);
+    const kinds = ["task", "run", "decide", "extract"].filter((key) => value[key] !== undefined);
+    if (kinds.length !== 1) this.fail(`${where} needs exactly one of task, run!sh, decide or extract`, at);
+    if (value.threshold !== undefined && value.decide === undefined) this.fail(`${where}: threshold is for a decide stage`, [...at, "threshold"]);
+    if (value.format !== undefined && value.extract === undefined) this.fail(`${where}: format is for an extract stage`, [...at, "format"]);
+    if (value.session !== undefined && value.decide !== undefined) this.fail(`${where}: a decide stage has no session, a decision model does not chat`, [...at, "session"]);
     if (value.each_line !== undefined && value.each_file !== undefined) this.fail(`${where} can loop over each_line or each_file, not both`, at);
 
     const when = this.condition(value.when, `${where} when`, [...at, "when"], id);
@@ -138,6 +143,18 @@ export class PipelineBuilder {
     if (!goesOn && !stage.stopOn.includes("fail")) stage.stopOn = ["fail", ...stage.stopOn];
 
     if (value.task !== undefined) stage.task = this.written(value.task, `${where} task`, [...at, "task"], "task");
+    if (value.decide !== undefined) stage.decide = this.written(value.decide, `${where} decide`, [...at, "decide"], "task");
+    if (value.threshold !== undefined) {
+      const threshold = value.threshold;
+      if (typeof threshold !== "number" || threshold <= 0 || threshold >= 1) this.fail(`${where} threshold is a probability between 0 and 1, like 0.7`, [...at, "threshold"]);
+      stage.threshold = threshold;
+    }
+    if (value.extract !== undefined) {
+      stage.extract = this.written(value.extract, `${where} extract`, [...at, "extract"], "task");
+      const fields = parseExtractFields(this.list(value.format, `${where} format`, [...at, "format"]), "format");
+      if (typeof fields === "string") this.fail(`${where}: ${fields}`, [...at, "format"]);
+      stage.format = fields.map((field) => `${field.name}: ${field.description}`);
+    }
     if (value.run !== undefined) {
       if (!(value.run instanceof ShellMarker)) this.fail(`${where} run is a shell command: run!sh: <command>`, [...at, "run"]);
       stage.run = this.plain(value.run.command, `${where} run!sh`, [...at, "run"]) ?? "";

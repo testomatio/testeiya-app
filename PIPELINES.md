@@ -127,6 +127,10 @@ Any other word means the pipeline is started by hand. The list is exported as
 | `emoji` | Shown before the title in the final report. Default: one picked from the id |
 | `task` | An agent stage: the task text. `{{ }}` is filled in, `/skill` names expand |
 | `run!sh` | A command stage: a shell command, run with `sh` in the checkout |
+| `decide` | A decision stage: a yes or no question for a decision model. Yes passes, no fails. `{{ }}` is filled in. See [Decisions and extractions](#decisions-and-extractions) |
+| `threshold` | A decision stage only: the probability of yes that counts as yes. Default: `0.5` |
+| `extract` | An extraction stage: what an agent finds, answered as values. `{{ }}` is filled in |
+| `format` | An extraction stage only: the values, `["url: public url of a page"]`, as `testeiya extract --output` takes them |
 | `when!` | A formula over prerequisites and variables. False: the stage is skipped with the message of the prerequisite that failed |
 | `session` | A named, persistent conversation. See [Sessions](#sessions) |
 | `inputs` | Files the stage reads, linked into its folder. See [Files](#files) |
@@ -138,7 +142,7 @@ Any other word means the pipeline is started by hand. The list is exported as
 | `optional` | `true`: its fail, break or timeout neither stops the pipeline nor fails the run |
 | `timeout` | `90s`, `30m`, `1h`, or seconds. Per item in a loop. Default: none |
 
-- A stage has exactly one of `task` or `run!sh`.
+- A stage has exactly one of `task`, `run!sh`, `decide` or `extract`.
 - A stage has at most one of `each_line` or `each_file`.
 - `inputs`, `outputs` and `stopOn` are lists: `inputs: [plan.md]`. File names
   are plain text, no `{{ }}`.
@@ -330,6 +334,48 @@ stages:
 `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE` are removed:
 they belong to a single task. `TESTEIYA_MCP_SERVERS` is kept, so every agent stage
 gets the same MCP servers.
+
+## Decisions and extractions
+
+A `decide` stage asks a decision model (TypeSafe's Jev, Cloudflare's Clef, …)
+a yes or no question, the same as `testeiya decide`. The model has no tools: it
+judges the question against the stage's `inputs` and nothing else, each file
+under its own name. A folder counts as the files in it. Yes passes and no fails,
+so a no stops the pipeline unless the stage is `optional` or has
+`continueOn: fail`. A call that fails breaks the stage, it never reads as a no.
+The stage writes the decision to `<id>.json` and one line to `<id>.md` for the
+summary.
+
+The model is `TESTEIYA_DECISION_MODEL`, from the job or `--set`, never the
+pipeline's `--model`: that one is a chat model. `pipeline-check` and `--dry-run`
+check it under the `ai` gate. A `decide` stage takes no `session`.
+
+An `extract` stage is an agent stage whose answer is values, the same as
+`testeiya extract`. It writes them to `<id>.values.json`, for a later stage to
+read, and as `name: value` lines to `<id>.md`. When a value cannot be found the
+stage fails and writes no values. It always runs in the pipeline's process, even
+under `TESTEIYA_PIPELINE_SPAWN=1`.
+
+```yaml
+stages:
+  - id: tests
+    run!sh: npx playwright test --reporter=line > "$STAGE_DIR/results.txt"
+    outputs: [results.txt]
+    continueOn: fail
+  - id: releasable
+    decide: Did every test pass, with no test skipped for a known bug?
+    threshold: 0.8
+    inputs: [results.txt]
+  - id: preview
+    extract: The public url of this pull request's preview deployment
+    format: ["url: public url of the deployed page"]
+  - id: smoke
+    run!sh: BASE_URL=$(jq -r .url "$STAGE_DIR/preview.values.json") npx playwright test smoke
+    inputs: [preview.values.json]
+```
+
+The values are files, not variables: a `when!` and the prerequisites are
+computed before the first stage, so they cannot read what a stage found.
 
 ## Packages
 

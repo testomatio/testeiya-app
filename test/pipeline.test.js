@@ -116,9 +116,9 @@ test("the old gates key points at prerequisites", () => {
 });
 
 test("a stage needs exactly one of task or run", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n"), /exactly one of task or run/);
+  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n"), /exactly one of task, run!sh, decide or extract/);
   const both = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run!sh: echo\n    task: hi\n";
-  assert.throws(() => parse(both), /exactly one of task or run/);
+  assert.throws(() => parse(both), /exactly one of task, run!sh, decide or extract/);
 });
 
 test("a stage without a title or an emoji gets them from its id", () => {
@@ -483,7 +483,7 @@ test("a wrong override is bad usage, found before anything runs", () => {
   assert.throws(() => overridden(Override.stage("plan:title: Planning")), /--stage plan: .*a plain field in a patch does not overwrite/);
   assert.throws(() => overridden(Override.stage("plan:$replace: { model: x }")), /"model" does not exist in the base/);
   assert.throws(() => overridden(Override.stage("plan:append_task: x")), /--stage plan: append_task is now \$after/);
-  assert.throws(() => overridden(Override.stage("run:$add: { task: x }")), /exactly one of task or run!sh/);
+  assert.throws(() => overridden(Override.stage("run:$add: { task: x }")), /exactly one of task, run!sh, decide or extract/);
   assert.throws(() => overridden(Override.stage("plan:$replace: { when!: prerequisites.staging }")), /there is no key "staging" in "prerequisites"/);
   assert.throws(() => overridden(Override.pipeline("stages: { $remove: [nope] }")), /"nope" does not exist in the base, so it cannot be removed/);
   assert.throws(() => Override.stage("plan"), /--stage takes ID:YAML/);
@@ -943,4 +943,136 @@ test("a task left behind keeps the crash guard until it settles", async () => {
   assert.equal(process.listenerCount("uncaughtException"), before + 1);
   await new Promise((done) => setTimeout(done, 3000));
   assert.equal(process.listenerCount("uncaughtException"), before);
+});
+
+test("a decide stage takes a question and a threshold; an extract stage a format", () => {
+  const spec = parse(`
+stages:
+  - id: ready
+    decide: Is the build green?
+    threshold: 0.8
+  - id: deploy
+    extract: The deployment url
+    format: ["url: public url of a page"]
+`);
+  const [ready, deploy] = spec.stages;
+  assert.equal(ready.decide, "Is the build green?");
+  assert.equal(ready.threshold, 0.8);
+  assert.equal(deploy.extract, "The deployment url");
+  assert.deepEqual(deploy.format, ["url: public url of a page"]);
+});
+
+test("threshold, format and session are checked against the stage kind", () => {
+  assert.throws(() => parse("stages:\n  - id: a\n    task: hi\n    threshold: 0.5\n"), /threshold is for a decide stage/);
+  assert.throws(() => parse("stages:\n  - id: a\n    task: hi\n    format: [x]\n"), /format is for an extract stage/);
+  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    session: s\n"), /a decide stage has no session/);
+  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    threshold: 2\n"), /between 0 and 1/);
+  assert.throws(() => parse("stages:\n  - id: a\n    extract: x\n    format: [\"url: a\", \"url: b\"]\n"), /two format values are called "url"/);
+  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    task: hi\n"), /exactly one of/);
+});
+
+// Answers yes when any state value says "green"; "BROKEN" in the question is a failed call.
+function fakeDecide(log) {
+  return async (request, model) => {
+    appendFileSync(log, JSON.stringify({ decide: request.question, state: request.state, threshold: request.threshold, model }) + "\n");
+    if (request.question.includes("BROKEN")) {
+      const { DecisionError } = await import("../dist/src/decision.js");
+      throw new DecisionError("fetch failed");
+    }
+    const yes = Object.values(request.state).some((text) => text.includes("green"));
+    const probability = yes ? 0.9 : 0.1;
+    return { answer: probability >= (request.threshold ?? 0.5) ? "yes" : "no", probability, threshold: request.threshold ?? 0.5, question: request.question, model: model ?? "fake/clef", tokens: { input: 1, output: 0 } };
+  };
+}
+
+// The fake task, plus values for an extract request.
+function fakeExtractTask(log) {
+  const task = fakeTask(log);
+  return async (request, control) => {
+    if (!request.extract) return task(request, control);
+    appendFileSync(log, JSON.stringify({ extract: request.extract, outputs: request.outputs }) + "\n");
+    if (request.prompt.includes("NOTHING")) return { code: 1, envelope: { status: "fail", reason: "not found" }, undelivered: false };
+    const values = Object.fromEntries(request.extract.map((field) => [field.name, `the ${field.name}`]));
+    for (const out of request.outputs) writeFileSync(out, JSON.stringify({ status: "pass", values }));
+    return { code: 0, envelope: { status: "pass", reason: null, values }, undelivered: false };
+  };
+}
+
+const DECIDE_PIPELINE = (question, extract = "The deployment url") => `
+stages:
+  - id: build
+    run!sh: echo "the build is $BUILD" > "$STAGE_DIR/build.txt"
+    outputs: [build.txt]
+  - id: ready
+    decide: ${question}
+    inputs: [build.txt]
+  - id: deploy
+    extract: ${extract}
+    format: ["url: public url of a page", "version: the version"]
+  - id: use
+    run!sh: cat "$STAGE_DIR/deploy.values.json"
+    inputs: [deploy.values.json]
+`;
+
+test("a decide stage passes on yes and judges its inputs; extract values reach a later stage", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", DECIDE_PIPELINE("Is the build green?"));
+  const dir = join(repo, ".qa");
+  const options = { name: file, dir, runTask: fakeExtractTask(log), decide: fakeDecide(log), sets: { BUILD: "green", TESTEIYA_DECISION_MODEL: "fake/jev" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+
+  const decided = calledWith(log).find((call) => call.decide);
+  assert.equal(decided.decide, "Is the build green?");
+  assert.deepEqual(Object.keys(decided.state), ["build.txt"]);
+  assert.equal(decided.model, "fake/jev");
+  assert.equal(readJson(join(dir, "2-ready", "ready.json")).answer, "yes");
+  assert.match(readFileSync(join(dir, "2-ready", "ready.md"), "utf8"), /^\*\*Yes\*\*: Is the build green\?/);
+
+  const extracted = calledWith(log).find((call) => call.extract);
+  assert.deepEqual(extracted.extract.map((field) => field.name), ["url", "version"]);
+  assert.ok(extracted.outputs.every((out) => !out.endsWith(".md")), "the model is not asked for a report");
+  assert.deepEqual(readJson(join(dir, "3-deploy", "deploy.values.json")), { url: "the url", version: "the version" });
+  assert.equal(readFileSync(join(dir, "3-deploy", "deploy.md"), "utf8"), "url: the url\nversion: the version\n");
+  assert.match(readFileSync(join(dir, "4-use", "use.log"), "utf8"), /"url": "the url"/);
+});
+
+test("a no fails the decide stage and stops the run; a failed call is broken, not a no", async () => {
+  const { repo, log } = setup();
+  const dir = join(repo, ".qa");
+  const no = write(repo, "no.yml", DECIDE_PIPELINE("Is the build green?"));
+  const options = { name: no, dir, runTask: fakeExtractTask(log), decide: fakeDecide(log), sets: { BUILD: "red" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 1);
+  let stages = readJson(join(dir, "pipeline.json")).stages;
+  assert.equal(stages[1].status, "fail");
+  assert.match(stages[1].reason, /no \(p=0.10\)/);
+  assert.equal(stages[2].status, "not-run");
+
+  const broken = write(repo, "broken.yml", DECIDE_PIPELINE("BROKEN?"));
+  const brokenDir = join(repo, ".qb");
+  assert.equal(await inRepo(repo, () => new Pipeline({ ...options, name: broken, dir: brokenDir }).run()), 1);
+  stages = readJson(join(brokenDir, "pipeline.json")).stages;
+  assert.equal(stages[1].status, "broken");
+  assert.match(stages[1].reason, /no answer: fetch failed/);
+});
+
+test("an extract stage that finds nothing fails", async () => {
+  const { repo, log } = setup();
+  const dir = join(repo, ".qa");
+  const file = write(repo, "pipe.yml", DECIDE_PIPELINE("Is the build green?", "NOTHING here"));
+  const options = { name: file, dir, runTask: fakeExtractTask(log), decide: fakeDecide(log), sets: { BUILD: "green" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 1);
+  const stages = readJson(join(dir, "pipeline.json")).stages;
+  assert.equal(stages[2].status, "fail");
+  assert.ok(!existsSync(join(dir, "3-deploy", "deploy.values.json")));
+});
+
+test("a pipeline with a decide stage checks the decision model before it runs", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", "stages:\n  - id: ready\n    decide: Is it green?\n");
+  const checkDecider = async () => {
+    throw new UsageError("No decision model: set TESTEIYA_DECISION_MODEL");
+  };
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeTask(log), decide: fakeDecide(log), checkDecider };
+  await assert.rejects(inRepo(repo, () => new Pipeline(options).run()), /No decision model/);
+  assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 1);
 });

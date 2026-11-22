@@ -57,7 +57,7 @@ export interface ChangesSpec {
   min_files?: number;
 }
 
-/** Exactly one of `task` or `run`; at most one of `each_line` or `each_file`. */
+/** Exactly one of `task`, `run`, `decide` or `extract`; at most one of `each_line` or `each_file`. */
 export interface StageSpec {
   id: string;
   /** Names the stage's section in the final report. */
@@ -67,6 +67,14 @@ export interface StageSpec {
   task?: string;
   /** A command stage: the shell command of `run!sh`. */
   run?: string;
+  /** A decision stage: the yes or no question, `{{ }}` as written. Yes passes, no fails. */
+  decide?: string;
+  /** The probability of yes a decision stage counts as yes. 0.5 by default. */
+  threshold?: number;
+  /** An extraction stage: what to find, `{{ }}` as written. */
+  extract?: string;
+  /** The values an extraction stage finds, each `name: description`, as `--output` takes them. */
+  format?: string[];
   /** A named, persistent conversation. */
   session?: string;
   inputs: string[];
@@ -87,6 +95,8 @@ export interface StageSpec {
 
 export type StopOn = "fail" | "gate";
 
+export type StageKind = "task" | "run" | "decide" | "extract";
+
 /** A pipeline as a UI shows it: what runs, what it needs, what a user can set. `Pipeline.describe()` returns it. */
 export interface PipelineDescription {
   name: string;
@@ -102,8 +112,8 @@ export interface StageView {
   id: string;
   title: string;
   emoji: string;
-  kind: "task" | "run";
-  /** The task or the command. */
+  kind: StageKind;
+  /** The task, the command, the question or what to extract. */
   text: string;
   session?: string;
   /** Prerequisite names its `when` reads. */
@@ -116,6 +126,10 @@ export interface StageView {
   stopOn: StopOn[];
   optional: boolean;
   timeout?: string | number;
+  /** A decide stage's threshold. */
+  threshold?: number;
+  /** An extract stage's values, `name: description`. */
+  format?: string[];
 }
 
 export interface PrerequisiteView {

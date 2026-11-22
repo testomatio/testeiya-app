@@ -1,0 +1,43 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { parseExtractFields, type ExtractField } from "../extract-fields.js";
+import type { TaskOutcome, TaskRequest } from "../run.js";
+import type { Item, StageContext } from "./stage.js";
+import { TaskStage } from "./task-stage.js";
+
+/**
+ * An agent stage whose answer is values, as `testeiya extract`. It writes them
+ * to `<id>.values.json` for a later stage to read, and as `name: value` lines
+ * to `<id>.md` for the summary. No values found: the stage fails.
+ */
+export class ExtractStage extends TaskStage {
+  // The values come back in the outcome: a child process would only leave its stdout.
+  protected readonly spawns = false;
+
+  files(): string[] {
+    return [...super.files(), `${this.id}.values.json`];
+  }
+
+  /** The envelope only: there is no report for the model to write. */
+  protected request(context: StageContext, item: Item, outputs: string[], task: string): TaskRequest {
+    const request = super.request(context, item, outputs.filter((output) => !output.endsWith(".md")), task);
+    request.extract = this.fields();
+    return request;
+  }
+
+  protected finished(dir: string, item: Item, outcome: TaskOutcome): void {
+    const values = outcome.envelope.values;
+    if (!values) return;
+    const base = join(dir, this.folder, `${this.id}${item.suffix}`);
+    writeFileSync(`${base}.values.json`, `${JSON.stringify(values, null, 2)}\n`);
+    writeFileSync(`${base}.md`, this.fields().map((field) => `${field.name}: ${values[field.name]}\n`).join(""));
+  }
+
+  private fields(): ExtractField[] {
+    const fields = parseExtractFields(this.spec.format ?? []);
+    // The builder already checked the format.
+    if (typeof fields === "string") throw new Error(fields);
+    return fields;
+  }
+}

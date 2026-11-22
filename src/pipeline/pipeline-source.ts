@@ -292,7 +292,7 @@ class OldFormat {
     const at: Path = ["stages", typeof stage.id === "string" ? stage.id : index];
     if (stage.when !== undefined) this.fail("when is now a formula: when!: prerequisites.a and prerequisites.b", [...at, "when"]);
     if (stage.run !== undefined) this.fail("run is now run!sh: <command>", [...at, "run"]);
-    for (const key of ["task", "title"]) this.text(stage[key], [...at, key]);
+    for (const key of ["task", "decide", "extract", "title"]) this.text(stage[key], [...at, key]);
     for (const key of ["inputs", "outputs"]) for (const item of Array.isArray(stage[key]) ? stage[key] : []) this.text(item, [...at, key]);
   }
 

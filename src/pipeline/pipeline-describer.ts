@@ -1,5 +1,5 @@
 import type { DeclaredVariable, InputRead, PipelineDefinition } from "./pipeline-definition.js";
-import type { InputUse, PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageView } from "./spec.js";
+import type { InputUse, PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageKind, StageSpec, StageView } from "./spec.js";
 import { BUILTIN_VARIABLES } from "./variables.js";
 
 /** Set by the shell or the machine, never asked of a user. */
@@ -39,8 +39,8 @@ export class PipelineDescriber {
       id: spec.id,
       title: spec.title,
       emoji: spec.emoji,
-      kind: spec.run !== undefined ? "run" : "task",
-      text: spec.run ?? spec.task ?? "",
+      kind: PipelineDescriber.kind(spec),
+      text: spec.run ?? spec.task ?? spec.decide ?? spec.extract ?? "",
       when: spec.when,
       inputs: spec.inputs,
       outputs: spec.outputs,
@@ -52,7 +52,16 @@ export class PipelineDescriber {
     if (spec.each_line !== undefined) view.loop = { each_line: spec.each_line };
     if (spec.each_file !== undefined) view.loop = { each_file: spec.each_file };
     if (spec.timeout !== undefined) view.timeout = spec.timeout;
+    if (spec.threshold !== undefined) view.threshold = spec.threshold;
+    if (spec.format !== undefined) view.format = spec.format;
     return view;
+  }
+
+  private static kind(spec: StageSpec): StageKind {
+    if (spec.run !== undefined) return "run";
+    if (spec.decide !== undefined) return "decide";
+    if (spec.extract !== undefined) return "extract";
+    return "task";
   }
 
   private prerequisite(name: string): PrerequisiteView {

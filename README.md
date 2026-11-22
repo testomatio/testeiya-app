@@ -95,6 +95,8 @@ testeiya models anthropic   # list what your key can reach
 ```bash
 testeiya task "<task>"     # run one task, deliver a report, exit
 testeiya ask "<question>"  # answer a question, no report
+testeiya decide "<question>"  # yes or no from a decision model: exit 0 yes, 1 no
+testeiya extract "<what>" -o "<name>: <description>"  # find values, print them
 testeiya pipeline <name>   # run several stages in a row, see Pipelines
 testeiya skills            # list the skills bundled with this package
 testeiya sessions          # list saved sessions for this folder
@@ -118,6 +120,29 @@ A task can come from stdin too:
 ```bash
 cat issue-42.md | testeiya task --output report.md
 ```
+
+### Decide and extract
+
+`decide` asks a decision model, such as TypeSafe's Jev or Cloudflare's Clef, a
+yes or no question. It has no tools: it judges the question against the files
+you pass with `--context`, or against stdin. It prints `yes` or `no` and exits
+`0` or `1`. A failed call exits `1` too, so a gate fails closed.
+
+```bash
+export TESTEIYA_DECISION_MODEL=openrouter/cloudflare/clef
+testeiya decide "Can we release?" --context report.md --threshold 0.8 && npm publish
+```
+
+`extract` runs the agent like a task, but its answer is values, one per
+`--output`, printed as `name: value` lines or as JSON with `--json`:
+
+```bash
+testeiya extract "A public url for the deployment of this PR" --output "url: public url of a page"
+# url: https://pr-42.preview.example.com
+```
+
+When a value cannot be found nothing is printed and it exits `1`. Both commands
+work as pipeline stages too, see [PIPELINES.md](PIPELINES.md#decisions-and-extractions).
 
 Every command takes `--json` for machine-readable output of the run envelope
 (verdict, reason, tokens, session id). `testeiya --help` lists all options;

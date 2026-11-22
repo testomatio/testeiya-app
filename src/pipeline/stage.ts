@@ -1,6 +1,7 @@
 import { cpSync, existsSync, globSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative } from "node:path";
 
+import type { DecisionRequest, Decision } from "../decision.js";
 import type { CrashGuard } from "./crash-guard.js";
 import { Duration } from "./duration.js";
 import type { Launched, Launcher } from "./launcher.js";
@@ -188,6 +189,8 @@ export interface StageContext {
   launcher: Launcher;
   /** Runs an agent stage in this process. */
   runTask: TaskRunner;
+  /** Asks a decision model, `model` or TESTEIYA_DECISION_MODEL. */
+  decide: (request: DecisionRequest, model?: string) => Promise<Decision>;
   /** Records the stage and exits when that agent stage crashes the process. */
   guard: CrashGuard;
   /** The `testeiya` CLI an agent stage spawns under TESTEIYA_PIPELINE_SPAWN=1. */

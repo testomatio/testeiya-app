@@ -6,10 +6,13 @@ import { chalkStderr as c } from "chalk";
 
 import { Git, type Changes } from "../git.js";
 import { UsageError } from "../model.js";
+import { Decider, type Decision, type DecisionRequest } from "../decision.js";
 import { runTask, type TaskRunner } from "../run.js";
 import { CommandStage } from "./command-stage.js";
+import { DecideStage } from "./decide-stage.js";
 import { CrashGuard } from "./crash-guard.js";
 import { Diagram } from "./diagram.js";
+import { ExtractStage } from "./extract-stage.js";
 import { Gate } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
@@ -48,12 +51,15 @@ export class Pipeline {
   private readonly launcher = new Launcher(this.cwd);
   private readonly cli: string;
   private readonly runTask: TaskRunner;
+  private readonly decide: DecideRunner;
+  private readonly deciders = new Map<string, Promise<Decider>>();
 
   private readonly overrides: Override[];
 
   constructor(private readonly options: PipelineOptions) {
     this.cli = options.cli ?? fileURLToPath(new URL("../cli.js", import.meta.url));
     this.runTask = options.runTask ?? runTask;
+    this.decide = options.decide ?? ((request, model) => this.decider(model).then((decider) => decider.decide(request)));
     // --pipeline first, so --stage can change a stage it adds.
     this.overrides = [...(options.pipelineOverrides ?? []).map(Override.pipeline), ...(options.stageOverrides ?? []).map(Override.stage)];
   }
@@ -103,7 +109,7 @@ export class Pipeline {
     }
 
     let aiProblem: string | null = null;
-    if (this.needsAi(stages)) aiProblem = await this.aiProblem();
+    if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
     const vars = await this.variables(definition, dir, round);
@@ -175,7 +181,7 @@ export class Pipeline {
     await this.test(definition);
 
     let aiProblem: string | null = null;
-    if (this.needsAi(stages)) aiProblem = await this.aiProblem();
+    if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
     const vars = await this.variables(definition, dir, 1);
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
@@ -225,7 +231,7 @@ export class Pipeline {
         state.save();
         continue;
       }
-      if (stage instanceof CommandStage && this.inputsSkipped(stage, run)) {
+      if ((stage instanceof CommandStage || stage instanceof DecideStage) && this.inputsSkipped(stage, run)) {
         stage.skip(record, "its inputs come from skipped stages");
         state.save();
         continue;
@@ -280,6 +286,7 @@ export class Pipeline {
       launcher: this.launcher,
       cli: this.cli,
       runTask: this.runTask,
+      decide: this.decide,
       guard: new CrashGuard((err) => this.crashed(run.state, err)),
       model: this.options.model,
       report,
@@ -287,6 +294,17 @@ export class Pipeline {
       task: (stage, vars) => run.definition.values(vars.toEnv()).task(stage.id),
       locate: (input, reader) => this.locate(input, reader, run),
     };
+  }
+
+  /** One decider per model, made the first time a stage asks. */
+  private decider(model?: string): Promise<Decider> {
+    const key = model ?? "";
+    let decider = this.deciders.get(key);
+    if (!decider) {
+      decider = Decider.create(model);
+      this.deciders.set(key, decider);
+    }
+    return decider;
   }
 
   /** The process is in an unknown state after an uncaught error: save what ran, stop. */
@@ -365,6 +383,8 @@ export class Pipeline {
     const stages = specs.map((spec, index) => {
       const folder = `${String(index + 1).padStart(width, "0")}-${spec.id}`;
       if (spec.run !== undefined) return new CommandStage(spec, folder);
+      if (spec.decide !== undefined) return new DecideStage(spec, folder);
+      if (spec.extract !== undefined) return new ExtractStage(spec, folder);
       return new TaskStage(spec, folder);
     });
     for (const stage of stages) {
@@ -414,7 +434,7 @@ export class Pipeline {
     }
   }
 
-  // A shell command cannot reason about a missing file; an agent stage is told instead.
+  // A shell command or a decision model cannot reason about a missing file; an agent stage is told instead.
   private inputsSkipped(stage: Stage, run: Run): boolean {
     const inputs = stage.inputs();
     if (inputs.length === 0) return false;
@@ -455,13 +475,21 @@ export class Pipeline {
 
   /** The summary is an agent, so a pipeline with one needs a model. */
   private needsAi(stages: Stage[]): boolean {
+    return this.needsChat(stages) || this.needsDecider(stages);
+  }
+
+  private needsChat(stages: Stage[]): boolean {
     return stages.length > 1 || stages.some((stage) => stage instanceof TaskStage);
   }
 
-  private async aiProblem(): Promise<string | null> {
-    if (!this.options.checkAi) return null;
+  private needsDecider(stages: Stage[]): boolean {
+    return stages.some((stage) => stage instanceof DecideStage);
+  }
+
+  private async aiProblem(stages: Stage[]): Promise<string | null> {
     try {
-      await this.options.checkAi(this.options.model);
+      if (this.needsChat(stages)) await this.options.checkAi?.(this.options.model);
+      if (this.needsDecider(stages)) await this.options.checkDecider?.(this.options.sets?.TESTEIYA_DECISION_MODEL);
       return null;
     } catch (err) {
       if (err instanceof UsageError) return err.message;
@@ -524,7 +552,13 @@ export interface PipelineOptions {
   runTask?: TaskRunner;
   /** Throws when no model or key resolves. */
   checkAi?: (model?: string) => Promise<void>;
+  /** Throws when a decide stage has no decision model or key. */
+  checkDecider?: (model?: string) => Promise<void>;
+  /** Asks the decision model of a decide stage. Tests swap in a fake. */
+  decide?: DecideRunner;
 }
+
+type DecideRunner = (request: DecisionRequest, model?: string) => Promise<Decision>;
 
 interface Run {
   definition: PipelineDefinition;

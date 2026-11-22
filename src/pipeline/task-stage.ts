@@ -19,6 +19,8 @@ const RETRY_NOTE =
  */
 export class TaskStage extends Stage {
   protected readonly result = { field: "report" as const, extension: "md" };
+  /** Whether TESTEIYA_PIPELINE_SPAWN=1 runs it as a `testeiya task` child process. */
+  protected readonly spawns: boolean = true;
 
   files(): string[] {
     return [`${this.id}.md`, `${this.id}.json`];
@@ -32,7 +34,7 @@ export class TaskStage extends Stage {
     rmSync(join(dir, envelope), { force: true });
 
     const task = this.task(context, vars);
-    if (process.env.TESTEIYA_PIPELINE_SPAWN === "1") return this.spawn(context, item, vars, task, report, envelope);
+    if (this.spawns && process.env.TESTEIYA_PIPELINE_SPAWN === "1") return this.spawn(context, item, vars, task, report, envelope);
 
     const request = this.request(context, item, [join(dir, report), join(dir, envelope)], task);
     let session: string | null = null;
@@ -60,6 +62,7 @@ export class TaskStage extends Stage {
         running.left = true;
         log.abandoned(`${this.id}${item.suffix}`);
       }
+      if (outcome) this.finished(dir, item, outcome);
       context.report?.copy(join(dir, report));
       const done: Launched = { code: outcome?.code ?? 1, timedOut: controller.signal.reason === "timeout", interrupted: context.launcher.interrupted };
       if (!outcome) return { ...this.outcome(done, "broken", "it did not stop"), report };
@@ -83,7 +86,10 @@ export class TaskStage extends Stage {
     }
   }
 
-  private request(context: StageContext, item: Item, outputs: string[], task: string): TaskRequest {
+  /** After the task ran in this process, before its report is copied. */
+  protected finished(_dir: string, _item: Item, _outcome: TaskOutcome): void {}
+
+  protected request(context: StageContext, item: Item, outputs: string[], task: string): TaskRequest {
     const { session } = this.spec;
     const request: TaskRequest = { prompt: task, outputs: [...outputs] };
     // Only the reporting stage posts. Every other stage keeps out of the comment thread.

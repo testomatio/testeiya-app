@@ -10,6 +10,7 @@ export const PROVIDER_KEYS: Array<{ provider: string; env: string }> = [
   { provider: "google", env: "GEMINI_API_KEY" },
   { provider: "cloudflare-ai-gateway", env: "CLOUDFLARE_API_KEY" },
   { provider: "cloudflare-workers-ai", env: "CLOUDFLARE_API_KEY" },
+  { provider: "typesafe", env: "TYPESAFE_API_KEY" },
 ];
 
 // Its own module, so the browser-safe pipeline parser can throw it without this one.
@@ -38,6 +39,26 @@ export function resolveModel(runtime: ModelRuntime, explicit?: string, saved?: S
   const model = runtime.getModel(parsed.provider, parsed.id);
   if (!model) {
     throw new UsageError(`unknown model "${parsed.id}" for provider "${parsed.provider}"`);
+  }
+  return requireAuth(runtime, model);
+}
+
+/**
+ * The decision model `decide` asks: --model, then TESTEIYA_DECISION_MODEL.
+ * Never TESTEIYA_MODEL: that one is a chat model, and a chat model cannot answer.
+ */
+export function resolveDecisionModel(runtime: ModelRuntime, explicit?: string) {
+  const candidate = explicit || process.env.TESTEIYA_DECISION_MODEL;
+  if (!candidate) {
+    throw new UsageError("no decision model — pass --model <provider>/<id> or set TESTEIYA_DECISION_MODEL, e.g. openrouter/cloudflare/clef");
+  }
+  const parsed = splitModelId(candidate);
+  if (!parsed) throw new UsageError(`a model must be <provider>/<model-id>, got "${candidate}"`);
+  const model = runtime.getModelOfType("classifier", parsed.provider, parsed.id);
+  if (!model) {
+    let hint = "";
+    if (runtime.getModel(parsed.provider, parsed.id)) hint = ": it is a chat model, decide needs a decision model like Jev or Clef";
+    throw new UsageError(`unknown decision model "${parsed.id}" for provider "${parsed.provider}"${hint}`);
   }
   return requireAuth(runtime, model);
 }

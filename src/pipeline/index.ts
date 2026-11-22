@@ -21,6 +21,7 @@ export type {
   PipelineInput,
   PipelineSpec,
   PrerequisiteView,
+  StageKind,
   StageSpec,
   StageView,
   StopOn,
