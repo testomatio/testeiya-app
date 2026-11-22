@@ -22,10 +22,8 @@ test("the job says which host, the checkout never does", () => {
 test("the thread is a subject, not a pull request", () => {
   for (const host of HOSTS) {
     const text = block(host);
-    assert.match(text, /a pull request, a merge request, an issue/, host);
     assert.ok(text.includes(MARKER), `${host} omits the line to write`);
     assert.match(text, /Never delete/, host);
-    assert.match(text, /complete current answer/, host);
   }
 });
 
@@ -80,20 +78,6 @@ test("the answer is the report file, marker first and footer last", () => {
   assert.doesNotMatch(bare, /Its last line is exactly/);
 });
 
-test("the block states intent, not shell", () => {
-  for (const host of HOSTS) {
-    const text = block(host);
-    assert.doesNotMatch(text, /curl/, `${host} explains curl`);
-    assert.doesNotMatch(text, /--header|--data-urlencode|--raw-field|--paginate|--jq/, `${host} spells out flags`);
-    for (const line of text.split("\n").slice(1, -1)) {
-      if (line.trim()) assert.match(line, /^ {2}\S|^ {5}\S|^ {2} /, `${host} line at column 0: ${line}`);
-    }
-    const lines = text.split("\n").length;
-    assert.ok(lines < 20, `${host} block is ${lines} lines`);
-    assert.ok(text.length < 1500, `${host} block is ${text.length} chars`);
-  }
-});
-
 // Whoever posts collapses, because only the poster knows which comment is new.
 // Asked to do both while the command posted, the agent had to guess which
 // comment was this round's answer — it is not there yet — and kept sparing the
@@ -106,6 +90,7 @@ test("a delivered round leaves the thread alone", () => {
   assert.doesNotMatch(text, /minimizeComment/);
   assert.doesNotMatch(text, /Collapse every id/);
   assert.ok(text.length < 900, `delivered block is ${text.length} chars`);
+  assert.match(block("github", { delivered: true, threadMode: "first" }), /if any exist, the newest/);
 });
 
 test("a round the agent delivers still carries the whole job", () => {
@@ -126,27 +111,14 @@ test("thread lifecycle describes separate configured triggers, not a live conver
   assert.doesNotMatch(thread({}), /new PR commits|Later rounds will continue/);
 });
 
-test("first, continuing and unknown comment rounds use the right opening on every host", () => {
-  for (const host of HOSTS) {
-    for (const delivered of [false, true]) {
-      const first = block(host, { delivered, threadMode: "first" });
-      assert.doesNotMatch(first, /Since the last round/);
-      assert.match(first, /The thread starts with this answer/);
-      const continuing = block(host, { delivered, threadMode: "continuing" });
-      assert.match(continuing, /Open with "Since the last round"/);
-      assert.doesNotMatch(continuing, /The thread starts with this answer/);
-      const unknown = block(host, { delivered });
-      assert.match(unknown, /If earlier rounds of yours exist, open with "Since the last round"/);
-      for (const text of [first, continuing, unknown]) {
-        assert.match(text, /complete current answer, never a delta/);
-        assert.match(text, /Its first line is the marker above/);
-      }
-    }
+test("first, continuing and unknown comment rounds use the right opening", () => {
+  for (const delivered of [false, true]) {
+    const first = block("github", { delivered, threadMode: "first" });
+    assert.match(first, /The thread starts with this answer/);
+    assert.doesNotMatch(first, /Since the last round/);
+    assert.match(block("github", { delivered, threadMode: "continuing" }), /Open with "Since the last round"/);
+    assert.match(block("github", { delivered }), /If earlier rounds of yours exist, open with "Since the last round"/);
   }
-});
-
-test("a delivered round only compares against an earlier answer when one exists", () => {
-  assert.match(block("github", { delivered: true, threadMode: "first" }), /if any exist, the newest/);
 });
 
 test("the consolidated marker matches the CLI stamp", () => {

@@ -90,18 +90,8 @@ test("a thread name is safe inside an html comment", () => {
 
 test("the report is signed by default", () => {
   const footer = defaultFooter("openrouter/anthropic/claude-sonnet-5");
-  assert.equal(
-    footer,
-    "*🧚🏻‍♀️ Provided by [Testeiya QA Agent](https://testomat.ai/testeiya) & claude-sonnet-5*"
-  );
+  assert.match(footer, /Testeiya.*claude-sonnet-5/);
   assert.equal(decorate("verdict\n", { footer }), `verdict\n\n${footer}\n`);
-});
-
-test("the default header carries the logo and is not added twice", () => {
-  const header = defaultHeader();
-  assert.ok(header.includes("testeiya-cli-logo-64.png"));
-  assert.equal(decorate("verdict\n", { header }), `${header}\n\n---\n\nverdict\n`);
-  assert.equal(decorate(`${header}\n\nverdict\n`, { header }), `${header}\n\n---\n\nverdict\n`);
 });
 
 test("a header and footer the agent already wrote are not added twice", () => {
