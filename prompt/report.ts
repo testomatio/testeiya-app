@@ -8,7 +8,8 @@ export const verdict = dedent`
 
 export function report(options: ReportOptions): string[] {
   const parts: string[] = [];
-  if (options.brief) parts.push(briefAnswer);
+  if (options.extract) parts.push(extraction(options.extract));
+  else if (options.brief) parts.push(briefAnswer);
   if (options.outputFile) parts.push(finalReport(options.outputFile));
   return parts;
 }
@@ -45,7 +46,24 @@ export const briefAnswer = dedent`
   </answer>
 `;
 
+/** `testeiya extract`: the answer is values, submitted through a tool. */
+export function extraction(fields: Array<{ name: string; description: string }>): string {
+  // Lines joined, not a dedent template: dedent re-indents an interpolated list.
+  return [
+    "<extraction>",
+    "* You were asked to find values, not to write a report. Find each one:",
+    ...fields.map((field) => `  * \`${field.name}\`: ${field.description}`),
+    "* Look them up with your tools: files, git, the CLIs and MCP servers you have. Do not guess and do not invent a value.",
+    "* Submit them with `submit_values`, once, each as a single line with only the value.",
+    "* If a value cannot be found, call `set_result` with `fail` and a one-line reason, and do not call `submit_values`.",
+    "* No report, no summary, no headings. After submitting, stop.",
+    "</extraction>",
+  ].join("\n");
+}
+
 export interface ReportOptions {
+  /** The values `testeiya extract` asks for. Replaces the answer and report rules. */
+  extract?: Array<{ name: string; description: string }>;
   /** Absolute path the agent must write its final report to (`--output`). */
   outputFile?: string;
   /** Answer a question instead of doing a task and reporting (`testeiya ask`). */

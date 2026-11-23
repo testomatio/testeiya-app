@@ -1,23 +1,28 @@
+$dsl: ./pipeline.dsl.yml
+
 name: web-testing
 description: Review a pull request, test the change in a browser with Explorbot, explain what broke.
 target: pr
 
+$vars:
+  EXPLORBOT_VERSION: { default: latest }
+
 prerequisites:
   staging:
-    env: [EXPLORBOT_URL]
+    $value!: vars.EXPLORBOT_URL != null
     message: No staging URL. Set EXPLORBOT_URL to test in a browser.
   browser:
-    run: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
+    $value!sh: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
     message: No browser. Run npx playwright install --with-deps chromium.
-  explorbot-ai:
-    env: [EXPLORBOT_AI_PROVIDER]
+  explorbot_ai:
+    $value!: vars.EXPLORBOT_AI_PROVIDER != null
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
 
 env:
   EXPLORBOT_NO_BANNER: "1"
 
 packages:
-  explorbot: ${EXPLORBOT_VERSION:-latest}
+  explorbot!: vars.EXPLORBOT_VERSION
 
 stages:
   - id: review
@@ -30,16 +35,16 @@ stages:
     title: Test plan
     emoji: 🗺️
     session: qa
-    when: [staging]
-    task: Turn the browser scenarios in review.md into an Explorbot test plan for ${EXPLORBOT_URL} in plan.md. /explorbot-plan
+    when!: prerequisites.staging
+    task: Turn the browser scenarios in review.md into an Explorbot test plan for {{ vars.EXPLORBOT_URL }} in plan.md. /explorbot-plan
     inputs: [review.md]
     outputs: [plan.md]
 
   - id: explore
     title: Browser testing
     emoji: 🌐
-    when: [staging, browser, explorbot-ai]
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot test "$STAGE_DIR/plan.md" '*'
+    when!: prerequisites.staging and prerequisites.browser and prerequisites.explorbot_ai
+    run!sh: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot test "$STAGE_DIR/plan.md" '*'
     inputs: [plan.md]
     outputs: [explorbot/]
     # Failed scenarios go to the results stage, which says which are real.
@@ -50,8 +55,16 @@ stages:
     title: Results
     emoji: 📊
     session: qa
-    when: [staging, browser, explorbot-ai]
+    when!: prerequisites.staging and prerequisites.browser and prerequisites.explorbot_ai
     task: |
       Read the Explorbot report in explorbot/ and say which failed scenarios are real defects and which are noise. /explorbot-fundamentals
       Fail the run if any is a real defect.
     inputs: [plan.md, explorbot/]
+
+$tests:
+  - about: A staging URL turns the scenarios into a plan for it
+    vars: { EXPLORBOT_URL: "https://staging.example.com" }
+    expect: { prerequisites.staging: true, packages.explorbot: latest }
+  - about: Without a staging URL there is no plan
+    vars: { EXPLORBOT_VERSION: 0.6.0 }
+    expect: { prerequisites.staging: false, packages.explorbot: 0.6.0 }

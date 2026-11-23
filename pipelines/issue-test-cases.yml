@@ -1,28 +1,35 @@
+$dsl: ./pipeline.dsl.yml
+
 name: issue-test-cases
 description: Turn an issue or epic into test cases, and sync them to Testomat.io.
 target: issue
 
+$vars:
+  TESTOMATIO: { optional: true, secret: true }
+
+$functions:
+  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
+
 prerequisites:
   issue:
-    env: [ISSUE_URL]
+    $value!: vars.ISSUE_URL != null
     message: No issue. Set ISSUE_URL to the issue or epic to cover.
   testomatio:
-    env: [TESTOMATIO]
+    $value!: vars.TESTOMATIO != null
     message: No Testomat.io project. Set TESTOMATIO API Key to import test cases
-    secret: true
 
-when: [issue]
+when!: prerequisites.issue
 
 env:
   # https://github.com/org/repo/issues/42 → org-repo-issues-42
-  TESTOMATIO_BRANCH: ${ISSUE_URL | path | slugify}
+  TESTOMATIO_BRANCH!: 'if matches(vars.ISSUE_URL, "^[a-z]+://") then slug(replace(vars.ISSUE_URL, "^[a-z]+://[^/]*|[?#].*$", "")) else null'
 
 stages:
   - id: requirements
     title: Requirements
     emoji: 📋
     session: analyst
-    task: Review the requirements in ${ISSUE_URL}. /qa-requirement-reviewer
+    task: Review the requirements in {{ vars.ISSUE_URL }}. /qa-requirement-reviewer
 
   - id: test-cases
     title: Test cases
@@ -37,8 +44,19 @@ stages:
   - id: sync
     title: Sync to Testomat.io
     emoji: 🔄
-    when: [testomatio]
+    when!: prerequisites.testomatio
     optional: true
     each_file: test-cases/*.md
     task: |
-      Sync the test cases in ${ITEM} to Testomat.io. /sync-test-cases-with-tms
+      Sync the test cases in {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
+
+$tests:
+  - about: The issue names the Testomat.io branch
+    vars: { ISSUE_URL: "https://github.com/org/repo/issues/42" }
+    expect: { when: true, env.TESTOMATIO_BRANCH: org-repo-issues-42, stages.sync.when: false }
+  - about: An issue that is no URL names no branch
+    vars: { ISSUE_URL: PROJ-42 }
+    expect: { when: true, env.TESTOMATIO_BRANCH: null }
+  - about: Without an issue nothing runs
+    vars: {}
+    expect: { when: false, env.TESTOMATIO_BRANCH: null }

@@ -3,3 +3,5 @@
 
 /** Each bundled pipeline: its file name without `.yml`, to the file's text. */
 export declare const BUNDLED_PIPELINES: Record<string, string>;
+/** pipelines/pipeline.dsl.yml: the shape every pipeline is checked against. */
+export declare const BUNDLED_DSL: string;

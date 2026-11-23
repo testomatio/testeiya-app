@@ -1,6 +1,7 @@
 import { cpSync, existsSync, globSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative } from "node:path";
 
+import type { DecisionRequest, Decision } from "../decision.js";
 import type { CrashGuard } from "./crash-guard.js";
 import { Duration } from "./duration.js";
 import type { Launched, Launcher } from "./launcher.js";
@@ -54,11 +55,6 @@ export abstract class Stage {
 
   produces(file: string): boolean {
     return this.files().includes(file) || this.spec.outputs.includes(file);
-  }
-
-  /** The first gate in `when` that failed. */
-  closedGate(results: Map<string, boolean>): string | undefined {
-    return this.spec.when.find((name) => !results.get(name));
   }
 
   stopsOn(reason: StopOn): boolean {
@@ -193,6 +189,8 @@ export interface StageContext {
   launcher: Launcher;
   /** Runs an agent stage in this process. */
   runTask: TaskRunner;
+  /** Asks a decision model, `model` or TESTEIYA_DECISION_MODEL. */
+  decide: (request: DecisionRequest, model?: string) => Promise<Decision>;
   /** Records the stage and exits when that agent stage crashes the process. */
   guard: CrashGuard;
   /** The `testeiya` CLI an agent stage spawns under TESTEIYA_PIPELINE_SPAWN=1. */
@@ -202,6 +200,8 @@ export interface StageContext {
   report: Report | null;
   /** Why an input is not in the folder. */
   missing(input: string): string;
+  /** A stage's task, `{{ }}` filled in with these variables. */
+  task(stage: Stage, vars: Variables): string;
   /** The folder holding an input: the folder of the stage that wrote it, `.` for the top, null when absent. */
   locate(input: string, reader: Stage): string | null;
 }

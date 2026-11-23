@@ -1,0 +1,28 @@
+# The shape of a pipeline file. Testeiya checks every pipeline against it, so `$dsl: ./pipeline.dsl.yml`
+# at the top of a file is only for `npx scripted-yaml validate`. PIPELINES.md documents every field.
+#
+# The runner checks what a shape cannot say: a stage has exactly one of task, run, decide or extract, ids are unique,
+# a timeout reads like 30m. Markers: `run!sh:` is a shell command; a prerequisite's `$value!sh:` (exits 0), `$value!file:` (paths
+# exist) and `$value!changes:` (changed files match) are checks the runner makes before the first stage.
+
+$vars:
+  '/[A-Z][A-Z0-9_]*/': { optional: true, about: Any environment variable, or one set with --set. }
+  GIT_BRANCH:     { host: true, about: The branch under test. }
+  PIPELINE_DIR:   { host: true, about: The pipeline folder. }
+  PIPELINE_NAME:  { host: true }
+  PIPELINE_ROUND: { host: true }
+  STAGE_DIR:      { host: true, about: The folder of the stage that runs. }
+  ITEM:           { host: true, optional: true, about: The line or the file of a loop. }
+  ITEM_NAME:      { host: true, optional: true, about: The file name of an each_file item, without its extension. }
+
+$schema:
+  required: [stages*:Stage]
+  optional: [name, description, target, summary, env, packages, prerequisites*:Prerequisite, when]
+  Prerequisite:
+    required: [$value, message]
+  Stage:
+    key: id
+    required: [id]
+    optional: [title, emoji, task, run, decide, threshold, extract, format*, session, when, inputs*, outputs*, each_line, each_file, stopOn*:StopOn, continueOn:ContinueOn, optional, timeout]
+  StopOn: [fail, gate]
+  ContinueOn: [fail]

@@ -6,6 +6,8 @@ export const WELCOME = `
 
   testeiya task "analyze this pr and find inconsistencies"
   testeiya ask "is this feature ready"
+  testeiya decide "can we release" --context report.md
+  testeiya extract "the deployment url of this PR" -o "url: public url"
   testeiya pipeline web-testing
 
   testeiya doctor    check your setup
@@ -28,6 +30,8 @@ export const USAGE = `testeiya, an AI testing agent
 Usage:
   testeiya task "<task>"      run one task and write a report
   testeiya ask "<question>"   answer a question
+  testeiya decide "<question>"  yes or no from a decision model: exit 0 yes, 1 no
+  testeiya extract "<what>"   find values and print them one per line
   testeiya pipeline <name>    run a multi-stage pipeline, or list them with no name
   testeiya pipeline-check <name>  check a pipeline file and its prerequisites, run nothing
   testeiya doctor             check what a run would resolve
@@ -38,6 +42,7 @@ Usage:
 
 Options:
   -o, --output <dest>        report destination, repeatable: file.md, file.json, gh:pr-comment
+                             extract: "<name>: <description>" of a value to find, repeatable
       --model <id>           provider/model to run
       --project <id>         Testomat.io project id
       --followup <text>      the user's reply, added to the task as a new message
@@ -55,6 +60,8 @@ Options:
       --no-default-footer    do not sign the report
       --no-thread            keep out of the comment thread: post nothing, read no comments
       --json                 machine-readable output
+      --context <path>       decide only: a file the question is judged against, repeatable; - is stdin
+      --threshold <p>        decide only: the probability of yes that counts as yes, 0.5
       --probe                doctor only: test the key with one request
       --force                install-app only: reinstall over an existing app
 
@@ -63,8 +70,8 @@ Pipeline options:
       --dry-run              show prerequisites and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
-      --stage ID:YAML        change one stage, e.g. 'plan:append_task: Be brief.'
-      --pipeline YAML        change the pipeline, e.g. 'append_summary: Be brief.'
+      --stage ID:YAML        patch one stage, e.g. 'plan:task: { $after: Be brief. }'
+      --pipeline YAML        patch the pipeline, e.g. '$replace: { summary: Be brief. }'
   -h, --help                 show this
   -v, --version              show version
 
@@ -88,6 +95,41 @@ Running a task
   --exit-zero keeps a negative verdict from failing the command: a broken run
   still exits 1 and bad usage still exits 2. The verdict is still in the report
   and in the run envelope, so a pipeline can gate on it when it wants to.
+
+Deciding
+
+  "testeiya decide" asks a decision model (TypeSafe's Jev, Cloudflare's Clef, …)
+  a yes or no question and exits 0 for yes and 1 for no, so it drops into an if.
+  It prints "yes" or "no", and --json prints the answer with its probability.
+
+    testeiya decide "Can we release?" --context report.md --context ci.log
+
+  A decision model does not chat and has no tools: it judges the question
+  against what it is given. Pass files with --context, or pipe text on stdin
+  (with --context files too, add --context - to read stdin as well).
+  A failed call is not a "no": it prints why and exits 1 too, so a gate fails
+  closed. Bad usage exits 2.
+
+  The model is --model or TESTEIYA_DECISION_MODEL, never TESTEIYA_MODEL:
+
+    openrouter/cloudflare/clef       openrouter/typesafe/jev-1.14
+    cloudflare-workers-ai/@cf/cloudflare/clef    typesafe/jev-latest
+
+  --threshold sets how sure it must be to say yes, 0.5 by default.
+
+Extracting
+
+  "testeiya extract" runs the agent like a task, with its tools, but its answer
+  is values, not a report. Each --output names one value and says what it is.
+  Each value is printed on its own line in that format, or as an object with --json:
+
+    testeiya extract "The public url of this PR's deployment" --output "url: public url of a page"
+    url: https://pr-42.preview.example.com
+
+  When a value cannot be found nothing is printed and it exits 1. An --output
+  without a name is the value "value", printed alone:
+
+    VERSION=$(testeiya extract "the version being released" -o "a semver")
 
 Where the report goes
 
@@ -206,13 +248,14 @@ Pipelines
   --gate adds a check from the CI job, e.g. --gate 'pr:test -n "$PR_NUMBER"'.
   When it fails the whole run is skipped and exits 0.
 
-  --stage and --pipeline change a pipeline without copying it. Their value is
-  YAML: a plain key replaces, append_ and prepend_ add, remove_ drops.
+  --stage and --pipeline change a pipeline without copying it. Their value is a
+  scripted-yaml patch: $replace overwrites, $add adds a key, $before and $after
+  add text or stages, $remove drops.
 
-    testeiya pipeline issue-test-cases --stage 'requirements:append_task: Never assume credentials.'
-    testeiya pipeline web-testing --stage 'explore:{timeout: 45m, append_when: [staging]}'
+    testeiya pipeline issue-test-cases --stage 'requirements:task: { $after: Never assume credentials. }'
+    testeiya pipeline web-testing --stage 'explore:$replace: { timeout: 45m }'
 
-  A file of your own can start with "extends: <name>" and hold only the changes.
+  A file of your own can start with "$extends: <name>" and hold the same patch.
 
   A stage whose prerequisite fails is skipped with its message. A final summary
   reads every stage and is the only thing posted. Keep --dir between runs, as a
@@ -248,7 +291,7 @@ MCP servers
   add a server of its own: .pi/mcp.json is never read, and the variable in a
   .env in the checkout is ignored. Set it in the job or in ~/.testeiya/.env.`;
 
-export const COMMANDS = ["task", "ask", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "install-app", "help"] as const;
+export const COMMANDS = ["task", "ask", "decide", "extract", "pipeline", "pipeline-check", "models", "skills", "doctor", "sessions", "install-app", "help"] as const;
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const first = argv[0];
@@ -272,7 +315,9 @@ export function parseCliArgs(argv: string[]): CliArgs {
 
   const args: CliArgs = { command: first };
   const text = parsed.positionals.join(" ").trim();
-  if ((first === "task" || first === "ask") && text) args.prompt = text;
+  if ((first === "task" || first === "ask" || first === "decide" || first === "extract") && text) args.prompt = text;
+  if (Array.isArray(values.context)) args.contexts = values.context as string[];
+  if (typeof values.threshold === "string") args.threshold = values.threshold;
   if ((first === "models" || first === "skills") && text) args.pattern = text;
   if ((first === "pipeline" || first === "pipeline-check") && text) args.pipeline = text;
   if (first === "pipeline-check" && !text) return { error: "pipeline-check needs a pipeline name or a .yml path" };
@@ -291,7 +336,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
   }
   if (Array.isArray(values.pipeline)) args.pipelineOverrides = values.pipeline as string[];
   if (Array.isArray(values.stage)) args.stageOverrides = values.stage as string[];
-  if (Array.isArray(values.output)) args.outputs = values.output as string[];
+  if (Array.isArray(values.output) && first === "extract") args.formats = values.output as string[];
+  else if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
   if (values.probe) args.probe = true;
   if (values.force) args.force = true;
@@ -368,6 +414,21 @@ const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
 const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
   task: RUN_OPTIONS,
   ask: RUN_OPTIONS,
+  decide: {
+    json: JSON_FLAG,
+    model: { type: "string" },
+    context: { type: "string", multiple: true },
+    threshold: { type: "string" },
+    help: HELP_FLAG,
+  },
+  extract: {
+    output: { type: "string", short: "o", multiple: true },
+    json: JSON_FLAG,
+    model: { type: "string" },
+    project: { type: "string" },
+    mcp: { type: "string" },
+    help: HELP_FLAG,
+  },
   pipeline: PIPELINE_OPTIONS,
   "pipeline-check": {
     json: JSON_FLAG,
@@ -426,6 +487,12 @@ export interface CliArgs {
   prompt?: string;
   pattern?: string;
   outputs?: string[];
+  /** extract: the `--output` values, one per value to find. */
+  formats?: string[];
+  /** decide: files the question is judged against. */
+  contexts?: string[];
+  /** decide: as written, checked when the command runs. */
+  threshold?: string;
   json?: boolean;
   probe?: boolean;
   force?: boolean;

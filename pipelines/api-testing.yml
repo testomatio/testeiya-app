@@ -1,48 +1,53 @@
+$dsl: ./pipeline.dsl.yml
+
 name: api-testing
 description: Find the API endpoints a pull request changed, test each with Explorbot, explain what broke.
 target: pr
 
+$vars:
+  EXPLORBOT_VERSION: { default: latest }
+  EXPLORBOT_AUTH:    { optional: true, secret: true }
+
 prerequisites:
   api:
-    env: [EXPLORBOT_URL, OPENAPI_SPEC]
+    $value!: vars.EXPLORBOT_URL != null and vars.OPENAPI_SPEC != null
     message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
-  api-auth:
-    env: [EXPLORBOT_AUTH]
+  api_auth:
+    $value!: vars.EXPLORBOT_AUTH != null
     message: No auth instructions passed. If your API is publicly available with no auth - add lines explaining this. But EXPLORBOT_AUTH variable must be set
-    secret: true
-  explorbot-ai:
-    env: [EXPLORBOT_AI_PROVIDER]
+  explorbot_ai:
+    $value!: vars.EXPLORBOT_AI_PROVIDER != null
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
 
 env:
   EXPLORBOT_NO_BANNER: "1"
 
 packages:
-  explorbot: ${EXPLORBOT_VERSION:-latest}
+  explorbot!: vars.EXPLORBOT_VERSION
   "@apidevtools/swagger-cli": latest
 
 stages:
   - id: spec
     title: OpenAPI spec
     emoji: 📜
-    when: [api]
-    run: npx swagger-cli validate "$OPENAPI_SPEC"
+    when!: prerequisites.api
+    run!sh: npx swagger-cli validate "$OPENAPI_SPEC"
     timeout: 2m
 
   - id: review
     title: API review
     emoji: 🔍
     session: qa
-    when: [api, api-auth]
+    when!: prerequisites.api and prerequisites.api_auth
     task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt,
-      List only paths defined in the OpenAPI spec at ${OPENAPI_SPEC}; other APIs are out of scope.
+      List only paths defined in the OpenAPI spec at {{ vars.OPENAPI_SPEC }}; other APIs are out of scope.
       one path per line, empty if none.
-      Write each path exactly as it appears under `paths:` in ${OPENAPI_SPEC},
-      relative to ${EXPLORBOT_URL} — no host, no base prefix.
+      Write each path exactly as it appears under `paths:` in {{ vars.OPENAPI_SPEC }},
+      relative to {{ vars.EXPLORBOT_URL }} — no host, no base prefix.
 
-      Check if API is available at ${EXPLORBOT_URL}, use ${EXPLORBOT_AUTH} to authorize
+      Check if API is available at {{ vars.EXPLORBOT_URL }}, use {{ vars.EXPLORBOT_AUTH }} to authorize
       If you need to fill data use /qa-data-seeder to prepare data
       The endpoints you need to write MUST NOT contain placeholders like {id} - fill them in with exact values
       Fill in placeholders with values you find out while examining api
@@ -53,8 +58,16 @@ stages:
   - id: explore
     title: API exploration
     emoji: 🤖
-    when: [api, explorbot-ai]
+    when!: prerequisites.api and prerequisites.explorbot_ai
     each_line: endpoints.txt
-    run: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
+    run!sh: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
     outputs: [explorbot/]
     timeout: 10m
+
+$tests:
+  - about: An API with a spec and auth is reviewed
+    vars: { EXPLORBOT_URL: "https://api.example.com", OPENAPI_SPEC: openapi.yaml, EXPLORBOT_AUTH: token }
+    expect: { stages.spec.when: true, stages.review.when: true, stages.explore.when: false }
+  - about: An API without a spec is not tested
+    vars: { EXPLORBOT_URL: "https://api.example.com" }
+    expect: { prerequisites.api: false, stages.review.when: false }

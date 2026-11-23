@@ -3,43 +3,50 @@ import { existsSync } from "node:fs";
 import { matchesGlob, resolve } from "node:path";
 
 import type { Changes } from "../git.js";
-import type { GateSpec } from "./spec.js";
+import { ChangesMarker, FileMarker, ShellMarker, type Marked } from "./markers.js";
+import type { ChangesSpec } from "./spec.js";
 import type { Variables } from "./variables.js";
 
 const RUN_LIMIT_MS = 30_000;
 
-/** A named check. It passes only when every check it has passes. */
+/**
+ * A check the runner makes before the first stage: a prerequisite's
+ * `$value!sh`, `$value!file` or `$value!changes`, or a `--gate`. Its result
+ * goes on the marker, so the formulas that read the prerequisite see it.
+ */
 export class Gate {
   constructor(
     readonly name: string,
-    private readonly spec: GateSpec
+    readonly message: string,
+    private readonly check: Marked,
+    /** The rule of a `$value!changes`, as `PipelineSource` checked it. */
+    private readonly rule?: ChangesSpec,
   ) {}
 
   /** A gate the CI job adds with `--gate NAME:COMMAND`. */
   static command(name: string, run: string): Gate {
-    return new Gate(name, { run, message: `The ${name} gate did not pass.` });
-  }
-
-  get message(): string {
-    return this.spec.message;
+    return new Gate(name, `The ${name} gate did not pass.`, new ShellMarker(run));
   }
 
   get readsChanges(): boolean {
-    return Boolean(this.spec.changes);
+    return this.check instanceof ChangesMarker;
   }
 
   async passes(context: GateContext): Promise<boolean> {
-    const { spec } = this;
-    const { vars, cwd } = context;
-    if (spec.env && !spec.env.every((name) => Boolean(vars.get(name)))) return false;
-    if (spec.file && !spec.file.every((path) => existsSync(resolve(cwd, vars.expand(path))))) return false;
-    if (spec.changes && !this.matchesChanges(context.changes)) return false;
-    if (spec.run && !(await this.succeeds(vars.expand(spec.run), context))) return false;
-    return true;
+    this.check.passed = await this.evaluate(context);
+    return this.check.passed;
+  }
+
+  private async evaluate(context: GateContext): Promise<boolean> {
+    const { check } = this;
+    if (check instanceof FileMarker) return Gate.list(check.paths).every((path) => existsSync(resolve(context.cwd, path)));
+    if (check instanceof ChangesMarker) return this.matchesChanges(context.changes);
+    if (check instanceof ShellMarker) return this.succeeds(String(check.command), context);
+    return false;
   }
 
   private matchesChanges(changes: Changes): boolean {
-    const rule = this.spec.changes!;
+    const rule = this.rule ?? {};
     if (!changes.files) return false;
     const counted = changes.files.filter((file) => !(rule.ignore ?? []).some((mask) => matchesGlob(file, mask)));
     if (rule.min_files && counted.length < rule.min_files) return false;
@@ -57,6 +64,11 @@ export class Gate {
         done(code === 0);
       });
     });
+  }
+
+  private static list(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map(String);
+    return [String(value)];
   }
 }
 

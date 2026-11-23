@@ -16,14 +16,16 @@ const TOP_LEVEL = 4;
  * word, so the agent only trims it and never writes a section of its own.
  */
 export class SummaryStage extends TaskStage {
+  /** `summary` is the pipeline's `summary:`, `{{ }}` filled in. */
   constructor(
     pipeline: PipelineSpec,
+    summary: string | undefined,
     private readonly stages: Stage[],
     private readonly state: PipelineState,
     dir: string
   ) {
     const lines = [`Write the final report of the "${pipeline.name}" pipeline, round ${state.record.round}.`];
-    if (pipeline.summary) lines.push("", pipeline.summary.trim());
+    if (summary) lines.push("", summary.trim());
     lines.push("", `The verdict is ${state.record.status}.`, `The draft: ${join(dir, "summary", DRAFT_FILE)}`, "", pipelineReport);
     const spec = { id: "summary", title: "Summary", emoji: "🧾", task: lines.join("\n"), session: "summary" };
     super({ ...spec, inputs: [STATE_FILE], outputs: [], when: [], stopOn: [], optional: false });
@@ -37,6 +39,11 @@ export class SummaryStage extends TaskStage {
     mkdirSync(this.dir(context), { recursive: true });
     writeFileSync(join(this.dir(context), DRAFT_FILE), this.draft(context.dir));
     await super.run(context, record);
+  }
+
+  /** Written by the runner: there is no `{{ }}` to fill in. */
+  protected text(): string {
+    return this.spec.task ?? "";
   }
 
   /** The stages' reports already update the last round, so the summary starts from the draft. */

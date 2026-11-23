@@ -1,5 +1,7 @@
 import type { PipelineSpec } from "./spec.js";
 import type { Stage } from "./stage.js";
+import { DecideStage } from "./decide-stage.js";
+import { ExtractStage } from "./extract-stage.js";
 import { TaskStage } from "./task-stage.js";
 
 /**
@@ -78,6 +80,8 @@ export class Diagram {
     const { spec } = stage;
     let kind = "command";
     if (stage instanceof TaskStage) kind = "agent";
+    if (stage instanceof ExtractStage) kind = "extract";
+    if (stage instanceof DecideStage) kind = "decide";
     const parts = [spec.id, kind];
     if (spec.each_line) parts.push(`each line of ${spec.each_line}`);
     if (spec.each_file) parts.push(`each file ${spec.each_file}`);
@@ -86,7 +90,8 @@ export class Diagram {
     else if (!spec.stopOn.includes("fail")) parts.push("goes on after a fail");
     if (spec.stopOn.includes("gate")) parts.push("stops when skipped");
     const text = this.label(parts.join("<br/>"));
-    if (kind === "agent") return `(${text})`;
+    if (kind === "agent" || kind === "extract") return `(${text})`;
+    if (kind === "decide") return `{{${text}}}`;
     return `[${text}]`;
   }
 

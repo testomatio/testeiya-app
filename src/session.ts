@@ -19,7 +19,7 @@ import { PACKAGE_ROOT, PI_STATE_DIR, TESTEIYA_HOME } from "./env.js";
 import { langfuseConfig } from "./langfuse.js";
 import { hasMcp, envMcpServers, mcpConfig, tmsAccess } from "./mcp.js";
 import { applyEnvKeys, resolveModel } from "./model.js";
-import { createSetResultTool, type RunResult } from "./result.js";
+import { createExtractTool, createSetResultTool, type ExtractField, type RunResult } from "./result.js";
 import { sessionModel } from "./sessions.js";
 
 // From the package root, never this file's own directory: `../skills` would
@@ -102,6 +102,7 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
         backendUrl: options.backendUrl,
         outputFile: options.outputFile,
         brief: options.brief,
+        extract: options.extract,
         threadMode: options.threadMode,
         sections: options.sections?.(`${model.provider}/${model.id}`),
         connectedClis: pathClis(),
@@ -118,7 +119,10 @@ export async function createTesteiyaSession(options: SessionOptions): Promise<Cr
     resourceLoader: loader,
     settingsManager,
     sessionManager: options.sessionManager,
-    customTools: [createSetResultTool(options.result)],
+    customTools: [
+      createSetResultTool(options.result),
+      ...(options.extract ? [createExtractTool(options.result, options.extract)] : []),
+    ],
     sessionStartEvent: { type: "session_start", reason: "startup" },
   });
 
@@ -161,6 +165,8 @@ export interface SessionOptions {
   model?: string;
   outputFile?: string;
   brief?: boolean;
+  /** `extract`: the values to find, and the tool that submits them. */
+  extract?: ExtractField[];
   /** Whole prompt sections this run contributes (the pull request thread rules).
    * Built from the resolved model, which the caller cannot know before this. */
   sections?: (model: string) => string[];

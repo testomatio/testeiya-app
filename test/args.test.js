@@ -92,3 +92,21 @@ test("pipeline gates split on the first colon", () => {
   assert.deepEqual(args.gates, { pr: "test -n \"$X\" && echo a:b" });
   assert.match(parseCliArgs(["pipeline", "regression", "--gate", "pr"]).error, /NAME:COMMAND/);
 });
+
+test("extract's --output is the format of a value, not a report destination", () => {
+  const args = parseCliArgs(["extract", "the deployment url", "-o", "url: public url", "--output", "version: semver", "--json"]);
+  assert.equal(args.command, "extract");
+  assert.equal(args.prompt, "the deployment url");
+  assert.deepEqual(args.formats, ["url: public url", "version: semver"]);
+  assert.equal(args.outputs, undefined);
+  assert.equal(args.json, true);
+});
+
+test("decide takes the question, context files and a threshold", () => {
+  const args = parseCliArgs(["decide", "can we release", "--context", "report.md", "--context", "-", "--threshold", "0.8"]);
+  assert.equal(args.command, "decide");
+  assert.equal(args.prompt, "can we release");
+  assert.deepEqual(args.contexts, ["report.md", "-"]);
+  assert.equal(args.threshold, "0.8");
+  assert.match(parseCliArgs(["decide", "x", "--followup", "y"]).error, /Unknown option/);
+});

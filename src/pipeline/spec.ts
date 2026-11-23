@@ -1,6 +1,8 @@
 /**
  * A pipeline file, key for key. PIPELINES.md documents every field.
- * `PipelineSource` validates YAML into these shapes and nothing else reads YAML.
+ * `PipelineSource` validates the scripted-yaml file into these shapes. A
+ * formula stays as it is written (`condition`, `task`): `PipelineValues`
+ * computes it for one run.
  */
 
 /** The targets a host acts on. Any other word is free text and means "started by hand". */
@@ -13,31 +15,37 @@ export interface PipelineSpec {
   target?: string;
   /** Extra instructions for the final summary. */
   summary?: string;
-  /** Variables for every stage. Values expand `${NAME}`. */
+  /** Variables for every stage, as written: a `KEY!` value is a formula. */
   env: Record<string, string>;
-  /** npm package name to version, installed for the run. Values expand `${NAME}`. */
+  /** npm package name to version, as written, installed for the run. */
   packages: Record<string, string>;
   /** Named checks, defined once. */
   prerequisites: Record<string, GateSpec>;
-  /** Prerequisites for the whole run. One fails: nothing runs. */
+  /** The prerequisites the top-level `when` reads, also through other prerequisites. One fails: nothing runs. */
   when: string[];
+  /** The top-level `when!` formula. None: the pipeline always runs. */
+  condition?: string;
   stages: StageSpec[];
 }
 
-/** A prerequisite passes when every check it has passes. */
+/** A prerequisite: a formula over variables and other prerequisites, or one check the runner makes. */
 export interface GateSpec {
-  /** Every variable is set and not empty. */
-  env?: string[];
-  /** Every path exists, relative to the checkout. */
+  /** `$value!:` the formula. */
+  formula?: string;
+  /** `$value!file:` every path exists, relative to the checkout. */
   file?: string[];
-  /** The command exits 0 within 30 seconds. */
+  /** `$value!sh:` the command exits 0 within 30 seconds. */
   run?: string;
-  /** The changed files match. */
+  /** `$value!changes:` the changed files match. */
   changes?: ChangesSpec;
   /** Why the prerequisite failed, shown when it skips something. */
   message: string;
-  /** Its `env` values are secrets: a UI hides them and keeps them out of plain storage. */
-  secret?: boolean;
+  /** The variables its formula reads: what a user sets to pass it. */
+  env: string[];
+  /** The other prerequisites its formula reads. */
+  needs: string[];
+  /** One of its variables is declared `secret: true` in `$vars`. */
+  secret: boolean;
 }
 
 export interface ChangesSpec {
@@ -49,22 +57,32 @@ export interface ChangesSpec {
   min_files?: number;
 }
 
-/** Exactly one of `task` or `run`; at most one of `each_line` or `each_file`. */
+/** Exactly one of `task`, `run`, `decide` or `extract`; at most one of `each_line` or `each_file`. */
 export interface StageSpec {
   id: string;
   /** Names the stage's section in the final report. */
   title: string;
   emoji: string;
-  /** An agent stage: the task text. */
+  /** An agent stage: the task text, `{{ }}` as written. */
   task?: string;
-  /** A command stage: a shell command. */
+  /** A command stage: the shell command of `run!sh`. */
   run?: string;
+  /** A decision stage: the yes or no question, `{{ }}` as written. Yes passes, no fails. */
+  decide?: string;
+  /** The probability of yes a decision stage counts as yes. 0.5 by default. */
+  threshold?: number;
+  /** An extraction stage: what to find, `{{ }}` as written. */
+  extract?: string;
+  /** The values an extraction stage finds, each `name: description`, as `--output` takes them. */
+  format?: string[];
   /** A named, persistent conversation. */
   session?: string;
   inputs: string[];
   outputs: string[];
-  /** Prerequisites this stage needs. One fails: the stage is skipped. */
+  /** The prerequisites its `when` reads, also through other prerequisites. One fails: the stage is skipped. */
   when: string[];
+  /** The `when!` formula. None: the stage runs. */
+  condition?: string;
   /** When the pipeline stops after this stage. `fail` is there unless the stage is optional or has `continueOn: fail`. */
   stopOn: StopOn[];
   /** Its fail, break or timeout neither stops the pipeline nor fails the run. */
@@ -76,6 +94,8 @@ export interface StageSpec {
 }
 
 export type StopOn = "fail" | "gate";
+
+export type StageKind = "task" | "run" | "decide" | "extract";
 
 /** A pipeline as a UI shows it: what runs, what it needs, what a user can set. `Pipeline.describe()` returns it. */
 export interface PipelineDescription {
@@ -92,18 +112,24 @@ export interface StageView {
   id: string;
   title: string;
   emoji: string;
-  kind: "task" | "run";
-  /** The task or the command. */
+  kind: StageKind;
+  /** The task, the command, the question or what to extract. */
   text: string;
   session?: string;
-  /** Prerequisite names. */
+  /** Prerequisite names its `when` reads. */
   when: string[];
+  /** The `when!` formula, as written. */
+  condition?: string;
   inputs: string[];
   outputs: string[];
   loop?: { each_line: string } | { each_file: string };
   stopOn: StopOn[];
   optional: boolean;
   timeout?: string | number;
+  /** A decide stage's threshold. */
+  threshold?: number;
+  /** An extract stage's values, `name: description`. */
+  format?: string[];
 }
 
 export interface PrerequisiteView {
@@ -124,7 +150,7 @@ export interface PipelineInput {
   name: string;
   /** Without it, nothing runs: an `env` check of a top-level prerequisite. */
   required: boolean;
-  /** From `${NAME:-default}`, the first one found. Never one that reads another variable. */
+  /** Its `default` in `$vars`, or the first `${NAME:-default}` a shell command has that reads no other variable. */
   default?: string;
   /** The message of the prerequisite that asks for it. The UI's hint. */
   message?: string;
@@ -134,8 +160,8 @@ export interface PipelineInput {
   unlocks: string[];
   /** Where the file reads it. `run` is a shell command: a stage's or a prerequisite's. */
   usedIn: InputUse[];
-  /** A prerequisite that lists it is `secret`. */
+  /** `$vars` declares it `secret: true`. */
   secret: boolean;
 }
 
-export type InputUse = "prerequisite" | "env" | "packages" | "task" | "run" | "outputs" | "file";
+export type InputUse = "prerequisite" | "when" | "env" | "packages" | "task" | "summary" | "run";

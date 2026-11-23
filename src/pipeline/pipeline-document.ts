@@ -1,12 +1,12 @@
 import { UsageError } from "../usage-error.js";
-import { Overlay } from "./overlay.js";
+import { Override } from "./override.js";
 import { PipelineDescriber } from "./pipeline-describer.js";
-import { PipelineError } from "./pipeline-error.js";
+import { PipelineError, PipelineErrors } from "./pipeline-error.js";
 import { PipelineSource } from "./pipeline-source.js";
 import type { PipelineDescription, PipelineInput, PipelineSpec, PrerequisiteView, StageView } from "./spec.js";
 
-/** Builds an overlay from an override's YAML. It throws when the YAML is not an override. */
-type Override = () => Overlay;
+/** Builds an override from its YAML. It throws when the YAML is not a patch. */
+type Change = () => Override;
 
 /** A checked pipeline, or the mistake that stops it. */
 type Outcome = { spec: PipelineSpec; description: PipelineDescription; yaml: string } | { error: PipelineError };
@@ -25,10 +25,10 @@ export class Pipeline {
 
   /** `Pipelines` makes these: call `pipelines.open(name)` or `pipelines.parse(yaml)`. */
   constructor(
-    /** The YAML as it was given, before `extends` and overrides. */
+    /** The YAML as it was given, before `$extends` and overrides. */
     readonly source: string,
     private readonly parser: PipelineSource,
-    private readonly overrides: Override[] = [],
+    private readonly overrides: Change[] = [],
   ) {}
 
   /** Nothing stops this pipeline from running. */
@@ -39,11 +39,13 @@ export class Pipeline {
   /**
    * What is wrong, for an editor: each error has `message`, and `line` and
    * `key` when the problem has a place in the text. It is empty for a valid
-   * pipeline. Checking stops at the first mistake, so today it holds one at most.
+   * pipeline. It holds every problem scripted-yaml found; a check of the
+   * runner's own, like a duplicate stage id, stops at the first.
    */
   errors(): PipelineError[] {
     const outcome = this.check();
-    return "error" in outcome ? [outcome.error] : [];
+    if (!("error" in outcome)) return [];
+    return outcome.error instanceof PipelineErrors ? outcome.error.errors : [outcome.error];
   }
 
   /** Name, description, target, stages, prerequisites and inputs in one plain object, ready for JSON. */
@@ -66,7 +68,7 @@ export class Pipeline {
     return this.describe().prerequisites;
   }
 
-  /** One self-contained YAML file, with `extends` and overrides applied: write it to disk and run it. */
+  /** One self-contained YAML file, with `$extends` and overrides applied: write it to disk and run it. */
   yaml(): string {
     return this.checked().yaml;
   }
@@ -76,17 +78,17 @@ export class Pipeline {
     return this.checked().spec;
   }
 
-  /** A copy with pipeline keys changed, as `--pipeline YAML` does. */
+  /** A copy patched as `--pipeline YAML` does: `$replace`, `$add`, `$before`, `$after`, `$remove`. */
   override(yaml: string): Pipeline {
-    return this.with(() => Overlay.pipeline(yaml));
+    return this.with(() => Override.pipeline(yaml));
   }
 
-  /** A copy with one stage changed, as `--stage ID:YAML` does. */
+  /** A copy with one stage patched, as `--stage ID:YAML` does. */
   overrideStage(id: string, yaml: string): Pipeline {
-    return this.with(() => Overlay.stage(`${id}:${yaml}`));
+    return this.with(() => Override.stage(`${id}:${yaml}`));
   }
 
-  private with(override: Override): Pipeline {
+  private with(override: Change): Pipeline {
     return new Pipeline(this.source, this.parser, [...this.overrides, override]);
   }
 
@@ -99,9 +101,9 @@ export class Pipeline {
   private check(): Outcome {
     if (this.outcome) return this.outcome;
     try {
-      const overlays = this.overrides.map((override) => override());
-      const spec = this.parser.spec(overlays);
-      this.outcome = { spec, description: new PipelineDescriber(spec).describe(), yaml: this.parser.text(overlays) };
+      const definition = this.parser.definition(this.overrides.map((override) => override()));
+      const description = new PipelineDescriber(definition).describe();
+      this.outcome = { spec: definition.spec, description, yaml: definition.text };
     } catch (err) {
       if (!(err instanceof UsageError)) throw err;
       this.outcome = { error: err instanceof PipelineError ? err : new PipelineError(err.message) };

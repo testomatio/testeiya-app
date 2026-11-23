@@ -16,12 +16,13 @@ const INSTALL_TIMEOUT_MS = 10 * 60_000;
  * the binaries are first on PATH as well.
  */
 export class Packages {
+  /** `versions` as the run computed them: a formula's value, not its source. */
   constructor(private readonly versions: Record<string, string>) {}
 
-  /** `name@version` for each, versions expanded. Empty means latest, and a leading `@` is dropped. */
-  specs(vars: Variables): string[] {
+  /** `name@version` for each. Empty means latest, and a leading `@` is dropped. */
+  specs(): string[] {
     return Object.entries(this.versions).map(([name, version]) => {
-      const wanted = vars.expand(version).trim().replace(/^@/, "") || "latest";
+      const wanted = version.trim().replace(/^@/, "") || "latest";
       return `${name}@${wanted}`;
     });
   }
@@ -32,7 +33,7 @@ export class Packages {
     const prefix = join(dir, PACKAGES_DIR);
     mkdirSync(prefix, { recursive: true });
 
-    const args = ["install", "--global", "--prefix", prefix, "--no-audit", "--no-fund", "--loglevel=error", ...this.specs(vars)];
+    const args = ["install", "--global", "--prefix", prefix, "--no-audit", "--no-fund", "--loglevel=error", ...this.specs()];
     const logFile = join(prefix, "install.log");
     log.command(`npm ${args.join(" ")}`);
     const done = await launcher.start({ command: "npm", args, vars, log: logFile, timeout: INSTALL_TIMEOUT_MS });

@@ -31,7 +31,7 @@ import { commentThread, threadHost } from "../prompt/thread.js";
 import { openSessionManager, shortId, type SessionArgs } from "./sessions.js";
 import { createTesteiyaSession } from "./session.js";
 import { expandSkills } from "./skills.js";
-import type { RunResult } from "./result.js";
+import { EXTRACT_TOOL, type ExtractField, type RunResult } from "./result.js";
 
 /** One task, start to end. Never exits, never traps signals: the caller owns the process. */
 export async function runTask(request: TaskRequest, control: TaskControl = {}): Promise<TaskOutcome> {
@@ -40,8 +40,10 @@ export async function runTask(request: TaskRequest, control: TaskControl = {}): 
 
 /** Everything a task needs, checked before a single token is spent. */
 export async function prepareTask(request: TaskRequest, cwd: string): Promise<PrintOptions> {
-  const destinations = parseDestinations(request.outputs, request.json);
+  let destinations = parseDestinations(request.outputs, request.json);
   if (typeof destinations === "string") throw new UsageError(destinations);
+  // The values are the answer: the caller prints them, never the model's last words.
+  if (request.extract) destinations = destinations.filter((destination) => destination.kind !== "stdout");
   const unreachable = await preflight(destinations);
   if (unreachable) throw new UsageError(unreachable);
 
@@ -61,13 +63,15 @@ export async function prepareTask(request: TaskRequest, cwd: string): Promise<Pr
     sessionManager,
     sessionId,
     brief: request.brief,
+    extract: request.extract,
     thread: request.thread ?? process.env.TESTEIYA_THREAD,
     model: request.model,
     exitZero: request.exitZero,
     header: request.header,
     footer: request.footer,
-    noDefaultFooter: request.noDefaultFooter,
-    noThread: request.noThread,
+    // Values go into a shell variable or a file: no thread, no signature around them.
+    noDefaultFooter: request.noDefaultFooter || Boolean(request.extract),
+    noThread: request.noThread || Boolean(request.extract),
   };
 }
 
@@ -119,6 +123,7 @@ async function execute(options: PrintOptions, control: TaskControl): Promise<Tas
     model: options.model,
     outputFile: outputPath,
     brief: options.brief,
+    extract: options.extract,
     threadMode,
     // The model names itself in the default footer, and the agent posts that
     // footer, so the section cannot be built until the model is resolved.
@@ -164,7 +169,8 @@ async function execute(options: PrintOptions, control: TaskControl): Promise<Tas
   abort.watch();
   if (!abort.reason) await promptOnce(session, task.prompt, run);
   if (abort.reason) run.error = abort.reason;
-  let written = await collectReport(session, run, outputPath, stampBefore);
+  let written = options.extract ? null : await collectReport(session, run, outputPath, stampBefore);
+  if (options.extract && !abort.reason) await collectValues(session, run, result);
   abort.release();
   if (abort.reason) {
     run.error = abort.reason;
@@ -177,6 +183,8 @@ async function execute(options: PrintOptions, control: TaskControl): Promise<Tas
   if (verbose) note("");
 
   let code = exitCode(run.error, result.status, Boolean(outputPath), report, options.exitZero);
+  // An extraction with no values found nothing, whatever the verdict says.
+  if (options.extract && !result.values && !run.error) code = 1;
   const envelope: RunEnvelope = {
     status: result.status ?? (code === 0 ? "pass" : "fail"),
     reason: result.reason ?? run.error,
@@ -188,6 +196,7 @@ async function execute(options: PrintOptions, control: TaskControl): Promise<Tas
     durationMs: Date.now() - started,
     sessionId: options.sessionId ?? null,
   };
+  if (result.values) envelope.values = result.values;
 
   // Nobody is watching this run, so the status goes above the answer rather
   // than after it: the last thing on screen should be the agent's output.
@@ -410,6 +419,20 @@ async function nudgeForReport(
   return null;
 }
 
+/** The model finished without submitting and without saying it could not: ask once. */
+async function collectValues(session: AgentSession, run: RunState, result: RunResult): Promise<void> {
+  const settled = () => Boolean(run.error || result.values || result.status === "fail");
+  if (settled()) return;
+  note(c.yellow("  ⟳ values missing, asking once more"));
+  await promptOnce(
+    session,
+    `You have not submitted the values. Call ${EXTRACT_TOOL} now, or set_result with fail if a value cannot be found.`,
+    run
+  );
+  if (settled()) return;
+  run.error = "no values submitted";
+}
+
 function summarize(s: Summary): void {
   const parts = [elapsed(s.started), modelName(s.envelope.model)];
   if (s.run.steps === 1) parts.push("1 step");
@@ -532,6 +555,8 @@ export interface TaskRequest extends SessionArgs {
   outputs: string[];
   json?: boolean;
   brief?: boolean;
+  /** `testeiya extract`: the values to find. The run submits them instead of reporting. */
+  extract?: ExtractField[];
   name?: string;
   model?: string;
   thread?: string;
@@ -565,6 +590,7 @@ export interface PrintOptions {
   sessionId?: string | null;
   model?: string;
   brief?: boolean;
+  extract?: ExtractField[];
   exitZero?: boolean;
   header?: string;
   footer?: string;

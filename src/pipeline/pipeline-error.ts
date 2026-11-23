@@ -26,3 +26,22 @@ export class PipelineError extends UsageError {
     return new PipelineError(`${source}: ${this.message}`, { line: this.line, key: this.key, source });
   }
 }
+
+/** Several mistakes found at once, as scripted-yaml reports them. The message holds them all, one per line. */
+export class PipelineErrors extends PipelineError {
+  constructor(readonly errors: PipelineError[]) {
+    const [first] = errors;
+    super(errors.map((error) => error.message).join("\n"), { line: first?.line, key: first?.key, source: first?.source });
+    this.name = "PipelineErrors";
+  }
+
+  /** One error stays one error. */
+  static of(errors: PipelineError[]): PipelineError {
+    if (errors.length === 1) return errors[0]!;
+    return new PipelineErrors(errors);
+  }
+
+  in(source: string): PipelineError {
+    return new PipelineErrors(this.errors.map((error) => error.in(source)));
+  }
+}
