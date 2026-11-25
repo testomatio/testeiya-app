@@ -70,7 +70,7 @@ Pipeline options:
       --dry-run              show prerequisites and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
-      --stage ID:YAML        patch one stage, e.g. 'plan:run!task: { $after: Be brief. }'
+      --stage ID:YAML        patch one stage, e.g. 'explore:$replace: { timeout: 45m }'
       --input <file.json>    values a $value!extract prerequisite takes before asking the agent, repeatable;
                              also TESTEIYA_PIPELINE_INPUT_FILE and TESTEIYA_PIPELINE_INPUT_JSON
       --pipeline YAML        patch the pipeline, e.g. '$replace: { summary: Be brief. }'
@@ -254,7 +254,6 @@ Pipelines
   scripted-yaml patch: $replace overwrites, $add adds a key, $before and $after
   add text or stages, $remove drops.
 
-    testeiya pipeline issue-test-cases --stage 'requirements:run!task: { $after: Never assume credentials. }'
     testeiya pipeline web-testing --stage 'explore:$replace: { timeout: 45m }'
 
   A file of your own can start with "$extends: <name>" and hold the same patch.

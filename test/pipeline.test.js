@@ -457,12 +457,12 @@ test("an override replaces, adds before and after, and removes", () => {
   // As the runner orders them: every --pipeline, then every --stage.
   const spec = overridden(
     Override.pipeline("{prerequisites: {$add: {staging: {$value!: vars.URL != null, message: No URL.}}}, $remove: [when], $add: {summary: Be brief.}}"),
-    Override.stage("plan:run!task: { $after: Never assume credentials. }"),
-    Override.stage("plan:{run!task: { $before: Read the issue first. }, $replace: { when!: base and prerequisites.staging }, $add: { timeout: 30m }}"),
+    Override.stage("plan:$replace: { run!task: Plan it. Never assume credentials. }"),
+    Override.stage("plan:{$replace: { when!: base and prerequisites.staging }, $add: { timeout: 30m }}"),
     Override.stage("run:$replace: { run!sh: echo changed }"),
   );
   const plan = spec.stages[0];
-  assert.equal(plan.task, "Read the issue first.\nPlan it.\nNever assume credentials.");
+  assert.equal(plan.task, "Plan it. Never assume credentials.");
   assert.deepEqual(plan.when, ["pr", "staging"]);
   assert.equal(plan.condition, "(prerequisites.pr) and prerequisites.staging");
   assert.equal(plan.timeout, "30m");
@@ -489,24 +489,24 @@ test("a wrong override is bad usage, found before anything runs", () => {
   assert.throws(() => overridden(Override.stage("plan:$replace: { model: x }")), /"model" does not exist in the base/);
   assert.throws(() => overridden(Override.stage("plan:append_task: x")), /--stage plan: append_task is now \$after/);
   assert.throws(() => overridden(Override.stage("run:$add: { run!task: x }")), /"run" already exists in the base/);
-  assert.throws(() => overridden(Override.stage("run:run!task: { $after: x }")), /the base has "run!sh", not "run!task"; change it with \$replace/);
+  assert.throws(() => overridden(Override.stage("plan:run!task: { $after: x }")), /a plain field in a patch does not overwrite; write \$replace: \{ run!task: … \}/);
   assert.throws(() => overridden(Override.stage("plan:$replace: { when!: prerequisites.staging }")), /there is no key "staging" in "prerequisites"/);
   assert.throws(() => overridden(Override.pipeline("stages: { $remove: [nope] }")), /"nope" does not exist in the base, so it cannot be removed/);
   assert.throws(() => Override.stage("plan"), /--stage takes ID:YAML/);
   assert.throws(() => Override.stage("plan:just text"), /--stage plan takes a YAML patch/);
-  assert.deepEqual(Override.stage("plan:{run!task: { $after: x }, $replace: { timeout: 1m }}").keys(), ["run!task.$after", "$replace.timeout"]);
+  assert.deepEqual(Override.stage("plan:{$replace: { run!task: x, timeout: 1m }}").keys(), ["$replace.run!task", "$replace.timeout"]);
 });
 
 test("a file can extend a bundled pipeline or a path, keeping only its changes", () => {
   const dir = mkdtempSync(join(tmpdir(), "testeiya-extends-"));
   write(dir, "base.yml", BASE);
-  const child = write(dir, "child.yml", "$extends: ./base.yml\n$add:\n  name: child\nstages:\n  plan:\n    run!task:\n      $after: Be brief.\n");
+  const child = write(dir, "child.yml", "$extends: ./base.yml\n$add:\n  name: child\nstages:\n  plan:\n    $replace:\n      run!task: Plan it. Be brief.\n");
   const spec = new PipelineFile(child).read();
   assert.equal(spec.name, "child");
-  assert.equal(spec.stages[0].task, "Plan it.\nBe brief.");
-  const bundled = new PipelineFile(write(dir, "issue.yml", "$extends: issue-test-cases\nstages:\n  requirements:\n    run!task:\n      $after: Never assume credentials.\n")).read();
+  assert.equal(spec.stages[0].task, "Plan it. Be brief.");
+  const bundled = new PipelineFile(write(dir, "issue.yml", "$extends: issue-test-cases\nstages:\n  requirements:\n    $replace:\n      run!task: Never assume credentials.\n")).read();
   assert.equal(bundled.name, "issue-test-cases");
-  assert.match(bundled.stages[0].task, /\nNever assume credentials\.$/);
+  assert.equal(bundled.stages[0].task, "Never assume credentials.");
   // A file called like a bundled pipeline extends the bundled one.
   const own = new PipelineFile(write(dir, "regression.yml", "$extends: regression\n$replace:\n  description: Ours.\n")).read();
   assert.equal(own.description, "Ours.");
@@ -519,10 +519,10 @@ test("a run keeps the pipeline with its overrides, so a retry repeats it", async
   const { repo, log, runTask } = setup();
   const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run!task: One.\n");
   const dir = join(repo, ".qa");
-  const options = { name: file, dir, runTask, stageOverrides: ["one:run!task: { $after: Be brief. }"] };
+  const options = { name: file, dir, runTask, stageOverrides: ["one:$replace: { run!task: One. Be brief. }"] };
   await inRepo(repo, () => new Pipeline(options).run());
-  assert.match(calledWith(log)[0].prompt, /^One\.\nBe brief\./);
-  assert.equal(new PipelineFile(file).parse(readFileSync(join(dir, "pipeline.yml"), "utf8")).spec.stages[0].task, "One.\nBe brief.");
+  assert.match(calledWith(log)[0].prompt, /^One\. Be brief\./);
+  assert.equal(new PipelineFile(file).parse(readFileSync(join(dir, "pipeline.yml"), "utf8")).spec.stages[0].task, "One. Be brief.");
 });
 
 test("a --gate from the job skips the run before outputs are checked", async () => {

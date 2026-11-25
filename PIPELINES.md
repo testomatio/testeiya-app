@@ -661,8 +661,8 @@ stages:
       timeout: 5m
 
   requirements:
-    run!task:
-      $after: Never assume user credentials. Ask for them.
+    $replace:
+      run!task: Work out the requirements of {{ vars.ISSUE_URL }}. Never assume user credentials. Ask for them.
 
   sync:
     $replace:
@@ -683,7 +683,7 @@ Every change says what it does:
 |---|---|
 | `$replace: { key: value }` | overwrites keys that exist: `title`, `timeout`, `when!`, `run!sh`, `description` |
 | `$add: { key: value }` | adds keys that do not exist yet: a prerequisite, a `timeout`, an `env` variable |
-| `run!task: { $after: text }` | adds text at the end of a text, on a new line; `$before` at the start. `summary`, `message`, `run!decide` and `run!sh` too; the marker must be the base's |
+| `summary: { $after: text }` | adds text at the end of a text, on a new line; `$before` at the start. `description` and `message` too. A stage's `run` is replaced whole: `$replace: { run!task: … }` |
 | `stages: { $before: { id: {…} } }` | adds stages, each under its id, before the first; `$after` after the last |
 | `stages: { id: { $after: { new: {…} } } }` | adds a stage right after the stage `id`; `$before` right before it |
 | `stages: { $remove: [id] }` | drops stages; `prerequisites: { $remove: [name] }` drops prerequisites; `$remove: [when]` drops a top-level key |
@@ -709,15 +709,15 @@ The command line takes the same patch:
 ```bash
 testeiya pipeline issue-test-cases \
   --pipeline 'prerequisites: { $add: { release: { $value!: vars.RELEASE != null, message: Not a release. } } }' \
-  --stage 'requirements:run!task: { $after: Never assume user credentials. Ask for them. }' \
+  --stage 'explore:$replace: { timeout: 45m }' \
   --stage 'sync:$replace: { when!: base and prerequisites.release }'
 ```
 
 - `--stage ID:YAML` patches one stage. It splits on the first colon. Several
-  changes go in one flow map: `--stage 'review:{$add: {timeout: 45m}, run!task: {$after: Be brief.}}'`.
+  changes go in one flow map: `--stage 'review:{$add: {timeout: 45m}, $replace: {title: Quick review}}'`.
 - `--pipeline YAML` patches the pipeline, as a file under `$extends` does.
 - The value is YAML, so quote text that holds `: `:
-  `--stage 'plan:run!task: { $after: "Note: be brief." }'`.
+  `--stage 'plan:$replace: { run!task: "Note: be brief." }'`.
 - Order: `$extends`, then every `--pipeline`, then every `--stage`, so a
   `--stage` can patch a stage a `--pipeline` added.
 - The result is checked like any pipeline file, before anything runs. A mistake
@@ -733,7 +733,7 @@ A file in the format before scripted-yaml fails with the new spelling:
 
 | Before | Now |
 |---|---|
-| `extends: name` + `append_task: …` | `$extends: name` + `run!task: { $after: … }` |
+| `extends: name` + `append_task: …` | `$extends: name` + `$replace: { run!task: … }` |
 | `task: <task>` | `run!task: <task>` |
 | `decide: <question>` | `run!decide: <question>` |
 | `extract: <what>` + `format: ["url: …"]` | `run!extract: { url: … }` |

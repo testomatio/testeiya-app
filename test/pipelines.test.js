@@ -234,11 +234,11 @@ test("the old format fails with the new spelling, on its own line", () => {
 });
 
 test("$extends finds a bundled pipeline, and a missing one is an error", () => {
-  const child = "$extends: issue-test-cases\nstages:\n  requirements:\n    run!task:\n      $after: Be brief.\n";
+  const child = "$extends: issue-test-cases\nstages:\n  requirements:\n    $replace:\n      run!task: Be brief.\n";
   const pipeline = parse(child, { name: "mine" });
   assert.deepEqual(pipeline.errors(), []);
   assert.equal(pipeline.describe().name, "issue-test-cases");
-  assert.match(pipeline.spec().stages[0].task, /\nBe brief\.$/);
+  assert.equal(pipeline.spec().stages[0].task, "Be brief.");
   assert.doesNotMatch(parse(child).yaml(), /\$extends/);
   assert.equal(pipeline.source, child);
   const [missing] = parse("$extends: nope\n").errors();
@@ -251,14 +251,14 @@ test("$extends finds your own pipelines, which win over the bundled ones", () =>
   const base = "name: base\nstages:\n  - id: a\n    run!task: Do it.\n";
   const own = new Pipelines({
     base,
-    team: "$extends: base\n$replace:\n  name: team\nstages:\n  a:\n    run!task:\n      $after: Be brief.\n",
+    team: "$extends: base\n$replace:\n  name: team\nstages:\n  a:\n    $replace:\n      run!task: Do it. Be brief.\n",
     "pr-review": base,
   });
-  const agent = own.parse("$extends: team\nstages:\n  a:\n    run!task:\n      $after: In English.\n", { name: "agent" });
+  const agent = own.parse("$extends: team\nstages:\n  a:\n    $replace:\n      run!task: Do it. Be brief. In English.\n", { name: "agent" });
   assert.deepEqual(agent.errors(), []);
   assert.equal(agent.describe().name, "team");
-  assert.equal(agent.spec().stages[0].task, "Do it.\nBe brief.\nIn English.");
-  assert.equal(own.open("team").spec().stages[0].task, "Do it.\nBe brief.");
+  assert.equal(agent.spec().stages[0].task, "Do it. Be brief. In English.");
+  assert.equal(own.open("team").spec().stages[0].task, "Do it. Be brief.");
   assert.equal(own.parse("$extends: pr-review\n").describe().name, "base");
   assert.equal(new Pipelines().parse("$extends: base\n").errors()[0].message, 'no pipeline "base" to extend');
 });
@@ -343,12 +343,12 @@ test("half-typed text is an error, never a crash", () => {
 
 test("yaml applies overrides and keeps the name the caller gave", () => {
   const pipeline = parse("stages:\n  - id: a\n    run!task: Do it.\n", { name: "agent" });
-  const changed = pipeline.overrideStage("a", "run!task: { $after: Be brief. }").override("$add: { description: Short. }");
+  const changed = pipeline.overrideStage("a", "$replace: { run!task: Do it. Be brief. }").override("$add: { description: Short. }");
   assert.deepEqual(changed.errors(), []);
   const spec = parse(changed.yaml()).spec();
   assert.equal(spec.name, "agent");
   assert.equal(spec.description, "Short.");
-  assert.equal(spec.stages[0].task, "Do it.\nBe brief.");
+  assert.equal(spec.stages[0].task, "Do it. Be brief.");
   assert.equal(pipeline.spec().stages[0].task, "Do it.");
   const [err] = pipeline.overrideStage("nope", "$replace: { title: x }").errors();
   assert.ok(err instanceof PipelineError);

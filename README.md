@@ -353,7 +353,7 @@ check from the CI job: when the command fails, the whole run is skipped and exit
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--stage ID:YAML` and
 `--pipeline YAML` patch a pipeline for one run, e.g. `--stage
-'requirements:run!task: { $after: Never assume credentials. }'`. `$replace`
+'explore:$replace: { timeout: 45m }'`. `$replace`
 overwrites, `$add` adds, `$before` and `$after` add text or stages, `$remove`
 drops. A file that starts with `$extends: <name>` keeps the same patch in the repo. `--dry-run` prints every
 prerequisite and stage and spends nothing. `testeiya pipeline-check` checks the file and
