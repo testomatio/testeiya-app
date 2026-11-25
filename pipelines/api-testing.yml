@@ -39,7 +39,7 @@ stages:
     emoji: 🔍
     session: qa
     when!: prerequisites.api and prerequisites.api_auth
-    task: |
+    run!task: |
       Review this pull request for public API changes
       List the API endpoints it adds or changes in endpoints.txt,
       List only paths defined in the OpenAPI spec at {{ vars.OPENAPI_SPEC }}; other APIs are out of scope.

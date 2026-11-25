@@ -38,6 +38,8 @@ export interface GateSpec {
   run?: string;
   /** `$value!changes:` the changed files match. */
   changes?: ChangesSpec;
+  /** `$value!extract:` every value is found, each `name: description`: in the pipeline's input, else by the agent. */
+  extract?: string[];
   /** Why the prerequisite failed, shown when it skips something. */
   message: string;
   /** The variables its formula reads: what a user sets to pass it. */
@@ -57,24 +59,22 @@ export interface ChangesSpec {
   min_files?: number;
 }
 
-/** Exactly one of `task`, `run`, `decide` or `extract`; at most one of `each_line` or `each_file`. */
+/** Exactly one of `task`, `run`, `decide` or `extract`, from the marker of `run`; at most one of `each_line` or `each_file`. */
 export interface StageSpec {
   id: string;
   /** Names the stage's section in the final report. */
   title: string;
   emoji: string;
-  /** An agent stage: the task text, `{{ }}` as written. */
+  /** `run!task:` an agent stage: the task text, `{{ }}` as written. */
   task?: string;
-  /** A command stage: the shell command of `run!sh`. */
+  /** `run!sh:` a command stage: the shell command. */
   run?: string;
-  /** A decision stage: the yes or no question, `{{ }}` as written. Yes passes, no fails. */
+  /** `run!decide:` a decision stage: the yes or no question, `{{ }}` as written. Yes passes, no fails. */
   decide?: string;
   /** The probability of yes a decision stage counts as yes. 0.5 by default. */
   threshold?: number;
-  /** An extraction stage: what to find, `{{ }}` as written. */
-  extract?: string;
-  /** The values an extraction stage finds, each `name: description`, as `--output` takes them. */
-  format?: string[];
+  /** `run!extract:` an extraction stage: the values to find, each `name: description`, as `--output` takes them. */
+  extract?: string[];
   /** A named, persistent conversation. */
   session?: string;
   inputs: string[];
@@ -113,7 +113,7 @@ export interface StageView {
   title: string;
   emoji: string;
   kind: StageKind;
-  /** The task, the command, the question or what to extract. */
+  /** The task, the command, the question, or the values to extract one per line. */
   text: string;
   session?: string;
   /** Prerequisite names its `when` reads. */
@@ -142,7 +142,7 @@ export interface PrerequisiteView {
   /** The part a user can satisfy by setting inputs. */
   env: string[];
   /** Checked in the checkout. A UI shows them, it cannot set them. */
-  checks: Array<"file" | "run" | "changes">;
+  checks: Array<"file" | "run" | "changes" | "extract">;
   secret: boolean;
 }
 

@@ -2,7 +2,7 @@ import { isMap, isScalar, isSeq, LineCounter, parseDocument, stringify, type Doc
 import { Files, ScriptedYaml, ValidationFailed, type Document, type FileText, type Problem } from "scripted-yaml/core";
 
 import { BUNDLED_DSL } from "./bundled.js";
-import { PIPELINE_MARKERS } from "./markers.js";
+import { COMPUTED_MARKERS, PIPELINE_MARKERS } from "./markers.js";
 import type { Override } from "./override.js";
 import { PipelineBuilder } from "./pipeline-builder.js";
 import type { PipelineDefinition } from "./pipeline-definition.js";
@@ -130,7 +130,7 @@ export class PipelineSource {
   }
 
   private scripted(files: Files): ScriptedYaml {
-    return new ScriptedYaml({ markers: PIPELINE_MARKERS, files });
+    return new ScriptedYaml({ markers: PIPELINE_MARKERS, computed: COMPUTED_MARKERS, files });
   }
 
   /** The DSL wherever a file names it; anything else as the options read it, checked for the old format first. */
@@ -228,7 +228,7 @@ export class PipelineSource {
   }
 
   /** `when!` and `run!sh` are the keys `when` and `run`. */
-  private static named(key: string): string {
+  static named(key: string): string {
     const at = key.lastIndexOf("!");
     return at < 0 ? key : key.slice(0, at);
   }
@@ -373,6 +373,13 @@ class OldFormat {
     secret: "secret: true on the variable in $vars: { NAME: { optional: true, secret: true } }",
   };
 
+  private static readonly stageKinds: Record<string, string> = {
+    task: "run!task: <task>",
+    decide: "run!decide: <question>",
+    extract: "run!extract: { name: what it is } (one key per value; the format goes there)",
+    format: "the keys of run!extract: { name: what it is }",
+  };
+
   constructor(private readonly fail: (message: string, at?: Path) => never) {}
 
   static check(raw: Raw, fail: (message: string, at?: Path) => never): void {
@@ -406,7 +413,10 @@ class OldFormat {
     const at: Path = ["stages", typeof stage.id === "string" ? stage.id : index];
     if (stage.when !== undefined) this.fail("when is now a formula: when!: prerequisites.a and prerequisites.b", [...at, "when"]);
     if (stage.run !== undefined) this.fail("run is now run!sh: <command>", [...at, "run"]);
-    for (const key of ["task", "decide", "extract", "title"]) this.text(stage[key], [...at, key]);
+    for (const [key, spelling] of Object.entries(OldFormat.stageKinds)) {
+      if (stage[key] !== undefined) this.fail(`${key} is now ${spelling}`, [...at, key]);
+    }
+    for (const key of ["run!task", "run!decide", "title"]) this.text(stage[key], [...at, PipelineSource.named(key)]);
     for (const key of ["inputs", "outputs"]) for (const item of Array.isArray(stage[key]) ? stage[key] : []) this.text(item, [...at, key]);
   }
 

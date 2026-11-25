@@ -8,21 +8,24 @@ import { Git, type Changes } from "../git.js";
 import { UsageError } from "../model.js";
 import { Decider, type Decision, type DecisionRequest } from "../decision.js";
 import { runTask, type TaskRunner } from "../run.js";
+import { extractPrompt, type ExtractField } from "../extract-fields.js";
 import { CommandStage } from "./command-stage.js";
 import { DecideStage } from "./decide-stage.js";
 import { CrashGuard } from "./crash-guard.js";
 import { Diagram } from "./diagram.js";
 import { ExtractStage } from "./extract-stage.js";
-import { Gate } from "./gate.js";
+import { Gate, type Extractor, type GateContext } from "./gate.js";
 import { Launcher } from "./launcher.js";
 import { log } from "./log.js";
 import { Override } from "./override.js";
 import { Packages } from "./packages.js";
 import type { PipelineDefinition, PipelineValues } from "./pipeline-definition.js";
 import { PipelineFile } from "./pipeline-file.js";
+import { PipelineInput } from "./pipeline-input.js";
 import { Report } from "./report.js";
 import type { PipelineSpec, StageSpec } from "./spec.js";
 import type { Stage, StageContext } from "./stage.js";
+import { StageEnv } from "./stage-env.js";
 import {
   CHANGES_FILE,
   COPY_FILE,
@@ -112,15 +115,22 @@ export class Pipeline {
     if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
-    const vars = await this.variables(definition, dir, round);
+    const base = await this.variables(definition, dir, round);
+    let vars = this.withEnv(definition, base);
+    const input = PipelineInput.read(options.inputs ?? [], vars.toEnv());
     const changes = await this.git.changes(since, vars.toEnv());
-    const used = [...spec.when, ...stages.flatMap((stage) => stage.spec.when), ...Object.keys(this.options.gates ?? {})];
-    const made = await this.checkGates(gates, used, vars, changes);
+    const used = [...spec.when, ...stages.flatMap((stage) => stage.spec.when), ...Object.keys(this.options.gates ?? {}), ...this.extracting(spec)];
+    let extract: Extractor | undefined;
+    if (!options.dryRun) extract = this.extractor(vars);
+    const made = await this.checkGates(gates, used, { vars, changes, input, extract });
+    // `env:` again: it may read what a `$value!extract` found.
+    vars = this.withEnv(definition, base);
     const values = definition.values(vars.toEnv());
     // In the order the file reads them, a check the runner made or a formula.
     const results = new Map([...new Set(used)].map((name) => [name, made.get(name) ?? values.passes(name)]));
     log.header(spec.name, round, changes, dir);
     if (!retry) log.overrides(this.overrides);
+    for (const name of this.extracting(spec)) log.extracted(name, gates.get(name)!.found, gates.get(name)!.message);
 
     const reason = this.blocked(spec, values, gates, results);
     if (reason) {
@@ -134,7 +144,7 @@ export class Pipeline {
 
     // After the skip: a job gated on a pull request may name one that only exists when the gate passes.
     const report = await Report.prepare(options);
-    if (options.dryRun) return this.dryRun(spec, stages, values, results, aiProblem);
+    if (options.dryRun) return this.dryRun(spec, gates, stages, values, results, aiProblem);
 
     let created = previous?.created ?? [];
     mkdirSync(dir, { recursive: true });
@@ -182,11 +192,15 @@ export class Pipeline {
 
     let aiProblem: string | null = null;
     if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
-    const vars = await this.variables(definition, dir, 1);
+    const base = await this.variables(definition, dir, 1);
+    let vars = this.withEnv(definition, base);
+    const input = PipelineInput.read(this.options.inputs ?? [], vars.toEnv());
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
     const names = [...Object.keys(spec.prerequisites), ...Object.keys(this.options.gates ?? {})];
-    const made = await this.checkGates(gates, names, vars, changes);
+    // A check asks no agent: a value the input does not have is reported as not found.
+    const made = await this.checkGates(gates, names, { vars, changes, input });
+    vars = this.withEnv(definition, base);
     const values = definition.values(vars.toEnv());
     const results = new Map(names.map((name) => [name, made.get(name) ?? values.passes(name)]));
 
@@ -349,7 +363,7 @@ export class Pipeline {
   private gates(definition: PipelineDefinition): Map<string, Gate> {
     const { prerequisites } = definition.spec;
     const gates = new Map<string, Gate>();
-    for (const [name, check] of definition.checks()) gates.set(name, new Gate(name, prerequisites[name]!.message, check, prerequisites[name]!.changes));
+    for (const [name, check] of definition.checks()) gates.set(name, new Gate(name, prerequisites[name]!.message, check, prerequisites[name]));
     for (const [name, run] of Object.entries(this.options.gates ?? {})) gates.set(name, Gate.command(name, run));
     return gates;
   }
@@ -369,8 +383,9 @@ export class Pipeline {
     return gate ? gates.get(gate)!.message : null;
   }
 
+  /** A check's own message, which knows what it did not find; else the prerequisite's. */
   private message(spec: PipelineSpec, gates: Map<string, Gate>, name: string): string {
-    return spec.prerequisites[name]?.message ?? gates.get(name)!.message;
+    return gates.get(name)?.message ?? spec.prerequisites[name]!.message;
   }
 
   /**
@@ -396,10 +411,7 @@ export class Pipeline {
     return stages;
   }
 
-  /**
-   * The job's environment, `--set`, the runner's own, the `$vars` defaults no
-   * one set, then `env:` computed from all of them. `--set` wins over `env:`.
-   */
+  /** The job's environment, `--set`, the runner's own, then the `$vars` defaults no one set. */
   private async variables(definition: PipelineDefinition, dir: string, round: number): Promise<Variables> {
     const sets = this.options.sets ?? {};
     const branch = await this.git.branch({ ...process.env, ...sets });
@@ -408,18 +420,48 @@ export class Pipeline {
       ...Variables.builtins({ GIT_BRANCH: branch ?? "", PIPELINE_DIR: dir, PIPELINE_NAME: definition.spec.name, PIPELINE_ROUND: String(round) }),
     });
     const unset = Object.entries(definition.defaults()).filter(([name]) => !vars.get(name));
-    vars = vars.with(Object.fromEntries(unset));
-    return vars.with(definition.values(vars.toEnv()).env()).with(sets).without(JOB_ONLY);
+    return vars.with(Object.fromEntries(unset));
+  }
+
+  /** The variables with `env:` computed from them. `--set` wins over `env:`. */
+  private withEnv(definition: PipelineDefinition, vars: Variables): Variables {
+    return vars.with(definition.values(vars.toEnv()).env()).with(this.options.sets ?? {}).without(JOB_ONLY);
+  }
+
+  /** The `$value!extract` prerequisites: checked on every run, as a stage may read their values with no `when`. */
+  private extracting(spec: PipelineSpec): string[] {
+    return Object.keys(spec.prerequisites).filter((name) => spec.prerequisites[name]!.extract);
+  }
+
+  /** Asks the agent, in this process, for the values the input does not have. A failed call finds nothing. */
+  private extractor(vars: Variables): Extractor {
+    return async (prerequisite: string, fields: ExtractField[]) => {
+      const prompt = extractPrompt(fields);
+      log.task(`prerequisites.${prerequisite}`, this.options.model, null, prompt);
+      const controller = new AbortController();
+      this.launcher.track(controller);
+      try {
+        const request = { prompt, outputs: [], extract: fields, noSession: true, noThread: true, noDefaultFooter: true, model: this.options.model };
+        const outcome = await new StageEnv(vars.toEnv()).run(() => this.runTask(request, { signal: controller.signal }));
+        return outcome.envelope.values ?? {};
+      } catch (err) {
+        log.note(c.yellow(`  prerequisites.${prerequisite}: ${err instanceof Error ? err.message : String(err)}`));
+        return {};
+      } finally {
+        this.launcher.untrack();
+      }
+    };
   }
 
   /** Each check once. A shallow clone cannot say what changed, and a silent skip would look like a quiet pull request. */
-  private async checkGates(gates: Map<string, Gate>, names: string[], vars: Variables, changes: Changes): Promise<Map<string, boolean>> {
+  private async checkGates(gates: Map<string, Gate>, names: string[], context: Omit<GateContext, "cwd">): Promise<Map<string, boolean>> {
     const used = [...new Set(names)].filter((name) => gates.has(name));
+    const { changes } = context;
     if (!changes.files && used.some((name) => gates.get(name)!.readsChanges)) {
       throw new UsageError(`cannot read the changes: ${changes.error}. Check out with full history (fetch-depth: 0)`);
     }
     const results = new Map<string, boolean>();
-    for (const name of used) results.set(name, await gates.get(name)!.passes({ cwd: this.cwd, vars, changes }));
+    for (const name of used) results.set(name, await gates.get(name)!.passes({ ...context, cwd: this.cwd }));
     return results;
   }
 
@@ -503,9 +545,9 @@ export class Pipeline {
     return mkdtempSync(join(tmpdir(), `testeiya-${name}-`));
   }
 
-  private dryRun(spec: PipelineSpec, stages: Stage[], values: PipelineValues, results: Map<string, boolean>, aiProblem: string | null): number {
+  private dryRun(spec: PipelineSpec, gates: Map<string, Gate>, stages: Stage[], values: PipelineValues, results: Map<string, boolean>, aiProblem: string | null): number {
     if (this.needsAi(stages)) log.aiGate(aiProblem);
-    for (const [name, passed] of results) log.gate(name, passed, spec.prerequisites[name]?.message ?? `The ${name} gate did not pass.`);
+    for (const [name, passed] of results) log.gate(name, passed, this.message(spec, gates, name));
     log.note("");
     let stopped = false;
     for (const stage of stages) {
@@ -538,6 +580,8 @@ export interface PipelineOptions {
   pipelineOverrides?: string[];
   /** ID:YAML, a patch of one stage, from --stage. */
   stageOverrides?: string[];
+  /** JSON files of values a `$value!extract` prerequisite takes before asking the agent, from --input. */
+  inputs?: string[];
   outputs?: string[];
   thread?: string;
   header?: string;

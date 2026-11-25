@@ -34,13 +34,13 @@ stages:
     title: Requirements
     emoji: 📋
     session: reviewer
-    task: Work out what this pull request is meant to do. /qa-pr-requirements-analyzer
+    run!task: Work out what this pull request is meant to do. /qa-pr-requirements-analyzer
 
   - id: review
     title: Review
     emoji: 🔍
     session: reviewer
-    task: Review this pull request as a QA engineer against requirements.md. /qa-review-pr
+    run!task: Review this pull request as a QA engineer against requirements.md. /qa-review-pr
     inputs: [requirements.md]
 
   - id: test-cases
@@ -48,7 +48,7 @@ stages:
     emoji: 📝
     session: writer
     when!: prerequisites.testcases_needed
-    task: |
+    run!task: |
       If there is linked issue and it was already reviewed by Testeiya and have linked tests - skip this step
       Write test cases for this pull request from requirements.md and review.md. /qa-write-test-cases
       Put them in test-cases/, one markdown file per suite.
@@ -61,7 +61,7 @@ stages:
     when!: prerequisites.testomatio and prerequisites.testcases_needed
     optional: true
     each_file: test-cases/*.md
-    task: |
+    run!task: |
       Sync the test cases in {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
 
 $tests:

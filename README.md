@@ -268,7 +268,7 @@ stages:
     title: Review
     emoji: 🔍
     session: qa
-    task: Review this pull request for {{ vars.EXPLORBOT_URL }}. Write browser scenarios to plan.md. /explorbot-plan
+    run!task: Review this pull request for {{ vars.EXPLORBOT_URL }}. Write browser scenarios to plan.md. /explorbot-plan
     outputs: [plan.md]
   - id: explore
     title: Browser testing
@@ -282,11 +282,12 @@ stages:
     title: Results
     emoji: 📊
     session: qa
-    task: Read the Explorbot report under explorbot/ and say what broke.
+    run!task: Read the Explorbot report under explorbot/ and say what broke.
     inputs: [explorbot/]
 ```
 
-- A stage is a `task` for the agent or a `run!sh` shell command. Its `title` and
+- A stage's `run` says what it runs: `run!task` for the agent, `run!sh` a shell
+  command, `run!decide` a yes or no, `run!extract` values to find. Its `title` and
   `emoji` head its section in the final report, `### 🔍 Review`. Both are
   optional: the title defaults to the id, the emoji is picked for you.
 - Each stage keeps its files in a numbered folder, `1-review/`, `2-explore/`, …,
@@ -296,6 +297,8 @@ stages:
 - `prerequisites` are named checks. `$value!:` is a formula over variables,
   `vars.NAME != null` for "is set". `$value!file:`, `$value!sh:` and
   `$value!changes:` (`paths`, `ignore`, `min_files`) are checks the runner makes.
+  `$value!extract:` finds values, `{ sha: sha of the commit }`, from `--input
+  git.json` or else by the agent, and a stage reads `{{ prerequisites.git.sha }}`.
   `when!:` is a formula over them. When it is false the stage is skipped with the
   message of the prerequisite that failed. In the top-level `when!:` it skips the
   whole run.
@@ -343,12 +346,14 @@ result instead of starting over. The summary updates its comment.
 Stages ignore `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE`:
 those belong to a single task. Use `--thread` on the pipeline instead.
 
-`--set KEY=VALUE` sets a variable for every stage. `--gate NAME:COMMAND` adds a
+`--set KEY=VALUE` sets a variable for every stage. `--input file.json`,
+`TESTEIYA_PIPELINE_INPUT_FILE` and `TESTEIYA_PIPELINE_INPUT_JSON` give the values a
+`$value!extract` prerequisite needs, so the agent is asked only for the rest. `--gate NAME:COMMAND` adds a
 check from the CI job: when the command fails, the whole run is skipped and exits
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--stage ID:YAML` and
 `--pipeline YAML` patch a pipeline for one run, e.g. `--stage
-'requirements:task: { $after: Never assume credentials. }'`. `$replace`
+'requirements:run!task: { $after: Never assume credentials. }'`. `$replace`
 overwrites, `$add` adds, `$before` and `$after` add text or stages, `$remove`
 drops. A file that starts with `$extends: <name>` keeps the same patch in the repo. `--dry-run` prints every
 prerequisite and stage and spends nothing. `testeiya pipeline-check` checks the file and

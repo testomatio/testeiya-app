@@ -1,9 +1,10 @@
 # The shape of a pipeline file. Testeiya checks every pipeline against it, so `$dsl: ./pipeline.dsl.yml`
 # at the top of a file is only for `npx scripted-yaml validate`. PIPELINES.md documents every field.
 #
-# The runner checks what a shape cannot say: a stage has exactly one of task, run, decide or extract, ids are unique,
-# a timeout reads like 30m. Markers: `run!sh:` is a shell command; a prerequisite's `$value!sh:` (exits 0), `$value!file:` (paths
-# exist) and `$value!changes:` (changed files match) are checks the runner makes before the first stage.
+# The runner checks what a shape cannot say: ids are unique, a timeout reads like 30m. A stage's `run` says what runs
+# by its marker: `run!task:` an agent's task, `run!sh:` a shell command, `run!decide:` a yes or no question,
+# `run!extract:` values to find. A prerequisite's `$value!sh:` (exits 0), `$value!file:` (paths exist),
+# `$value!changes:` (changed files match) and `$value!extract:` (values found) are checks made before the first stage.
 
 $vars:
   '/[A-Z][A-Z0-9_]*/': { optional: true, about: Any environment variable, or one set with --set. }
@@ -19,10 +20,11 @@ $schema:
   required: [stages*:Stage]
   optional: [name, description, target, summary, env, packages, prerequisites*:Prerequisite, when]
   Prerequisite:
-    required: [$value, message]
+    required: [$value]
+    optional: [message]
   Stage:
     key: id
-    required: [id]
-    optional: [title, emoji, task, run, decide, threshold, extract, format*, session, when, inputs*, outputs*, each_line, each_file, stopOn*:StopOn, continueOn:ContinueOn, optional, timeout]
+    required: [id, run]
+    optional: [title, emoji, threshold, session, when, inputs*, outputs*, each_line, each_file, stopOn*:StopOn, continueOn:ContinueOn, optional, timeout]
   StopOn: [fail, gate]
   ContinueOn: [fail]

@@ -40,7 +40,7 @@ export class PipelineDescriber {
       title: spec.title,
       emoji: spec.emoji,
       kind: PipelineDescriber.kind(spec),
-      text: spec.run ?? spec.task ?? spec.decide ?? spec.extract ?? "",
+      text: spec.run ?? spec.task ?? spec.decide ?? spec.extract?.join("\n") ?? "",
       when: spec.when,
       inputs: spec.inputs,
       outputs: spec.outputs,
@@ -53,7 +53,7 @@ export class PipelineDescriber {
     if (spec.each_file !== undefined) view.loop = { each_file: spec.each_file };
     if (spec.timeout !== undefined) view.timeout = spec.timeout;
     if (spec.threshold !== undefined) view.threshold = spec.threshold;
-    if (spec.format !== undefined) view.format = spec.format;
+    if (spec.extract !== undefined) view.format = spec.extract;
     return view;
   }
 
@@ -74,6 +74,7 @@ export class PipelineDescriber {
     if (gate.file) checks.push("file");
     if (gate.run) checks.push("run");
     if (gate.changes) checks.push("changes");
+    if (gate.extract) checks.push("extract");
     return { name, message: gate.message, scope, stages, env: gate.env, checks, secret: gate.secret };
   }
 

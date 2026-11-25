@@ -1,6 +1,6 @@
-import { ResolveFailed, type Document } from "scripted-yaml/core";
+import { ResolveFailed, type Document, type Marked as DocumentMark } from "scripted-yaml/core";
 
-import type { Marked } from "./markers.js";
+import { ExtractMarker, TaskMarker, type Marked } from "./markers.js";
 import { PipelineError } from "./pipeline-error.js";
 import type { InputUse, PipelineSpec } from "./spec.js";
 
@@ -39,9 +39,11 @@ export class PipelineDefinition {
     readonly reads: InputRead[],
     private readonly document: Document,
     private readonly markers: Map<string, Marked>,
-  ) {}
+  ) {
+    this.found();
+  }
 
-  /** The checks the runner makes before the first stage, by prerequisite: `$value!sh`, `$value!file`, `$value!changes`. */
+  /** The checks the runner makes before the first stage, by prerequisite: `$value!sh`, `$value!file`, `$value!changes`, `$value!extract`. */
   checks(): Map<string, Marked> {
     return new Map(this.markers);
   }
@@ -73,12 +75,40 @@ export class PipelineDefinition {
 
   /** Every formula and `{{ }}` computed with these variables. Checks the runner has not made read as false. */
   values(vars: Record<string, string | undefined>): PipelineValues {
+    this.found();
     try {
-      return new PipelineValues(this.spec, this.document.resolve({ vars }) as Raw);
+      return new PipelineValues(this.spec, this.document.resolve({ vars }) as Raw, this.reasons());
     } catch (err) {
       if (err instanceof ResolveFailed) throw new PipelineError(err.message);
       throw err;
     }
+  }
+
+  /**
+   * What a formula reads for each `$value!extract`: the values once every one was found, else null,
+   * so `prerequisites.git.sha` is null until then and `prerequisites.git != null` says if they were.
+   */
+  private found(): void {
+    for (const [name, check] of this.markers) {
+      if (!(check instanceof ExtractMarker)) continue;
+      const mark = this.mark(`prerequisites.${name}.$value!extract`);
+      if (mark) mark.value = check.values ? { ...check.values } : null;
+    }
+  }
+
+  /** What a `$value!extract` that did not pass says: the values it did not find. */
+  private reasons(): Record<string, string> {
+    const reasons: Record<string, string> = {};
+    for (const [name, check] of this.markers) {
+      const gate = this.spec.prerequisites[name];
+      if (!(check instanceof ExtractMarker) || !gate?.extract) continue;
+      reasons[name] = check.reason(gate.message, gate.extract.map((field) => field.split(":")[0]!));
+    }
+    return reasons;
+  }
+
+  private mark(path: string): DocumentMark | undefined {
+    return this.document.marked.find((mark) => mark.path === path);
   }
 }
 
@@ -87,11 +117,15 @@ export class PipelineValues {
   constructor(
     private readonly spec: PipelineSpec,
     private readonly data: Raw,
+    /** A prerequisite's message for this run, where it is not the one written. */
+    private readonly reasons: Record<string, string> = {},
   ) {}
 
   passes(name: string): boolean {
     const gate = (this.data.prerequisites as Raw | undefined)?.[name];
     const value = PipelineValues.isRecord(gate) ? gate.$value : gate;
+    // Its values once every one was found, else null.
+    if (this.spec.prerequisites[name]?.extract) return PipelineValues.isRecord(value);
     return this.truth(value, `prerequisite "${name}"`, this.spec.prerequisites[name]?.formula);
   }
 
@@ -108,14 +142,14 @@ export class PipelineValues {
   /** Why `when` is false: the message of the first prerequisite it reads that does not pass. */
   reason(names: string[], formula: string | undefined): string {
     const closed = names.find((name) => !this.passes(name));
-    if (closed) return this.spec.prerequisites[closed]!.message;
+    if (closed) return this.reasons[closed] ?? this.spec.prerequisites[closed]!.message;
     return `when is false: ${formula ?? ""}`.trim();
   }
 
-  /** The stage's text: its task, its question or what it extracts. */
+  /** The text of a stage's `run!task` or `run!decide`, `{{ }}` filled in. */
   task(id: string): string {
-    const stage = this.stage(id);
-    return String(stage.task ?? stage.decide ?? stage.extract ?? "");
+    const run = this.stage(id).run;
+    return run instanceof TaskMarker ? String(run.text ?? "") : "";
   }
 
   summary(): string | undefined {

@@ -42,7 +42,7 @@ stages:
     emoji: 🐞
     when!: prerequisites.local and prerequisites.test_command
     session: triage
-    task: |
+    run!task: |
       Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
       Fail the run if this change caused a failure.
     inputs: [tests.log]

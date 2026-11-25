@@ -2,7 +2,7 @@ import { Expression, type Document } from "scripted-yaml/core";
 
 import { parseExtractFields } from "../extract-fields.js";
 import { Duration } from "./duration.js";
-import { ChangesMarker, FileMarker, Marked, ShellMarker } from "./markers.js";
+import { ChangesMarker, DecideMarker, ExtractMarker, FileMarker, Marked, ShellMarker, TaskMarker } from "./markers.js";
 import { PipelineDefinition, type InputRead } from "./pipeline-definition.js";
 import type { Path } from "./pipeline-source.js";
 import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
@@ -73,7 +73,8 @@ export class PipelineBuilder {
     if (!/^[a-z][a-z0-9_]*$/.test(name)) this.fail(`${where}: a name is lowercase words joined by underscores, like ${name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, at);
     const gate = value as Raw;
     const check = gate.$value;
-    const spec: GateSpec = { message: this.plain(gate.message, `${where} message`, [...at, "message"]) ?? "", env: [], needs: [], secret: false };
+    const message = this.plain(gate.message, `${where} message`, [...at, "message"]);
+    const spec: GateSpec = { message: message ?? "", env: [], needs: [], secret: false };
     if (check instanceof Expression) {
       spec.formula = check.source;
       for (const read of check.reads) this.read(read, "prerequisite", (variable) => spec.env.push(variable), (other) => spec.needs.push(other));
@@ -84,9 +85,13 @@ export class PipelineBuilder {
       spec.file = this.list(check.paths, `${where} $value!file`, [...at, "$value"]);
     } else if (check instanceof ChangesMarker) {
       spec.changes = this.changes(check.rule, where, [...at, "$value"]);
+    } else if (check instanceof ExtractMarker) {
+      spec.extract = this.fields(check.fields, `${where} $value!extract`, [...at, "$value"]);
+      if (message === undefined) spec.message = ExtractMarker.notFound(spec.extract.map((field) => field.split(":")[0]!));
     } else {
-      this.fail(`${where}: $value is a formula ($value!:) or a check ($value!sh:, $value!file:, $value!changes:)`, [...at, "$value"]);
+      this.fail(`${where}: $value is a formula ($value!:) or a check ($value!sh:, $value!file:, $value!changes:, $value!extract:)`, [...at, "$value"]);
     }
+    if (message === undefined && !spec.extract) this.fail(`${where} needs a message: what to do when it does not pass`, at);
     if (check instanceof Marked) this.markers.set(name, check);
     spec.env = [...new Set(spec.env)];
     spec.secret = spec.env.some((variable) => secrets.has(variable));
@@ -114,11 +119,12 @@ export class PipelineBuilder {
     const at: Path = ["stages", id];
     const where = `stage "${id}"`;
     if (RESERVED_IDS.includes(id)) this.fail(`${where}: "${id}" is reserved`, [...at, "id"]);
-    const kinds = ["task", "run", "decide", "extract"].filter((key) => value[key] !== undefined);
-    if (kinds.length !== 1) this.fail(`${where} needs exactly one of task, run!sh, decide or extract`, at);
-    if (value.threshold !== undefined && value.decide === undefined) this.fail(`${where}: threshold is for a decide stage`, [...at, "threshold"]);
-    if (value.format !== undefined && value.extract === undefined) this.fail(`${where}: format is for an extract stage`, [...at, "format"]);
-    if (value.session !== undefined && value.decide !== undefined) this.fail(`${where}: a decide stage has no session, a decision model does not chat`, [...at, "session"]);
+    const run = value.run;
+    if (!(run instanceof ShellMarker || run instanceof TaskMarker || run instanceof ExtractMarker)) {
+      return this.fail(`${where} runs something: run!task: <task>, run!sh: <command>, run!decide: <question> or run!extract: { name: what it is }`, [...at, "run"]);
+    }
+    if (value.threshold !== undefined && !(run instanceof DecideMarker)) this.fail(`${where}: threshold is for run!decide`, [...at, "threshold"]);
+    if (value.session !== undefined && run instanceof DecideMarker) this.fail(`${where}: run!decide has no session, a decision model does not chat`, [...at, "session"]);
     if (value.each_line !== undefined && value.each_file !== undefined) this.fail(`${where} can loop over each_line or each_file, not both`, at);
 
     const when = this.condition(value.when, `${where} when`, [...at, "when"], id);
@@ -142,23 +148,17 @@ export class PipelineBuilder {
     if (goesOn && stage.stopOn.includes("fail")) this.fail(`${where} cannot both stop and go on after a fail`, [...at, "stopOn"]);
     if (!goesOn && !stage.stopOn.includes("fail")) stage.stopOn = ["fail", ...stage.stopOn];
 
-    if (value.task !== undefined) stage.task = this.written(value.task, `${where} task`, [...at, "task"], "task");
-    if (value.decide !== undefined) stage.decide = this.written(value.decide, `${where} decide`, [...at, "decide"], "task");
+    if (run instanceof DecideMarker) stage.decide = this.written(run.text, `${where} run!decide`, [...at, "run"], "task") ?? "";
+    else if (run instanceof TaskMarker) stage.task = this.written(run.text, `${where} run!task`, [...at, "run"], "task") ?? "";
+    else if (run instanceof ExtractMarker) stage.extract = this.fields(run.fields, `${where} run!extract`, [...at, "run"]);
+    else {
+      stage.run = this.plain(run.command, `${where} run!sh`, [...at, "run"]) ?? "";
+      this.shell(stage.run, "run");
+    }
     if (value.threshold !== undefined) {
       const threshold = value.threshold;
       if (typeof threshold !== "number" || threshold <= 0 || threshold >= 1) this.fail(`${where} threshold is a probability between 0 and 1, like 0.7`, [...at, "threshold"]);
       stage.threshold = threshold;
-    }
-    if (value.extract !== undefined) {
-      stage.extract = this.written(value.extract, `${where} extract`, [...at, "extract"], "task");
-      const fields = parseExtractFields(this.list(value.format, `${where} format`, [...at, "format"]), "format");
-      if (typeof fields === "string") this.fail(`${where}: ${fields}`, [...at, "format"]);
-      stage.format = fields.map((field) => `${field.name}: ${field.description}`);
-    }
-    if (value.run !== undefined) {
-      if (!(value.run instanceof ShellMarker)) this.fail(`${where} run is a shell command: run!sh: <command>`, [...at, "run"]);
-      stage.run = this.plain(value.run.command, `${where} run!sh`, [...at, "run"]) ?? "";
-      this.shell(stage.run, "run");
     }
     if (value.session !== undefined) {
       const session = this.plain(value.session, `${where} session`, [...at, "session"]);
@@ -172,6 +172,23 @@ export class PipelineBuilder {
       stage.timeout = value.timeout as string | number;
     }
     return stage;
+  }
+
+  /**
+   * The values of `run!extract:` or `$value!extract:`: a map of a name to what the value is. A name is
+   * what a formula reads, `prerequisites.git.pr_url`, so it has no dash.
+   */
+  private fields(value: unknown, what: string, at: Path): string[] {
+    if (!PipelineBuilder.isRecord(value) || Object.keys(value).length === 0) return this.fail(`${what} is a map of values to find: { sha: the commit under test }`, at);
+    const lines: string[] = [];
+    for (const [name, description] of Object.entries(value)) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) this.fail(`${what}: "${name}" is not a name a formula can read; use letters, digits and underscores`, [...at, name]);
+      if (typeof description !== "string" || !description.trim()) this.fail(`${what}.${name} says what the value is, as text`, [...at, name]);
+      lines.push(`${name}: ${description.trim()}`);
+    }
+    const fields = parseExtractFields(lines, what);
+    if (typeof fields === "string") return this.fail(fields, at);
+    return lines;
   }
 
   /** A `when!` formula, and the prerequisites it reads: directly, and through the prerequisites it reads. */

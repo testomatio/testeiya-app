@@ -1,6 +1,6 @@
 /**
  * What `extract` is asked to find. No Node imports: the pipeline parser checks
- * a stage's `format:` with it in a Worker and a browser.
+ * the values of `run!extract:` and `$value!extract:` with it in a Worker and a browser.
  */
 export interface ExtractField {
   name: string;
@@ -27,4 +27,17 @@ export function parseExtractFields(formats: string[], what = "--output"): Extrac
     fields.push(field);
   }
   return fields;
+}
+
+/**
+ * The task for values a pipeline asks for with `run!extract:` or `$value!extract:`,
+ * where there is no text of what to find: the names and descriptions say it.
+ */
+export function extractPrompt(fields: ExtractField[]): string {
+  const lines = fields.map((field) => `- ${field.name}: ${field.description}`);
+  return [
+    "Find these values. Look where this job runs: the git checkout, the environment variables of the CI job, files in this folder, and the tools you have.",
+    ...lines,
+    "Submit them all at once. Do not guess a value you cannot find.",
+  ].join("\n");
 }
