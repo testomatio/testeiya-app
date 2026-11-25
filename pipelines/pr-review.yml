@@ -7,9 +7,6 @@ target: pr
 $vars:
   TESTOMATIO: { optional: true, secret: true }
 
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
-
 prerequisites:
   code_changed:
     $value!changes:

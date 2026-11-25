@@ -185,8 +185,6 @@ test("branch names come from CI source branches before the checkout", async () =
 test("GIT_BRANCH reaches pipeline env and can be transformed", async () => {
   const { repo, cli } = setup();
   const file = write(repo, "pipe.yml", `
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
 env:
   TESTOMATIO_BRANCH!: slug(vars.GIT_BRANCH)
 stages:
@@ -822,8 +820,6 @@ test("the summary draft keeps each stage report word for word, its headings unde
 
 test("env values are formulas: a URL's host and path, and one env key read by another", () => {
   const definition = new PipelineFile("p.yml").parse(`
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
 env:
   SITE!: replace(vars.URL, "^[a-z]+://([^/]+).*$", "$1")
   PAGE!: slug(replace(vars.URL, "^[a-z]+://[^/]*|[?#].*$", ""))

@@ -90,7 +90,7 @@ $tests:
 |---|---|---|
 | `$extends` | no | A bundled pipeline or a `.yml` path to patch. See [Extending a pipeline](#extending-a-pipeline) |
 | `$vars` | no | Variables the file declares: a `default`, `secret: true`. See [Variables](#variables) |
-| `$functions` | no | Formulas used more than once: `slug(text)!: …`. See [Variables](#variables) |
+| `$functions` | no | Formulas used more than once: `host(url)!: …`. See [Variables](#variables) |
 | `$tests` | no | Checks of the formulas: `vars` in, `expect` out. See [Checking a pipeline](#checking-a-pipeline) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
@@ -355,9 +355,6 @@ stages:
   variable unset. `--set` wins over `env:`.
 
   ```yaml
-  $functions:
-    slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
-
   env:
     SITE!: replace(vars.STAGING_URL, "^[a-z]+://([^/]+).*$", "$1")        # staging.example.com
     PAGE!: slug(replace(vars.STAGING_URL, "^[a-z]+://[^/]*|[?#].*$", "")) # users-settings
@@ -368,8 +365,9 @@ stages:
   ```
 
 - `$functions` names a formula a file uses more than once. FEEL has text
-  functions (`replace`, `upper case`, `substring`, `string join`) and no
-  filters: a slug or a URL's host is a formula like the ones above.
+  functions (`replace`, `upper case`, `substring`, `string join`), and
+  scripted-yaml adds one-word ones such as `slug`: `slug("feature/add-login")`
+  is `feature-add-login`. A function of the file may not take a built-in's name.
 - An unknown name or function is an error, so `pipeline-check` catches a typo.
 - The runner sets:
 

@@ -7,9 +7,6 @@ target: issue
 $vars:
   TESTOMATIO: { optional: true, secret: true }
 
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
-
 prerequisites:
   issue:
     $value!: vars.ISSUE_URL != null
