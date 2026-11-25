@@ -1,5 +1,6 @@
 import { ResolveFailed, type Document, type Marked as DocumentMark } from "scripted-yaml/core";
 
+import { ExtractFields } from "../extract-fields.js";
 import { ExtractMarker, TaskMarker, type Marked } from "./markers.js";
 import { PipelineError } from "./pipeline-error.js";
 import type { InputUse, PipelineSpec } from "./spec.js";
@@ -102,7 +103,7 @@ export class PipelineDefinition {
     for (const [name, check] of this.markers) {
       const gate = this.spec.prerequisites[name];
       if (!(check instanceof ExtractMarker) || !gate?.extract) continue;
-      reasons[name] = check.reason(gate.message, gate.extract.map((field) => field.split(":")[0]!));
+      reasons[name] = check.reason(gate.message, ExtractFields.names(gate.extract));
     }
     return reasons;
   }

@@ -78,8 +78,11 @@ export class ExtractMarker extends Marked {
   values?: Record<string, string>;
   /** The values that were not found, once it was checked. */
   empty: string[] = [];
-  /** The agent was asked for what the input did not have. Not in a dry run or a check. */
-  asked = false;
+  /**
+   * The values the input does not have, in a dry run or a check, which ask no
+   * agent: a run would. Until then each reads as its name, `<pr_url>`.
+   */
+  pending: string[] = [];
 
   constructor(readonly fields: unknown) {
     super();
@@ -93,9 +96,7 @@ export class ExtractMarker extends Marked {
   /** Why it did not pass: the file's message, or the values that were not found when the file gives none. */
   reason(message: string, names: string[]): string {
     if (this.empty.length === 0 || message !== ExtractMarker.notFound(names)) return message;
-    let reason = ExtractMarker.notFound(this.empty);
-    if (!this.asked) reason += " The input has none of them; a run asks the agent.";
-    return reason;
+    return ExtractMarker.notFound(this.empty);
   }
 }
 

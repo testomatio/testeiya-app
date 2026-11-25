@@ -2,7 +2,7 @@ import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ExtractField } from "./extract-fields.js";
 
-export { parseExtractFields, type ExtractField } from "./extract-fields.js";
+export { ExtractFields, type ExtractField } from "./extract-fields.js";
 
 export function createSetResultTool(runtime: RunResult): ToolDefinition {
   return {

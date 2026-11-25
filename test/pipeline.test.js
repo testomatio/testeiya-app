@@ -21,7 +21,7 @@ import { SummaryStage } from "../dist/src/pipeline/summary-stage.js";
 import { TaskStage } from "../dist/src/pipeline/task-stage.js";
 import { KILL_GRACE_MS } from "../dist/src/pipeline/launcher.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
-import { PipelineInput } from "../dist/src/pipeline/pipeline-input.js";
+import { InputValues } from "../dist/src/pipeline/input-values.js";
 import { UsageError } from "../dist/src/model.js";
 
 // A pull request run in CI names its own branches; the tests name theirs.
@@ -163,7 +163,7 @@ test("a task fills in {{ }} with the run's variables; unset is empty", () => {
 test("a changes check counts what is not ignored", async () => {
   const files = ["src/api/users.ts", "README.md", "docs/a.md"];
   const passes = (changes, filesChanged = files) =>
-    new Gate("g", "m", new ChangesMarker(changes), { changes }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" }, input: new PipelineInput() });
+    new Gate("g", "m", new ChangesMarker(changes), { changes }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" }, input: new InputValues() });
   assert.equal(await passes({ min_files: 2, ignore: ["**/*.md", "*.md"] }), false);
   assert.equal(await passes({ paths: ["src/api/**"] }), true);
   assert.equal(await passes({ paths: ["src/ui/**"] }), false);
@@ -1148,8 +1148,35 @@ test("a dry run and pipeline-check take extracted values from the input only", a
   const input = write(repo, "git.json", JSON.stringify({ sha: "abc123" }));
   const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), inputs: [input] };
   assert.equal(await inRepo(repo, () => new Pipeline({ ...options, dryRun: true }).run()), 0);
-  assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 1);
+  // What only the agent of a run would find is pending, not failed.
+  assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 0);
   assert.equal(calledWith(log).length, 0, "no agent is asked");
+});
+
+test("the agent finds values only for a run that goes on", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE());
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), gates: { pr: "false" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+  assert.equal(readJson(join(repo, ".qa", "pipeline.json")).status, "skipped");
+  assert.equal(calledWith(log).length, 0, "a skipped run asks no agent");
+});
+
+test("input files merge a prerequisite's map with the one before it", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE());
+  const first = write(repo, "a.json", JSON.stringify({ git: { sha: "abc" } }));
+  const second = write(repo, "b.json", JSON.stringify({ git: { pr_url: "https://x/pull/2" } }));
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), inputs: [first, second] };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+  assert.equal(calledWith(log).filter((call) => call.extract).length, 0);
+  assert.match(calledWith(log).find((call) => call.prompt.startsWith("Review")).prompt, /^Review https:\/\/x\/pull\/2 at abc\./);
+});
+
+test("the old stage keys in a patch fail with the new spelling", () => {
+  assert.throws(() => overridden(Override.stage("plan:task: { $after: x }")), /--stage plan: task is now run!task/);
+  assert.throws(() => overridden(Override.stage("plan:$add: { decide: ok? }")), /--stage plan: decide is now run!decide/);
+  assert.throws(() => overridden(Override.pipeline("stages: { $after: { late: { extract: x } } }")), /--pipeline: extract is now run!extract/);
 });
 
 test("$value!extract is a map of names a formula reads; its message is optional", () => {
@@ -1157,4 +1184,5 @@ test("$value!extract is a map of names a formula reads; its message is optional"
   assert.deepEqual(extract("{ sha: the commit }").prerequisites.git, { message: "Not found: sha.", env: [], needs: [], secret: false, extract: ["sha: the commit"] });
   assert.throws(() => extract("the commit"), /\$value!extract is a map of values to find/);
   assert.throws(() => extract("{ pr-url: the url }"), /"pr-url" is not a name a formula can read/);
+  assert.throws(() => extract("{ sha: \"the {{ vars.X }}\" }"), /sha is plain text: no \{\{ \}\}/);
 });

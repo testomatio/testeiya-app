@@ -5,16 +5,16 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { Decider } from "../dist/src/decision.js";
-import { parseExtractFields } from "../dist/src/extract-fields.js";
+import { ExtractFields } from "../dist/src/extract-fields.js";
 import { createExtractTool } from "../dist/src/result.js";
 import { resolveDecisionModel, UsageError } from "../dist/src/model.js";
 
 test("--output values become named fields; an unnamed one is the field value", () => {
-  assert.deepEqual(parseExtractFields(["url: public url of a page"]), [{ name: "url", description: "public url of a page" }]);
-  assert.deepEqual(parseExtractFields(["a semver version"]), [{ name: "value", description: "a semver version" }]);
-  assert.deepEqual(parseExtractFields([]), [{ name: "value", description: "the answer" }]);
-  assert.match(parseExtractFields(["a", "b"]), /only one --output value can go without a name/);
-  assert.match(parseExtractFields(["url: a", "url: b"]), /two --output values are called "url"/);
+  assert.deepEqual(ExtractFields.parse(["url: public url of a page"]), [{ name: "url", description: "public url of a page" }]);
+  assert.deepEqual(ExtractFields.parse(["a semver version"]), [{ name: "value", description: "a semver version" }]);
+  assert.deepEqual(ExtractFields.parse([]), [{ name: "value", description: "the answer" }]);
+  assert.match(ExtractFields.parse(["a", "b"]), /only one --output value can go without a name/);
+  assert.match(ExtractFields.parse(["url: a", "url: b"]), /two --output values are called "url"/);
 });
 
 test("the extract tool keeps each value on one line", async () => {

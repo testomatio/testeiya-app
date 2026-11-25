@@ -1,6 +1,6 @@
 import { Expression, type Document } from "scripted-yaml/core";
 
-import { parseExtractFields } from "../extract-fields.js";
+import { ExtractFields } from "../extract-fields.js";
 import { Duration } from "./duration.js";
 import { ChangesMarker, DecideMarker, ExtractMarker, FileMarker, Marked, ShellMarker, TaskMarker } from "./markers.js";
 import { PipelineDefinition, type InputRead } from "./pipeline-definition.js";
@@ -87,7 +87,7 @@ export class PipelineBuilder {
       spec.changes = this.changes(check.rule, where, [...at, "$value"]);
     } else if (check instanceof ExtractMarker) {
       spec.extract = this.fields(check.fields, `${where} $value!extract`, [...at, "$value"]);
-      if (message === undefined) spec.message = ExtractMarker.notFound(spec.extract.map((field) => field.split(":")[0]!));
+      if (message === undefined) spec.message = ExtractMarker.notFound(ExtractFields.names(spec.extract));
     } else {
       this.fail(`${where}: $value is a formula ($value!:) or a check ($value!sh:, $value!file:, $value!changes:, $value!extract:)`, [...at, "$value"]);
     }
@@ -184,9 +184,10 @@ export class PipelineBuilder {
     for (const [name, description] of Object.entries(value)) {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) this.fail(`${what}: "${name}" is not a name a formula can read; use letters, digits and underscores`, [...at, name]);
       if (typeof description !== "string" || !description.trim()) this.fail(`${what}.${name} says what the value is, as text`, [...at, name]);
+      if (description.includes("{{")) this.fail(`${what}.${name} is plain text: no {{ }}`, [...at, name]);
       lines.push(`${name}: ${description.trim()}`);
     }
-    const fields = parseExtractFields(lines, what);
+    const fields = ExtractFields.parse(lines, what);
     if (typeof fields === "string") return this.fail(fields, at);
     return lines;
   }

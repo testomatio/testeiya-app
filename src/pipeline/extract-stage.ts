@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { extractPrompt, parseExtractFields, type ExtractField } from "../extract-fields.js";
+import { ExtractFields, type ExtractField } from "../extract-fields.js";
 import type { TaskOutcome, TaskRequest } from "../run.js";
 import type { Item, StageContext } from "./stage.js";
 import { TaskStage } from "./task-stage.js";
@@ -30,7 +30,7 @@ export class ExtractStage extends TaskStage {
 
   /** No text is written: the values say what to find. */
   protected text(_context: StageContext, _vars: Variables): string {
-    return extractPrompt(this.fields());
+    return ExtractFields.prompt(this.fields());
   }
 
   protected finished(dir: string, item: Item, outcome: TaskOutcome): void {
@@ -42,9 +42,6 @@ export class ExtractStage extends TaskStage {
   }
 
   private fields(): ExtractField[] {
-    const fields = parseExtractFields(this.spec.extract ?? []);
-    // The builder already checked the values.
-    if (typeof fields === "string") throw new Error(fields);
-    return fields;
+    return ExtractFields.checked(this.spec.extract ?? []);
   }
 }

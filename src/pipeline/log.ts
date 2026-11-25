@@ -91,10 +91,16 @@ export class PipelineLog {
   }
 
   /** A `$value!extract` prerequisite: what it found, or what it did not. */
-  extracted(name: string, values: Record<string, string> | undefined, message: string): void {
+  extracted(name: string, values: Record<string, string> | undefined, message: string, pending: string[] = []): void {
+    if (pending.length > 0) return this.pending(name, pending);
     if (!values) return this.gate(name, false, message);
     const found = Object.entries(values).map(([field, value]) => `${field}=${value}`).join(" ");
     this.note(`  ${c.green("✓")} ${name}${c.dim(`  ${found}`)}`);
+  }
+
+  /** Values a dry run or a check leaves to the agent of a real run. */
+  pending(name: string, values: string[]): void {
+    this.note(`  ${c.cyan("○")} gate ${name}${c.dim(`  not in the input: ${values.join(", ")}; a run asks the agent`)}`);
   }
 
   aiGate(problem: string | null): void {

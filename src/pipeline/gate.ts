@@ -2,10 +2,10 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { matchesGlob, resolve } from "node:path";
 
-import { parseExtractFields, type ExtractField } from "../extract-fields.js";
+import { ExtractFields, type ExtractField } from "../extract-fields.js";
 import type { Changes } from "../git.js";
 import { ChangesMarker, ExtractMarker, FileMarker, ShellMarker, type Marked } from "./markers.js";
-import type { PipelineInput } from "./pipeline-input.js";
+import type { InputValues } from "./input-values.js";
 import type { GateSpec } from "./spec.js";
 import type { Variables } from "./variables.js";
 
@@ -30,12 +30,17 @@ export class Gate {
   get message(): string {
     const { check } = this;
     if (!(check instanceof ExtractMarker)) return this.text;
-    return check.reason(this.text, (this.spec?.extract ?? []).map((field) => field.split(":")[0]!));
+    return check.reason(this.text, ExtractFields.names(this.spec?.extract ?? []));
   }
 
   /** The values a `$value!extract` found, once every one was. */
   get found(): Record<string, string> | undefined {
     return this.check instanceof ExtractMarker ? this.check.values : undefined;
+  }
+
+  /** The values a `$value!extract` leaves to the agent of a run: a dry run and a check ask none. */
+  get pending(): string[] {
+    return this.check instanceof ExtractMarker ? this.check.pending : [];
   }
 
   /** A gate the CI job adds with `--gate NAME:COMMAND`. */
@@ -68,21 +73,22 @@ export class Gate {
 
   /** Each value from the input, the rest from the agent. One that is still empty fails it. */
   private async extract(check: ExtractMarker, context: GateContext): Promise<boolean> {
-    const fields = parseExtractFields(this.spec?.extract ?? []);
-    // The builder already checked the values.
-    if (typeof fields === "string") throw new Error(fields);
+    const fields = ExtractFields.checked(this.spec?.extract ?? []);
     const values: Record<string, string> = {};
     for (const field of fields) {
       const value = context.input.find(this.name, field.name);
       if (value !== undefined) values[field.name] = value;
     }
     const missing = fields.filter((field) => values[field.name] === undefined);
-    check.asked = missing.length > 0 && context.extract !== undefined;
-    if (missing.length > 0 && context.extract) {
+    check.values = undefined;
+    check.pending = [];
+    if (missing.length > 0 && !context.extract) {
+      check.pending = missing.map((field) => field.name);
+      for (const field of missing) values[field.name] = `<${field.name}>`;
+    } else if (missing.length > 0 && context.extract) {
       const found = await context.extract(this.name, missing);
       for (const field of missing) if (found[field.name]?.trim()) values[field.name] = found[field.name]!.trim();
     }
-    check.values = undefined;
     check.empty = fields.filter((field) => values[field.name] === undefined).map((field) => field.name);
     if (check.empty.length > 0) return false;
     check.values = values;
@@ -121,7 +127,7 @@ export interface GateContext {
   vars: Variables;
   changes: Changes;
   /** Values the job passed: a `$value!extract` takes them first. */
-  input: PipelineInput;
+  input: InputValues;
   /** Asks the agent for the values the input does not have. None: they stay empty, as in a dry run. */
   extract?: Extractor;
 }

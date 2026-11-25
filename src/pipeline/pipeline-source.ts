@@ -398,6 +398,20 @@ class OldFormat {
     if (PipelineSource.isRecord(raw.env)) for (const [key, value] of Object.entries(raw.env)) this.text(value, ["env", key]);
     if (PipelineSource.isRecord(raw.packages)) for (const [key, value] of Object.entries(raw.packages)) this.text(value, ["packages", key]);
     if (Array.isArray(raw.stages)) raw.stages.forEach((stage, index) => this.stage(stage, index));
+    if (PipelineSource.isRecord(raw.stages)) this.patchedStages(raw.stages);
+  }
+
+  /** A patch's `stages:` map: a stage by its id, `$before`/`$after`/`$add` with new stages, a stage's `$add`/`$replace`. */
+  private patchedStages(stages: Raw): void {
+    for (const [key, value] of Object.entries(stages)) {
+      if (!PipelineSource.isRecord(value)) continue;
+      if (key.startsWith("$")) {
+        for (const [id, stage] of Object.entries(value)) if (PipelineSource.isRecord(stage)) this.stage({ id, ...stage }, 0);
+        continue;
+      }
+      this.stage({ id: key, ...value }, 0);
+      for (const change of ["$add", "$replace"]) if (PipelineSource.isRecord(value[change])) this.stage({ id: key, ...(value[change] as Raw) }, 0);
+    }
   }
 
   private prerequisite(name: string, gate: unknown): void {
