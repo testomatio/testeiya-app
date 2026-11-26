@@ -17,7 +17,7 @@ file. Four markers say what is not plain data:
 |---|---|
 | `key: text` | data; in text, each `{{ formula }}` is filled in |
 | `key!: formula` | the value is one [FEEL](https://docs.camunda.io/docs/components/modeler/feel/what-is-feel/) formula |
-| `key!sh: command` | a shell command (`run!sh`), or a check the runner makes (`$value!sh`, `$value!file`, `$value!changes`) |
+| `key!name: value` | what runs: a stage's `run!task`, `run!sh`, `run!decide`, `run!extract`, or a check the runner makes (`$value!sh`, `$value!file`, `$value!changes`, `$value!decide`, `$value!extract`) |
 | `$keyword:` | a word of the language: `$vars`, `$value`, `$functions`, `$extends`, `$tests` |
 
 Its shape, the keys a pipeline may have, is
@@ -73,7 +73,7 @@ stages:
     emoji: 🐞
     when!: prerequisites.local and prerequisites.test_command
     session: triage
-    task: |
+    run!task: |
       Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
       Fail the run if this change caused a failure.
     inputs: [tests.log]
@@ -90,7 +90,7 @@ $tests:
 |---|---|---|
 | `$extends` | no | A bundled pipeline or a `.yml` path to patch. See [Extending a pipeline](#extending-a-pipeline) |
 | `$vars` | no | Variables the file declares: a `default`, `secret: true`. See [Variables](#variables) |
-| `$functions` | no | Formulas used more than once: `slug(text)!: …`. See [Variables](#variables) |
+| `$functions` | no | Formulas used more than once: `host(url)!: …`. See [Variables](#variables) |
 | `$tests` | no | Checks of the formulas: `vars` in, `expect` out. See [Checking a pipeline](#checking-a-pipeline) |
 | `name` | no | Shown in logs and `pipeline.json`. Default: the file name |
 | `description` | no | One line, shown by `testeiya pipeline` |
@@ -125,12 +125,11 @@ Any other word means the pipeline is started by hand. The list is exported as
 | `id` | Required. Lowercase words joined by dashes. Unique. Names the stage's files. `pipeline` and `summary` are reserved |
 | `title` | The stage's heading in the final report. Default: the id, `browser-testing` is "Browser testing" |
 | `emoji` | Shown before the title in the final report. Default: one picked from the id |
-| `task` | An agent stage: the task text. `{{ }}` is filled in, `/skill` names expand |
-| `run!sh` | A command stage: a shell command, run with `sh` in the checkout |
-| `decide` | A decision stage: a yes or no question for a decision model. Yes passes, no fails. `{{ }}` is filled in. See [Decisions and extractions](#decisions-and-extractions) |
-| `threshold` | A decision stage only: the probability of yes that counts as yes. Default: `0.5` |
-| `extract` | An extraction stage: what an agent finds, answered as values. `{{ }}` is filled in |
-| `format` | An extraction stage only: the values, `["url: public url of a page"]`, as `testeiya extract --output` takes them |
+| `run` | Required. What the stage runs, said by its marker: |
+| `run!task` | an agent's task. `{{ }}` is filled in, `/skill` names expand |
+| `run!sh` | a shell command, run with `sh` in the checkout. No `{{ }}`: the shell reads variables |
+| `run!decide` | `{ question, context, threshold }`: a yes or no for a decision model. Yes passes, no fails. See [Decisions and extractions](#decisions-and-extractions) |
+| `run!extract` | `{ what, values }`: values an agent finds. See [Decisions and extractions](#decisions-and-extractions) |
 | `when!` | A formula over prerequisites and variables. False: the stage is skipped with the message of the prerequisite that failed |
 | `session` | A named, persistent conversation. See [Sessions](#sessions) |
 | `inputs` | Files the stage reads, linked into its folder. See [Files](#files) |
@@ -142,7 +141,7 @@ Any other word means the pipeline is started by hand. The list is exported as
 | `optional` | `true`: its fail, break or timeout neither stops the pipeline nor fails the run |
 | `timeout` | `90s`, `30m`, `1h`, or seconds. Per item in a loop. Default: none |
 
-- A stage has exactly one of `task`, `run!sh`, `decide` or `extract`.
+- A stage has one `run`: `run!task`, `run!sh`, `run!decide` or `run!extract`.
 - A stage has at most one of `each_line` or `each_file`.
 - `inputs`, `outputs` and `stopOn` are lists: `inputs: [plan.md]`. File names
   are plain text, no `{{ }}`.
@@ -171,8 +170,11 @@ Its `$value` is one of:
 | `$value!file: [path]` | every path exists, relative to the checkout |
 | `$value!sh: <command>` | the command exits 0 within 30 seconds. Its output is hidden |
 | `$value!changes: {…}` | the changed files match, see [Changes](#changes) |
+| `$value!decide: {…}` | the decision model answers yes, see [Values and answers before the first stage](#values-and-answers-before-the-first-stage) |
+| `$value!extract: {…}` | the agent finds every value, see [Values and answers before the first stage](#values-and-answers-before-the-first-stage) |
 
-- A prerequisite needs a `$value` and a `message`.
+- A prerequisite needs a `$value` and a `message`. A `$value!extract` may leave
+  the message out: it says which values were not found.
 - Every check is made once, before the first stage. `--dry-run` prints them all.
 - A formula that gives anything but true or false is an error when it is
   computed. `vars.NAME and …` is null when NAME is unset: compare with null,
@@ -196,6 +198,62 @@ prerequisites:
     $value!: vars.TESTOMATIO != null
     message: No Testomat.io project. Set TESTOMATIO to the project's API key.
 ```
+
+### Values and answers before the first stage
+
+A `$value!extract` prerequisite has the agent find values before the first
+stage: the pull request, the commit, a deployment's url. `what` says what to
+find and why; each key of `values` is a name and what the value is:
+
+```yaml
+prerequisites:
+  git:
+    $value!extract:
+      what: The pull request under test. Use gh and git in this checkout.
+      values:
+        sha: sha of the commit under test
+        pr: pull request number
+        pr_url: pull request url
+        branch: name of the branch
+
+env:
+  GIT_SHA!: prerequisites.git.sha
+
+stages:
+  - id: review
+    when!: prerequisites.git != null
+    run!task: Review {{ prerequisites.git.pr_url }} at commit {{ prerequisites.git.sha }}.
+```
+
+- The agent runs in the pipeline's process, as `testeiya extract` would, with
+  its tools: `gh`, `git`, the shell. A value it cannot find fails the
+  prerequisite; its message, when the file gives none, names what was not found.
+- A formula reads a value as `prerequisites.git.sha`, in `when!`, in `env:` and
+  in `{{ }}`. `prerequisites.git` is the map of values when every one was found,
+  and null when one was not: `when!: prerequisites.git != null` runs a stage
+  only with all of them. It is checked on every run, read in a `when!` or not.
+- `{{ }}` is filled in in `what`, not in the descriptions of `values`.
+
+A `$value!decide` prerequisite asks the decision model a yes or no question:
+
+```yaml
+prerequisites:
+  ui_change:
+    $value!decide:
+      question: Does this diff change UI code or styles?
+      context:
+        sh: git diff --stat origin/main...HEAD
+      threshold: 0.7
+    message: No UI change, nothing to test in a browser.
+```
+
+- No stage has run yet, so its `context` takes `files` and `sh` only. See
+  [Decisions and extractions](#decisions-and-extractions).
+- A call that fails is a no: the prerequisite fails closed.
+
+Both ask a model only for a run that goes on: after `--gate` and the top-level
+`when!`, unless that `when!` reads them. `--dry-run` and `pipeline-check` ask
+none: they show what a run would ask as pending, and count it as passing.
 
 ### Prerequisites from the CI job
 
@@ -221,8 +279,9 @@ testeiya pipeline-check regression --set TEST_COMMAND="npx playwright test"
 - Validates the file the way a run does and runs its `$tests`, then checks every
   prerequisite it declares, used or not, plus `ai` and any `--gate`.
 - Prints each prerequisite as passed or not, with its `message` when it does not pass.
-- Runs no stage and spends no tokens. Takes `--set`, `--gate`, `--stage`,
-  `--pipeline`, `--dir`, `--model` and `--json`.
+- Runs no stage and spends no tokens: a `$value!decide` or `$value!extract` is
+  pending. Takes `--set`, `--gate`, `--stage`, `--pipeline`, `--dir`, `--model`
+  and `--json`.
 - Exit code: `0` every prerequisite passes, `1` one does not, `2` the file is
   invalid or one of its `$tests` fails.
 - `--diagram` also writes `<name>.diagram.md` to the current folder: a Mermaid
@@ -235,13 +294,13 @@ beside the file, so it suits the bundled pipelines and a copy of them that keeps
 is for `testeiya pipeline-check`:
 
 ```bash
-npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes
+npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes --computed task,decide,extract
 npm run validate:pipelines      # the bundled ones, in this repository
 ```
 
 `$tests` hold one case per branch of the formulas: the variables in, the values
 out, as paths. A check the runner makes (`$value!sh`, `$value!file`,
-`$value!changes`) reads as false in a test.
+`$value!changes`, `$value!decide`) reads as false in a test, and a `$value!extract` as null.
 
 ```yaml
 $tests:
@@ -285,7 +344,7 @@ $vars:
 
 stages:
   - id: plan
-    task: Plan a check of {{ vars.EXPLORBOT_URL }} against {{ vars.BASE_BRANCH }}.
+    run!task: Plan a check of {{ vars.EXPLORBOT_URL }} against {{ vars.BASE_BRANCH }}.
 ```
 
 - `$vars` declares a variable: its `default`, `secret: true`, an `about` for a
@@ -302,9 +361,6 @@ stages:
   variable unset. `--set` wins over `env:`.
 
   ```yaml
-  $functions:
-    slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
-
   env:
     SITE!: replace(vars.STAGING_URL, "^[a-z]+://([^/]+).*$", "$1")        # staging.example.com
     PAGE!: slug(replace(vars.STAGING_URL, "^[a-z]+://[^/]*|[?#].*$", "")) # users-settings
@@ -315,8 +371,9 @@ stages:
   ```
 
 - `$functions` names a formula a file uses more than once. FEEL has text
-  functions (`replace`, `upper case`, `substring`, `string join`) and no
-  filters: a slug or a URL's host is a formula like the ones above.
+  functions (`replace`, `upper case`, `substring`, `string join`), and
+  scripted-yaml adds one-word ones such as `slug`: `slug("feature/add-login")`
+  is `feature-add-login`. A function of the file may not take a built-in's name.
 - An unknown name or function is an error, so `pipeline-check` catches a typo.
 - The runner sets:
 
@@ -337,24 +394,53 @@ gets the same MCP servers.
 
 ## Decisions and extractions
 
-A `decide` stage asks a decision model (TypeSafe's Jev, Cloudflare's Clef, …)
-a yes or no question, the same as `testeiya decide`. The model has no tools: it
-judges the question against the stage's `inputs` and nothing else, each file
-under its own name. A folder counts as the files in it. Yes passes and no fails,
-so a no stops the pipeline unless the stage is `optional` or has
-`continueOn: fail`. A call that fails breaks the stage, it never reads as a no.
-The stage writes the decision to `<id>.json` and one line to `<id>.md` for the
-summary.
+A `run!decide` stage asks a decision model (TypeSafe's Jev, Cloudflare's Clef, …)
+a yes or no question, the same as `testeiya decide`. Yes passes and no fails, so
+a no stops the pipeline unless the stage is `optional` or has `continueOn: fail`.
+A call that fails breaks the stage, it never reads as a no. The stage writes the
+decision to `<id>.json` and one line to `<id>.md` for the summary.
 
-The model is `TESTEIYA_DECISION_MODEL`, from the job or `--set`, never the
-pipeline's `--model`: that one is a chat model. `pipeline-check` and `--dry-run`
-check it under the `ai` gate. A `decide` stage takes no `session`.
+```yaml
+- id: worth-testing
+  run!decide:
+    question: Does this change touch anything a user can see in a browser?
+    context:
+      stages: review                          # review's report
+      sessions: qa                            # the qa session's last answer
+      files: [spec.md, "docs/*.md"]
+      sh: git diff --stat origin/main...HEAD
+    threshold: 0.7
+```
 
-An `extract` stage is an agent stage whose answer is values, the same as
-`testeiya extract`. It writes them to `<id>.values.json`, for a later stage to
-read, and as `name: value` lines to `<id>.md`. When a value cannot be found the
-stage fails and writes no values. It always runs in the pipeline's process, even
-under `TESTEIYA_PIPELINE_SPAWN=1`.
+| Key | Required | Meaning |
+|---|---|---|
+| `question` | yes | The yes or no question. `{{ }}` is filled in |
+| `context` | no | What the model judges the question against |
+| `threshold` | no | The probability of yes that counts as yes. Default: `0.5` |
+
+The model has no tools: `context` is all it sees, each source one named block of
+text. Each kind takes one entry or a list, and `{{ }}` is filled in:
+
+| Kind | Gives |
+|---|---|
+| `stages` | an earlier stage's report, or its log for `run!sh`; a skipped stage says why |
+| `sessions` | the last answer in a session of an earlier stage |
+| `files` | files, in the stage's folder first, then in the checkout. A mask takes every file it matches, a folder its files |
+| `sh` | what a command prints, run in the checkout with the stage's variables, within 30 seconds. One that fails says how |
+
+- Without `context`, the stage's `inputs` are its context. A decide with
+  neither is an error, as is a stage or a session that is not before it.
+- The shape is in the DSL, so `npx scripted-yaml validate` catches a typo in it.
+- The model is `TESTEIYA_DECISION_MODEL`, from the job or `--set`, never the
+  pipeline's `--model`: that one is a chat model. `pipeline-check` and
+  `--dry-run` check it under the `ai` gate. A `run!decide` stage takes no `session`.
+
+A `run!extract` stage is an agent stage whose answer is values, the same as
+`testeiya extract`. It finds them with its tools; `what` says what and why, and
+it reads the stage's `inputs` too. It writes them to `<id>.values.json`, for a
+later stage to read, and as `name: value` lines to `<id>.md`. When a value cannot
+be found the stage fails and writes no values. It always runs in the pipeline's
+process, even under `TESTEIYA_PIPELINE_SPAWN=1`.
 
 ```yaml
 stages:
@@ -363,19 +449,23 @@ stages:
     outputs: [results.txt]
     continueOn: fail
   - id: releasable
-    decide: Did every test pass, with no test skipped for a known bug?
-    threshold: 0.8
-    inputs: [results.txt]
+    run!decide:
+      question: Did every test pass, with no test skipped for a known bug?
+      context: { stages: tests }
+      threshold: 0.8
   - id: preview
-    extract: The public url of this pull request's preview deployment
-    format: ["url: public url of the deployed page"]
+    run!extract:
+      what: The preview deployment of this pull request. Its link is in a comment by the deploy bot.
+      values:
+        url: public url of the preview deployment
   - id: smoke
     run!sh: BASE_URL=$(jq -r .url "$STAGE_DIR/preview.values.json") npx playwright test smoke
     inputs: [preview.values.json]
 ```
 
-The values are files, not variables: a `when!` and the prerequisites are
-computed before the first stage, so they cannot read what a stage found.
+A stage's values are files, not variables: a `when!` and the prerequisites are
+computed before the first stage, so they cannot read what a stage found. Values
+needed by a formula are a prerequisite's: see [Values and answers before the first stage](#values-and-answers-before-the-first-stage).
 
 ## Packages
 
@@ -474,7 +564,7 @@ Each stage leaves its own files:
   title: Sync to Testomat.io
   emoji: 🔄
   each_file: test-cases/*.md
-  task: Sync {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
+  run!task: Sync {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
 ```
 
 - `each_line` runs once per non-empty line. `each_file` runs once per matching
@@ -606,8 +696,8 @@ stages:
       timeout: 5m
 
   requirements:
-    task:
-      $after: Never assume user credentials. Ask for them.
+    $replace:
+      run!task: Work out the requirements of {{ vars.ISSUE_URL }}. Never assume user credentials. Ask for them.
 
   sync:
     $replace:
@@ -628,7 +718,7 @@ Every change says what it does:
 |---|---|
 | `$replace: { key: value }` | overwrites keys that exist: `title`, `timeout`, `when!`, `run!sh`, `description` |
 | `$add: { key: value }` | adds keys that do not exist yet: a prerequisite, a `timeout`, an `env` variable |
-| `task: { $after: text }` | adds text at the end of a text, on a new line; `$before` at the start. `summary` and `message` too |
+| `summary: { $after: text }` | adds text at the end of a text, on a new line; `$before` at the start. `description` and `message` too. A stage's `run` is replaced whole: `$replace: { run!task: … }` |
 | `stages: { $before: { id: {…} } }` | adds stages, each under its id, before the first; `$after` after the last |
 | `stages: { id: { $after: { new: {…} } } }` | adds a stage right after the stage `id`; `$before` right before it |
 | `stages: { $remove: [id] }` | drops stages; `prerequisites: { $remove: [name] }` drops prerequisites; `$remove: [when]` drops a top-level key |
@@ -654,15 +744,15 @@ The command line takes the same patch:
 ```bash
 testeiya pipeline issue-test-cases \
   --pipeline 'prerequisites: { $add: { release: { $value!: vars.RELEASE != null, message: Not a release. } } }' \
-  --stage 'requirements:task: { $after: Never assume user credentials. Ask for them. }' \
+  --stage 'explore:$replace: { timeout: 45m }' \
   --stage 'sync:$replace: { when!: base and prerequisites.release }'
 ```
 
 - `--stage ID:YAML` patches one stage. It splits on the first colon. Several
-  changes go in one flow map: `--stage 'review:{$add: {timeout: 45m}, task: {$after: Be brief.}}'`.
+  changes go in one flow map: `--stage 'review:{$add: {timeout: 45m}, $replace: {title: Quick review}}'`.
 - `--pipeline YAML` patches the pipeline, as a file under `$extends` does.
 - The value is YAML, so quote text that holds `: `:
-  `--stage 'plan:task: { $after: "Note: be brief." }'`.
+  `--stage 'plan:$replace: { run!task: "Note: be brief." }'`.
 - Order: `$extends`, then every `--pipeline`, then every `--stage`, so a
   `--stage` can patch a stage a `--pipeline` added.
 - The result is checked like any pipeline file, before anything runs. A mistake
@@ -678,7 +768,10 @@ A file in the format before scripted-yaml fails with the new spelling:
 
 | Before | Now |
 |---|---|
-| `extends: name` + `append_task: …` | `$extends: name` + `task: { $after: … }` |
+| `extends: name` + `append_task: …` | `$extends: name` + `$replace: { run!task: … }` |
+| `task: <task>` | `run!task: <task>` |
+| `decide: <question>` + `threshold:` | `run!decide: { question, context, threshold }` |
+| `extract: <what>` + `format: ["url: …"]` | `run!extract: { what, values: { url: … } }` |
 | `when: [a, b]` | `when!: prerequisites.a and prerequisites.b` |
 | `run: <command>` | `run!sh: <command>` |
 | prerequisite `env: [A, B]` | `$value!: vars.A != null and vars.B != null` |
@@ -782,8 +875,8 @@ pipelines.parse("$extends: team-review\n", { name: "my-agent" });
 | `errors()` | A list of `PipelineError`. Empty when the pipeline is valid |
 | `isValid()` | `true` when there are no errors |
 | `inputs()` | Every variable a user can set |
-| `stages()` | The stages in order: `id`, `title`, `emoji`, `kind`, `text`, `when`, `inputs`, `outputs`, `loop` |
-| `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks`, `secret` |
+| `stages()` | The stages in order: `id`, `title`, `emoji`, `kind` (`task`, `run`, `decide`, `extract`), `text` (the task, command, question or `what`), `when`, `inputs`, `outputs`, `loop`; a decide stage's `decide` (`question`, `context`, `threshold`) and an extract stage's `extract` (`what`, `values`) |
+| `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks` (`file`, `run`, `changes`, `decide`, `extract`), `secret` |
 | `describe()` | All of the above with `name`, `description`, `target` and `summary`, as one plain object for JSON |
 | `yaml()` | The YAML with `$extends` and overrides applied, `base` written out. It needs nothing else to run |
 | `spec()` | The pipeline key for key, with defaults filled in |

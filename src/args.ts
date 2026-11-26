@@ -70,7 +70,7 @@ Pipeline options:
       --dry-run              show prerequisites and stages, spend no tokens
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
-      --stage ID:YAML        patch one stage, e.g. 'plan:task: { $after: Be brief. }'
+      --stage ID:YAML        patch one stage, e.g. 'explore:$replace: { timeout: 45m }'
       --pipeline YAML        patch the pipeline, e.g. '$replace: { summary: Be brief. }'
   -h, --help                 show this
   -v, --version              show version
@@ -130,6 +130,10 @@ Extracting
   without a name is the value "value", printed alone:
 
     VERSION=$(testeiya extract "the version being released" -o "a semver")
+
+  In a pipeline both are stages and prerequisites: run!decide: { question,
+  context, threshold } judges the stages, sessions, files and sh it is given;
+  run!extract: { what, values } finds the values with the agent's tools.
 
 Where the report goes
 
@@ -252,7 +256,6 @@ Pipelines
   scripted-yaml patch: $replace overwrites, $add adds a key, $before and $after
   add text or stages, $remove drops.
 
-    testeiya pipeline issue-test-cases --stage 'requirements:task: { $after: Never assume credentials. }'
     testeiya pipeline web-testing --stage 'explore:$replace: { timeout: 45m }'
 
   A file of your own can start with "$extends: <name>" and hold the same patch.

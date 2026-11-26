@@ -1,13 +1,15 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseExtractFields, type ExtractField } from "../extract-fields.js";
+import { ExtractFields, type ExtractField } from "../extract-fields.js";
 import type { TaskOutcome, TaskRequest } from "../run.js";
 import type { Item, StageContext } from "./stage.js";
 import { TaskStage } from "./task-stage.js";
+import type { Variables } from "./variables.js";
 
 /**
- * An agent stage whose answer is values, as `testeiya extract`. It writes them
+ * `run!extract:` an agent stage whose answer is values, as `testeiya extract`.
+ * The names and descriptions are its task, with its inputs. It writes them
  * to `<id>.values.json` for a later stage to read, and as `name: value` lines
  * to `<id>.md` for the summary. No values found: the stage fails.
  */
@@ -26,6 +28,11 @@ export class ExtractStage extends TaskStage {
     return request;
   }
 
+  /** `what`, `{{ }}` filled in, then the values. */
+  protected text(context: StageContext, vars: Variables): string {
+    return ExtractFields.prompt(context.task(this, vars), this.fields());
+  }
+
   protected finished(dir: string, item: Item, outcome: TaskOutcome): void {
     const values = outcome.envelope.values;
     if (!values) return;
@@ -35,9 +42,6 @@ export class ExtractStage extends TaskStage {
   }
 
   private fields(): ExtractField[] {
-    const fields = parseExtractFields(this.spec.format ?? []);
-    // The builder already checked the format.
-    if (typeof fields === "string") throw new Error(fields);
-    return fields;
+    return ExtractFields.checked(this.spec.extract?.values ?? []);
   }
 }

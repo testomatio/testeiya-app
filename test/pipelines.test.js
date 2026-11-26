@@ -165,7 +165,7 @@ test("stages are described for a UI", () => {
 });
 
 test("a value of its own env that reads its own name is an input, other keys are not", () => {
-  const text = "$vars:\n  BASE: { default: main }\nenv:\n  BASE!: vars.BASE\n  SITE!: vars.URL\nstages:\n  - id: a\n    task: Use {{ vars.SITE }} and {{ vars.PIPELINE_DIR }}\n";
+  const text = "$vars:\n  BASE: { default: main }\nenv:\n  BASE!: vars.BASE\n  SITE!: vars.URL\nstages:\n  - id: a\n    run!task: Use {{ vars.SITE }} and {{ vars.PIPELINE_DIR }}\n";
   assert.deepEqual(parse(text).describe().inputs.map((input) => [input.name, input.default]), [
     ["BASE", "main"],
     ["URL", undefined],
@@ -200,8 +200,8 @@ test("an error is bad usage with the line and key it is about", () => {
   assert.equal(err.line, 7);
 
   const gate = catchError(() => parse("prerequisites:\n  staging:\n    $value!: vars.A != null\nstages:\n  - id: a\n    run!sh: echo\n").spec());
-  assert.match(gate.message, /missing required field "message"/);
-  assert.equal(gate.line, 3);
+  assert.match(gate.message, /prerequisite "staging" needs a message/);
+  assert.equal(gate.line, 2);
 
   const syntax = catchError(() => parse("stages:\n  - id: a\n    run!sh: [echo\n").spec());
   assert.ok(syntax instanceof PipelineError);
@@ -223,7 +223,7 @@ test("the old format fails with the new spelling, on its own line", () => {
     ["stages:\n  - id: a\n    run: echo\n", /run is now run!sh/, 3],
     ["stages:\n  - id: a\n    run!sh: echo\n    when: [x]\n", /when is now a formula/, 4],
     ["prerequisites:\n  a:\n    env: [A]\n    message: m\nstages:\n  - id: a\n    run!sh: echo\n", /prerequisite "a" env is now \$value!: vars.NAME != null/, 3],
-    ["stages:\n  - id: a\n    task: Open ${URL}.\n", /\$\{URL\} is now \{\{ vars.URL \}\}/, 3],
+    ["stages:\n  - id: a\n    run!task: Open ${URL}.\n", /\$\{URL\} is now \{\{ vars.URL \}\}/, 3],
     ["$extends: regression\nstages:\n  - id: tests\n    append_task: x\n", /append_task is now \$after/, 4],
   ];
   for (const [text, message, line] of cases) {
@@ -234,11 +234,11 @@ test("the old format fails with the new spelling, on its own line", () => {
 });
 
 test("$extends finds a bundled pipeline, and a missing one is an error", () => {
-  const child = "$extends: issue-test-cases\nstages:\n  requirements:\n    task:\n      $after: Be brief.\n";
+  const child = "$extends: issue-test-cases\nstages:\n  requirements:\n    $replace:\n      run!task: Be brief.\n";
   const pipeline = parse(child, { name: "mine" });
   assert.deepEqual(pipeline.errors(), []);
   assert.equal(pipeline.describe().name, "issue-test-cases");
-  assert.match(pipeline.spec().stages[0].task, /\nBe brief\.$/);
+  assert.equal(pipeline.spec().stages[0].task, "Be brief.");
   assert.doesNotMatch(parse(child).yaml(), /\$extends/);
   assert.equal(pipeline.source, child);
   const [missing] = parse("$extends: nope\n").errors();
@@ -248,17 +248,17 @@ test("$extends finds a bundled pipeline, and a missing one is an error", () => {
 });
 
 test("$extends finds your own pipelines, which win over the bundled ones", () => {
-  const base = "name: base\nstages:\n  - id: a\n    task: Do it.\n";
+  const base = "name: base\nstages:\n  - id: a\n    run!task: Do it.\n";
   const own = new Pipelines({
     base,
-    team: "$extends: base\n$replace:\n  name: team\nstages:\n  a:\n    task:\n      $after: Be brief.\n",
+    team: "$extends: base\n$replace:\n  name: team\nstages:\n  a:\n    $replace:\n      run!task: Do it. Be brief.\n",
     "pr-review": base,
   });
-  const agent = own.parse("$extends: team\nstages:\n  a:\n    task:\n      $after: In English.\n", { name: "agent" });
+  const agent = own.parse("$extends: team\nstages:\n  a:\n    $replace:\n      run!task: Do it. Be brief. In English.\n", { name: "agent" });
   assert.deepEqual(agent.errors(), []);
   assert.equal(agent.describe().name, "team");
-  assert.equal(agent.spec().stages[0].task, "Do it.\nBe brief.\nIn English.");
-  assert.equal(own.open("team").spec().stages[0].task, "Do it.\nBe brief.");
+  assert.equal(agent.spec().stages[0].task, "Do it. Be brief. In English.");
+  assert.equal(own.open("team").spec().stages[0].task, "Do it. Be brief.");
   assert.equal(own.parse("$extends: pr-review\n").describe().name, "base");
   assert.equal(new Pipelines().parse("$extends: base\n").errors()[0].message, 'no pipeline "base" to extend');
 });
@@ -342,13 +342,13 @@ test("half-typed text is an error, never a crash", () => {
 });
 
 test("yaml applies overrides and keeps the name the caller gave", () => {
-  const pipeline = parse("stages:\n  - id: a\n    task: Do it.\n", { name: "agent" });
-  const changed = pipeline.overrideStage("a", "task: { $after: Be brief. }").override("$add: { description: Short. }");
+  const pipeline = parse("stages:\n  - id: a\n    run!task: Do it.\n", { name: "agent" });
+  const changed = pipeline.overrideStage("a", "$replace: { run!task: Do it. Be brief. }").override("$add: { description: Short. }");
   assert.deepEqual(changed.errors(), []);
   const spec = parse(changed.yaml()).spec();
   assert.equal(spec.name, "agent");
   assert.equal(spec.description, "Short.");
-  assert.equal(spec.stages[0].task, "Do it.\nBe brief.");
+  assert.equal(spec.stages[0].task, "Do it. Be brief.");
   assert.equal(pipeline.spec().stages[0].task, "Do it.");
   const [err] = pipeline.overrideStage("nope", "$replace: { title: x }").errors();
   assert.ok(err instanceof PipelineError);
@@ -423,7 +423,7 @@ test("every bundled pipeline passes its own $tests", async () => {
 
 test("scripted-yaml validates every bundled pipeline against the DSL", () => {
   const files = pipelines.names().map((name) => join(ROOT, "pipelines", `${name}.yml`));
-  const out = execFileSync(join(ROOT, "node_modules", ".bin", "scripted-yaml"), ["validate", ...files, "--markers", "sh,file,changes"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const out = execFileSync(join(ROOT, "node_modules", ".bin", "scripted-yaml"), ["validate", ...files, "--markers", "sh,file,changes", "--computed", "task,decide,extract"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   assert.equal(out.trim().split("\n").filter((line) => line.startsWith("ok")).length, files.length, out);
 });
 
@@ -439,7 +439,7 @@ test("a formula cannot take the place of a check through base", () => {
 });
 
 test("a $vars variable with no default and not optional is a required input", () => {
-  const [issue] = parse("$vars:\n  ISSUE: { about: The issue to cover. }\nstages:\n  - id: a\n    task: Cover {{ vars.ISSUE }}.\n").inputs();
+  const [issue] = parse("$vars:\n  ISSUE: { about: The issue to cover. }\nstages:\n  - id: a\n    run!task: Cover {{ vars.ISSUE }}.\n").inputs();
   assert.deepEqual([issue.name, issue.required, issue.message], ["ISSUE", true, "The issue to cover."]);
 });
 
@@ -454,4 +454,26 @@ test("a bundled pipeline opens and describes where Node gives no modules, as in 
   } finally {
     process.getBuiltinModule = saved;
   }
+});
+
+test("a $value!extract prerequisite is a check, and its values are readable in task text", () => {
+  const { prerequisites, stages } = pipelines.open("web-testing").describe();
+  const git = prerequisites.find((gate) => gate.name === "git");
+  assert.deepEqual(git.checks, ["extract"]);
+  assert.equal(git.message, "Not found: sha, pr, pr_url, branch.");
+  const text = "prerequisites:\n  git:\n    $value!extract: { what: The PR, values: { sha: the commit } }\nstages:\n  - id: a\n    run!task: At {{ prerequisites.git.sha }}.\n";
+  assert.deepEqual(parse(text).describe().stages[0], { ...parse(text).describe().stages[0], kind: "task", text: "At {{ prerequisites.git.sha }}." });
+  assert.equal(stages.find((stage) => stage.id === "review").kind, "task");
+});
+
+test("a stage's view carries its decide and extract whole", () => {
+  const text = "stages:\n  - id: a\n    run!sh: echo\n  - id: b\n    run!decide: { question: Ok?, context: { stages: a }, threshold: 0.7 }\n  - id: c\n    run!extract: { what: The url, values: { url: a url } }\n";
+  const [, decide, extract] = parse(text).describe().stages;
+  assert.equal(decide.kind, "decide");
+  assert.equal(decide.text, "Ok?");
+  assert.deepEqual(decide.decide, { question: "Ok?", context: { stages: ["a"], sessions: [], files: [], sh: [] }, threshold: 0.7 });
+  assert.equal(extract.text, "The url");
+  assert.deepEqual(extract.extract, { what: "The url", values: ["url: a url"] });
+  const gate = parse("prerequisites:\n  ok:\n    $value!decide: { question: Ok?, context: { sh: echo } }\n    message: m\nstages:\n  - id: a\n    run!sh: echo\n").describe().prerequisites[0];
+  assert.deepEqual(gate.checks, ["decide"]);
 });

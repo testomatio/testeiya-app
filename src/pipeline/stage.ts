@@ -8,7 +8,8 @@ import type { Launched, Launcher } from "./launcher.js";
 import { log } from "./log.js";
 import type { TaskRunner } from "../run.js";
 import type { Report } from "./report.js";
-import type { StageSpec, StopOn } from "./spec.js";
+import type { ContextSources } from "./decide-context.js";
+import type { DecideContext, StageSpec, StopOn } from "./spec.js";
 import { PipelineState, type ItemRecord, type StageRecord, type StageResult, type Status } from "./state.js";
 import { Variables } from "./variables.js";
 
@@ -202,6 +203,10 @@ export interface StageContext {
   missing(input: string): string;
   /** A stage's task, `{{ }}` filled in with these variables. */
   task(stage: Stage, vars: Variables): string;
+  /** A decide stage's question and context, `{{ }}` filled in with these variables. */
+  decision(stage: Stage, vars: Variables): { question: string; context: DecideContext };
+  /** Where a decide stage's context is read from. */
+  sources(stage: Stage, vars: Variables): ContextSources;
   /** The folder holding an input: the folder of the stage that wrote it, `.` for the top, null when absent. */
   locate(input: string, reader: Stage): string | null;
 }

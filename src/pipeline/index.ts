@@ -15,6 +15,9 @@ export { PIPELINE_TARGETS } from "./spec.js";
 export { ENVIRONMENT_VARIABLES, type EnvironmentVariable, type EnvironmentVariableName } from "../environment.js";
 export type {
   ChangesSpec,
+  DecideContext,
+  DecideSpec,
+  ExtractSpec,
   GateSpec,
   InputUse,
   PipelineDescription,

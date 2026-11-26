@@ -7,9 +7,6 @@ target: issue
 $vars:
   TESTOMATIO: { optional: true, secret: true }
 
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
-
 prerequisites:
   issue:
     $value!: vars.ISSUE_URL != null
@@ -29,13 +26,13 @@ stages:
     title: Requirements
     emoji: 📋
     session: analyst
-    task: Review the requirements in {{ vars.ISSUE_URL }}. /qa-requirement-reviewer
+    run!task: Review the requirements in {{ vars.ISSUE_URL }}. /qa-requirement-reviewer
 
   - id: test-cases
     title: Test cases
     emoji: 📝
     session: writer
-    task: |
+    run!task: |
       Write test cases from requirements.md. /qa-write-test-cases
       Put them in test-cases/, one markdown file per suite.
     inputs: [requirements.md]
@@ -47,7 +44,7 @@ stages:
     when!: prerequisites.testomatio
     optional: true
     each_file: test-cases/*.md
-    task: |
+    run!task: |
       Sync the test cases in {{ vars.ITEM }} to Testomat.io. /sync-test-cases-with-tms
 
 $tests:

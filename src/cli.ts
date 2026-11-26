@@ -9,7 +9,7 @@ import { resolveModel, UsageError } from "./model.js";
 import { runModels } from "./models.js";
 import { runSkills } from "./skills.js";
 import { Pipeline } from "./pipeline/pipeline.js";
-import { parseExtractFields } from "./result.js";
+import { ExtractFields } from "./result.js";
 import { runTask } from "./run.js";
 import { createRuntime } from "./session.js";
 import { runSessions } from "./sessions.js";
@@ -151,7 +151,7 @@ async function decide(args: CliArgs): Promise<number> {
 async function extract(args: CliArgs): Promise<number> {
   const prompt = args.prompt ?? (await readStdin());
   if (!prompt.trim()) throw new UsageError('extract needs something to find, e.g. testeiya extract "the deployment url" -o "url: public url"');
-  const fields = parseExtractFields(args.formats ?? []);
+  const fields = ExtractFields.parse(args.formats ?? []);
   if (typeof fields === "string") throw new UsageError(fields);
 
   const controller = new AbortController();

@@ -268,7 +268,7 @@ stages:
     title: Review
     emoji: 🔍
     session: qa
-    task: Review this pull request for {{ vars.EXPLORBOT_URL }}. Write browser scenarios to plan.md. /explorbot-plan
+    run!task: Review this pull request for {{ vars.EXPLORBOT_URL }}. Write browser scenarios to plan.md. /explorbot-plan
     outputs: [plan.md]
   - id: explore
     title: Browser testing
@@ -282,11 +282,12 @@ stages:
     title: Results
     emoji: 📊
     session: qa
-    task: Read the Explorbot report under explorbot/ and say what broke.
+    run!task: Read the Explorbot report under explorbot/ and say what broke.
     inputs: [explorbot/]
 ```
 
-- A stage is a `task` for the agent or a `run!sh` shell command. Its `title` and
+- A stage's `run` says what it runs: `run!task` for the agent, `run!sh` a shell
+  command, `run!decide` a yes or no, `run!extract` values to find. Its `title` and
   `emoji` head its section in the final report, `### 🔍 Review`. Both are
   optional: the title defaults to the id, the emoji is picked for you.
 - Each stage keeps its files in a numbered folder, `1-review/`, `2-explore/`, …,
@@ -296,10 +297,13 @@ stages:
 - `prerequisites` are named checks. `$value!:` is a formula over variables,
   `vars.NAME != null` for "is set". `$value!file:`, `$value!sh:` and
   `$value!changes:` (`paths`, `ignore`, `min_files`) are checks the runner makes.
+  `$value!extract: { what, values }` has the agent find values with its tools,
+  which a stage reads as `{{ prerequisites.git.sha }}`; `$value!decide` asks the
+  decision model, judging the `context` it is given.
   `when!:` is a formula over them. When it is false the stage is skipped with the
   message of the prerequisite that failed. In the top-level `when!:` it skips the
   whole run.
-- `npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes` checks
+- `npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes --computed task,decide,extract` checks
   a file's shape; `npm run validate:pipelines` does it for the bundled ones.
 - `session: <name>` keeps a conversation. Stages with the same name share it.
   No `session` is a fresh one.
@@ -348,7 +352,7 @@ check from the CI job: when the command fails, the whole run is skipped and exit
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--stage ID:YAML` and
 `--pipeline YAML` patch a pipeline for one run, e.g. `--stage
-'requirements:task: { $after: Never assume credentials. }'`. `$replace`
+'explore:$replace: { timeout: 45m }'`. `$replace`
 overwrites, `$add` adds, `$before` and `$after` add text or stages, `$remove`
 drops. A file that starts with `$extends: <name>` keeps the same patch in the repo. `--dry-run` prints every
 prerequisite and stage and spends nothing. `testeiya pipeline-check` checks the file and

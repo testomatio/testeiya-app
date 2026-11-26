@@ -1,8 +1,10 @@
-import { ResolveFailed, type Document } from "scripted-yaml/core";
+import { ResolveFailed, type Document, type Marked as DocumentMark } from "scripted-yaml/core";
 
-import type { Marked } from "./markers.js";
+import { ExtractFields } from "../extract-fields.js";
+import { DecideContexts } from "./decide-contexts.js";
+import { DecideMarker, ExtractMarker, TaskMarker, type Marked } from "./markers.js";
 import { PipelineError } from "./pipeline-error.js";
-import type { InputUse, PipelineSpec } from "./spec.js";
+import type { DecideContext, InputUse, PipelineSpec } from "./spec.js";
 
 /** Where the file reads a variable. `within` is the `env:` key whose value reads it. */
 export interface InputRead {
@@ -39,9 +41,11 @@ export class PipelineDefinition {
     readonly reads: InputRead[],
     private readonly document: Document,
     private readonly markers: Map<string, Marked>,
-  ) {}
+  ) {
+    this.found();
+  }
 
-  /** The checks the runner makes before the first stage, by prerequisite: `$value!sh`, `$value!file`, `$value!changes`. */
+  /** The checks the runner makes before the first stage, by prerequisite: `$value!sh`, `$value!file`, `$value!changes`, `$value!extract`. */
   checks(): Map<string, Marked> {
     return new Map(this.markers);
   }
@@ -73,12 +77,54 @@ export class PipelineDefinition {
 
   /** Every formula and `{{ }}` computed with these variables. Checks the runner has not made read as false. */
   values(vars: Record<string, string | undefined>): PipelineValues {
+    this.found();
     try {
-      return new PipelineValues(this.spec, this.document.resolve({ vars }) as Raw);
+      return new PipelineValues(this.spec, this.document.resolve({ vars }) as Raw, this.reasons(), this.answers());
     } catch (err) {
       if (err instanceof ResolveFailed) throw new PipelineError(err.message);
       throw err;
     }
+  }
+
+  /**
+   * What a formula reads for a `$value!extract`: the values once every one was found, else null,
+   * so `prerequisites.git.sha` is null until then and `prerequisites.git != null` says if they were.
+   * For a `$value!decide`: the answer, true for yes, once asked; false before.
+   */
+  private found(): void {
+    for (const [name, check] of this.markers) {
+      if (check instanceof ExtractMarker) {
+        const mark = this.mark(`prerequisites.${name}.$value!extract`);
+        if (mark) mark.value = check.values ? { ...check.values } : null;
+      } else if (check instanceof DecideMarker) {
+        const mark = this.mark(`prerequisites.${name}.$value!decide`);
+        if (mark) mark.value = check.passed === true;
+      }
+    }
+  }
+
+  /** Whether each `$value!decide` and `$value!extract` passed: their results hold the question and the task, not the answer. */
+  private answers(): Record<string, boolean> {
+    const answers: Record<string, boolean> = {};
+    for (const [name, check] of this.markers) {
+      if (check instanceof DecideMarker || check instanceof ExtractMarker) answers[name] = check.passed === true;
+    }
+    return answers;
+  }
+
+  /** What a `$value!extract` that did not pass says: the values it did not find. */
+  private reasons(): Record<string, string> {
+    const reasons: Record<string, string> = {};
+    for (const [name, check] of this.markers) {
+      const gate = this.spec.prerequisites[name];
+      if (!(check instanceof ExtractMarker) || !gate?.extract) continue;
+      reasons[name] = check.reason(gate.message, ExtractFields.names(gate.extract.values));
+    }
+    return reasons;
+  }
+
+  private mark(path: string): DocumentMark | undefined {
+    return this.document.marked.find((mark) => mark.path === path);
   }
 }
 
@@ -87,9 +133,14 @@ export class PipelineValues {
   constructor(
     private readonly spec: PipelineSpec,
     private readonly data: Raw,
+    /** A prerequisite's message for this run, where it is not the one written. */
+    private readonly reasons: Record<string, string> = {},
+    /** Whether each `$value!decide` and `$value!extract` passed. */
+    private readonly answers: Record<string, boolean> = {},
   ) {}
 
   passes(name: string): boolean {
+    if (name in this.answers) return this.answers[name]!;
     const gate = (this.data.prerequisites as Raw | undefined)?.[name];
     const value = PipelineValues.isRecord(gate) ? gate.$value : gate;
     return this.truth(value, `prerequisite "${name}"`, this.spec.prerequisites[name]?.formula);
@@ -108,14 +159,36 @@ export class PipelineValues {
   /** Why `when` is false: the message of the first prerequisite it reads that does not pass. */
   reason(names: string[], formula: string | undefined): string {
     const closed = names.find((name) => !this.passes(name));
-    if (closed) return this.spec.prerequisites[closed]!.message;
+    if (closed) return this.reasons[closed] ?? this.spec.prerequisites[closed]!.message;
     return `when is false: ${formula ?? ""}`.trim();
   }
 
-  /** The stage's text: its task, its question or what it extracts. */
+  /** A stage's task, its question or what it extracts, `{{ }}` filled in. */
   task(id: string): string {
-    const stage = this.stage(id);
-    return String(stage.task ?? stage.decide ?? stage.extract ?? "");
+    return PipelineValues.text(this.stage(id).run);
+  }
+
+  /** A stage's or a prerequisite's decide: the question and the context, `{{ }}` filled in. */
+  decide(id: string, prerequisite = false): { question: string; context: DecideContext } {
+    const run = prerequisite ? PipelineValues.value((this.data.prerequisites as Raw | undefined)?.[id]) : this.stage(id).run;
+    if (!(run instanceof DecideMarker)) return { question: "", context: DecideContexts.empty() };
+    return { question: String(run.question ?? ""), context: DecideContexts.read(run.context, String) };
+  }
+
+  /** What a prerequisite's `$value!extract` is to find, `{{ }}` filled in. */
+  extracts(name: string): string {
+    return PipelineValues.text(PipelineValues.value((this.data.prerequisites as Raw | undefined)?.[name]));
+  }
+
+  private static value(gate: unknown): unknown {
+    return PipelineValues.isRecord(gate) ? gate.$value : gate;
+  }
+
+  private static text(run: unknown): string {
+    if (run instanceof TaskMarker) return String(run.text ?? "");
+    if (run instanceof DecideMarker) return String(run.question ?? "");
+    if (run instanceof ExtractMarker) return String(run.what ?? "");
+    return "";
   }
 
   summary(): string | undefined {

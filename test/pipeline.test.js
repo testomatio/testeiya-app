@@ -21,6 +21,7 @@ import { SummaryStage } from "../dist/src/pipeline/summary-stage.js";
 import { TaskStage } from "../dist/src/pipeline/task-stage.js";
 import { KILL_GRACE_MS } from "../dist/src/pipeline/launcher.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { UsageError } from "../dist/src/model.js";
 
 // A pull request run in CI names its own branches; the tests name theirs.
@@ -115,10 +116,14 @@ test("the old gates key points at prerequisites", () => {
   assert.throws(() => parse(text), /gates is now called prerequisites/);
 });
 
-test("a stage needs exactly one of task or run", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n"), /exactly one of task, run!sh, decide or extract/);
-  const both = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run!sh: echo\n    task: hi\n";
-  assert.throws(() => parse(both), /exactly one of task, run!sh, decide or extract/);
+test("a stage runs one thing, said by the marker of run", () => {
+  assert.throws(() => parse("stages:\n  - id: a\n    title: a\n    emoji: 🔹\n"), /missing required field "run"/);
+  const both = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run!sh: echo\n    run!task: hi\n";
+  assert.throws(() => parse(both), /"run!sh" and "run!task" are the same key "run"/);
+  assert.throws(() => parse("stages:\n  - id: a\n    run!file: x\n"), /runs something: run!task: <task>, run!sh: <command>/);
+  for (const [old, now] of [["task: hi", "run!task: <task>"], ["decide: ok?", "run!decide: { question, context, threshold }"], ["extract: x", "run!extract: { what, values: { name: what it is } }"]]) {
+    assert.throws(() => parse(`stages:\n  - id: a\n    ${old}\n`), new RegExp(`${old.split(":")[0]} is now ${now.replace(/[{}!?<>]/g, "\\$&")}`));
+  }
 });
 
 test("a stage without a title or an emoji gets them from its id", () => {
@@ -137,8 +142,8 @@ test("reserved ids, unknown keys and stray stopOn are rejected", () => {
 test("an output may not reuse the stage's own file name, nor one of its inputs", async () => {
   const { repo, runTask } = setup();
   const check = (text) => inRepo(repo, () => new Pipeline({ name: write(repo, "pipe.yml", text), dir: join(repo, ".qa"), runTask, dryRun: true }).run());
-  await assert.rejects(check("stages:\n  - id: plan\n    title: plan\n    emoji: 🔹\n    task: hi\n    outputs: [plan.md]\n"), /plan.md is a file the stage writes itself/);
-  const edits = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    task: hi\n    outputs: [x.md]\n  - id: b\n    title: b\n    emoji: 🔹\n    task: hi\n    inputs: [x.md]\n    outputs: [x.md]\n";
+  await assert.rejects(check("stages:\n  - id: plan\n    title: plan\n    emoji: 🔹\n    run!task: hi\n    outputs: [plan.md]\n"), /plan.md is a file the stage writes itself/);
+  const edits = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run!task: hi\n    outputs: [x.md]\n  - id: b\n    title: b\n    emoji: 🔹\n    run!task: hi\n    inputs: [x.md]\n    outputs: [x.md]\n";
   await assert.rejects(check(edits), /reads and writes x.md/);
 });
 
@@ -151,14 +156,14 @@ test("durations read seconds, minutes and hours", () => {
 });
 
 test("a task fills in {{ }} with the run's variables; unset is empty", () => {
-  const definition = new PipelineFile("p.yml").parse("stages:\n  - id: a\n    task: Open {{ vars.URL }}/x [{{ vars.MISSING }}]\n");
+  const definition = new PipelineFile("p.yml").parse("stages:\n  - id: a\n    run!task: Open {{ vars.URL }}/x [{{ vars.MISSING }}]\n");
   assert.equal(definition.values({ URL: "https://a", MISSING: "" }).task("a"), "Open https://a/x []");
 });
 
 test("a changes check counts what is not ignored", async () => {
   const files = ["src/api/users.ts", "README.md", "docs/a.md"];
   const passes = (changes, filesChanged = files) =>
-    new Gate("g", "m", new ChangesMarker(changes), changes).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" } });
+    new Gate("g", "m", new ChangesMarker(changes), { changes }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" }, values: () => null });
   assert.equal(await passes({ min_files: 2, ignore: ["**/*.md", "*.md"] }), false);
   assert.equal(await passes({ paths: ["src/api/**"] }), true);
   assert.equal(await passes({ paths: ["src/ui/**"] }), false);
@@ -180,8 +185,6 @@ test("branch names come from CI source branches before the checkout", async () =
 test("GIT_BRANCH reaches pipeline env and can be transformed", async () => {
   const { repo, cli } = setup();
   const file = write(repo, "pipe.yml", `
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
 env:
   TESTOMATIO_BRANCH!: slug(vars.GIT_BRANCH)
 stages:
@@ -223,7 +226,7 @@ stages:
     title: review
     emoji: 🔹
     session: qa
-    task: Review it.
+    run!task: Review it.
     outputs: [endpoints.txt]
   - id: list
     title: list
@@ -239,12 +242,12 @@ stages:
     title: explore
     emoji: 🔹
     when!: prerequisites.staging
-    task: Explore it.
+    run!task: Explore it.
   - id: results
     title: results
     emoji: 🔹
     session: qa
-    task: Read results.
+    run!task: Read results.
     inputs: [explore.md, review.md]
 `);
   const dir = join(repo, ".qa");
@@ -351,11 +354,11 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: One.
+    run!task: One.
   - id: two
     title: two
     emoji: 🔹
-    task: Two.
+    run!task: Two.
 `);
   const dir = join(repo, ".qa");
   const code = await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run());
@@ -405,7 +408,7 @@ stages:
   - id: review
     title: review
     emoji: 🔹
-    task: Review.
+    run!task: Review.
     outputs: [plan.md]
   - id: explore
     title: explore
@@ -435,7 +438,7 @@ stages:
   - id: plan
     title: Plan
     emoji: 🔹
-    task: Plan it.
+    run!task: Plan it.
     when!: prerequisites.pr
   - id: run
     title: Run
@@ -452,12 +455,12 @@ test("an override replaces, adds before and after, and removes", () => {
   // As the runner orders them: every --pipeline, then every --stage.
   const spec = overridden(
     Override.pipeline("{prerequisites: {$add: {staging: {$value!: vars.URL != null, message: No URL.}}}, $remove: [when], $add: {summary: Be brief.}}"),
-    Override.stage("plan:task: { $after: Never assume credentials. }"),
-    Override.stage("plan:{task: { $before: Read the issue first. }, $replace: { when!: base and prerequisites.staging }, $add: { timeout: 30m }}"),
+    Override.stage("plan:$replace: { run!task: Plan it. Never assume credentials. }"),
+    Override.stage("plan:{$replace: { when!: base and prerequisites.staging }, $add: { timeout: 30m }}"),
     Override.stage("run:$replace: { run!sh: echo changed }"),
   );
   const plan = spec.stages[0];
-  assert.equal(plan.task, "Read the issue first.\nPlan it.\nNever assume credentials.");
+  assert.equal(plan.task, "Plan it. Never assume credentials.");
   assert.deepEqual(plan.when, ["pr", "staging"]);
   assert.equal(plan.condition, "(prerequisites.pr) and prerequisites.staging");
   assert.equal(plan.timeout, "30m");
@@ -483,24 +486,25 @@ test("a wrong override is bad usage, found before anything runs", () => {
   assert.throws(() => overridden(Override.stage("plan:title: Planning")), /--stage plan: .*a plain field in a patch does not overwrite/);
   assert.throws(() => overridden(Override.stage("plan:$replace: { model: x }")), /"model" does not exist in the base/);
   assert.throws(() => overridden(Override.stage("plan:append_task: x")), /--stage plan: append_task is now \$after/);
-  assert.throws(() => overridden(Override.stage("run:$add: { task: x }")), /exactly one of task, run!sh, decide or extract/);
+  assert.throws(() => overridden(Override.stage("run:$add: { run!task: x }")), /"run" already exists in the base/);
+  assert.throws(() => overridden(Override.stage("plan:run!task: { $after: x }")), /a plain field in a patch does not overwrite; write \$replace: \{ run!task: … \}/);
   assert.throws(() => overridden(Override.stage("plan:$replace: { when!: prerequisites.staging }")), /there is no key "staging" in "prerequisites"/);
   assert.throws(() => overridden(Override.pipeline("stages: { $remove: [nope] }")), /"nope" does not exist in the base, so it cannot be removed/);
   assert.throws(() => Override.stage("plan"), /--stage takes ID:YAML/);
   assert.throws(() => Override.stage("plan:just text"), /--stage plan takes a YAML patch/);
-  assert.deepEqual(Override.stage("plan:{task: { $after: x }, $replace: { timeout: 1m }}").keys(), ["task.$after", "$replace.timeout"]);
+  assert.deepEqual(Override.stage("plan:{$replace: { run!task: x, timeout: 1m }}").keys(), ["$replace.run!task", "$replace.timeout"]);
 });
 
 test("a file can extend a bundled pipeline or a path, keeping only its changes", () => {
   const dir = mkdtempSync(join(tmpdir(), "testeiya-extends-"));
   write(dir, "base.yml", BASE);
-  const child = write(dir, "child.yml", "$extends: ./base.yml\n$add:\n  name: child\nstages:\n  plan:\n    task:\n      $after: Be brief.\n");
+  const child = write(dir, "child.yml", "$extends: ./base.yml\n$add:\n  name: child\nstages:\n  plan:\n    $replace:\n      run!task: Plan it. Be brief.\n");
   const spec = new PipelineFile(child).read();
   assert.equal(spec.name, "child");
-  assert.equal(spec.stages[0].task, "Plan it.\nBe brief.");
-  const bundled = new PipelineFile(write(dir, "issue.yml", "$extends: issue-test-cases\nstages:\n  requirements:\n    task:\n      $after: Never assume credentials.\n")).read();
+  assert.equal(spec.stages[0].task, "Plan it. Be brief.");
+  const bundled = new PipelineFile(write(dir, "issue.yml", "$extends: issue-test-cases\nstages:\n  requirements:\n    $replace:\n      run!task: Never assume credentials.\n")).read();
   assert.equal(bundled.name, "issue-test-cases");
-  assert.match(bundled.stages[0].task, /\nNever assume credentials\.$/);
+  assert.equal(bundled.stages[0].task, "Never assume credentials.");
   // A file called like a bundled pipeline extends the bundled one.
   const own = new PipelineFile(write(dir, "regression.yml", "$extends: regression\n$replace:\n  description: Ours.\n")).read();
   assert.equal(own.description, "Ours.");
@@ -511,24 +515,24 @@ test("a file can extend a bundled pipeline or a path, keeping only its changes",
 
 test("a run keeps the pipeline with its overrides, so a retry repeats it", async () => {
   const { repo, log, runTask } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    task: One.\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run!task: One.\n");
   const dir = join(repo, ".qa");
-  const options = { name: file, dir, runTask, stageOverrides: ["one:task: { $after: Be brief. }"] };
+  const options = { name: file, dir, runTask, stageOverrides: ["one:$replace: { run!task: One. Be brief. }"] };
   await inRepo(repo, () => new Pipeline(options).run());
-  assert.match(calledWith(log)[0].prompt, /^One\.\nBe brief\./);
-  assert.equal(new PipelineFile(file).parse(readFileSync(join(dir, "pipeline.yml"), "utf8")).spec.stages[0].task, "One.\nBe brief.");
+  assert.match(calledWith(log)[0].prompt, /^One\. Be brief\./);
+  assert.equal(new PipelineFile(file).parse(readFileSync(join(dir, "pipeline.yml"), "utf8")).spec.stages[0].task, "One. Be brief.");
 });
 
 test("a --gate from the job skips the run before outputs are checked", async () => {
   const { repo, log, runTask } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    task: One.\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run!task: One.\n");
   const dir = join(repo, ".qa");
   const options = { name: file, dir, runTask, outputs: ["gh:pr#"], gates: { pr: "test -n \"$PR\"" } };
   assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
   assert.equal(readJson(join(dir, "pipeline.json")).status, "skipped");
   assert.equal(calledWith(log).length, 0);
   await assert.rejects(inRepo(repo, () => new Pipeline({ ...options, sets: { PR: "1" } }).run()), /gh:pr#/);
-  const gated = write(repo, "gated.yml", "prerequisites:\n  pr:\n    $value!: vars.PR != null\n    message: No PR.\nstages:\n  - id: one\n    title: one\n    emoji: 🔹\n    when!: prerequisites.pr\n    task: One.\n");
+  const gated = write(repo, "gated.yml", "prerequisites:\n  pr:\n    $value!: vars.PR != null\n    message: No PR.\nstages:\n  - id: one\n    title: one\n    emoji: 🔹\n    when!: prerequisites.pr\n    run!task: One.\n");
   await assert.rejects(inRepo(repo, () => new Pipeline({ name: gated, dir, runTask, gates: { pr: "true" } }).run()), /already defines/);
 });
 
@@ -539,11 +543,11 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: FAIL on purpose.
+    run!task: FAIL on purpose.
   - id: two
     title: two
     emoji: 🔹
-    task: Two.
+    run!task: Two.
 `);
   const dir = join(repo, ".qa");
   const code = await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run());
@@ -561,12 +565,12 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: FAIL on purpose.
+    run!task: FAIL on purpose.
     continueOn: fail
   - id: two
     title: two
     emoji: 🔹
-    task: Two.
+    run!task: Two.
 `);
   const dir = join(repo, ".qa");
   assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 1);
@@ -583,11 +587,11 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: One.
+    run!task: One.
   - id: sync
     title: sync
     emoji: 🔹
-    task: FAIL on purpose.
+    run!task: FAIL on purpose.
     optional: true
   - id: three
     title: three
@@ -597,7 +601,7 @@ stages:
   - id: four
     title: four
     emoji: 🔹
-    task: Four.
+    run!task: Four.
 `);
   const dir = join(repo, ".qa");
   assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 0);
@@ -614,11 +618,11 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: FAIL on purpose.
+    run!task: FAIL on purpose.
   - id: sync
     title: sync
     emoji: 🔹
-    task: Sync.
+    run!task: Sync.
     optional: true
 `);
   const dir = join(repo, ".qa");
@@ -647,17 +651,17 @@ stages:
     title: one
     emoji: 🔹
     session: qa
-    task: One.
+    run!task: One.
   - id: two
     title: two
     emoji: 🔹
     session: qa
-    task: SLOW two.
+    run!task: SLOW two.
     timeout: 1s
   - id: three
     title: three
     emoji: 🔹
-    task: Three.
+    run!task: Three.
 `);
   const dir = join(repo, ".qa");
   process.env.FAKE_SLOW = "1";
@@ -688,7 +692,7 @@ stages:
   - id: two
     title: two
     emoji: 🔹
-    task: Two.
+    run!task: Two.
 `);
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "pipeline");
@@ -816,8 +820,6 @@ test("the summary draft keeps each stage report word for word, its headings unde
 
 test("env values are formulas: a URL's host and path, and one env key read by another", () => {
   const definition = new PipelineFile("p.yml").parse(`
-$functions:
-  slug(text)!: lower case(replace(replace(text, "[^A-Za-z0-9]+", "-"), "^-+|-+$", ""))
 env:
   SITE!: replace(vars.URL, "^[a-z]+://([^/]+).*$", "$1")
   PAGE!: slug(replace(vars.URL, "^[a-z]+://[^/]*|[?#].*$", ""))
@@ -834,8 +836,8 @@ stages:
 test("an unknown function or name is bad usage, found before anything runs", () => {
   const stage = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n";
   assert.throws(() => parse(`env:\n  SITE!: hots(vars.URL)\n${stage}    run!sh: echo\n`), /env.SITE!: unknown function "hots"/);
-  assert.throws(() => parse(`${stage}    task: Check {{ vars.URL + }}\n`), /stages.a.task/);
-  assert.throws(() => parse(`${stage}    task: Check {{ url }}\n`), /unknown name "url"/);
+  assert.throws(() => parse(`${stage}    run!task: Check {{ vars.URL + }}\n`), /stages.a.run!task/);
+  assert.throws(() => parse(`${stage}    run!task: Check {{ url }}\n`), /unknown name "url"/);
 });
 
 const twoStages = (first) => `
@@ -843,12 +845,12 @@ stages:
   - id: one
     title: one
     emoji: 🔹
-    task: ${first}
+    run!task: ${first}
     timeout: 1s
   - id: two
     title: two
     emoji: 🔹
-    task: Two.
+    run!task: Two.
 `;
 
 test("a stuck stage times out after the grace period and the next stage never runs", async () => {
@@ -889,7 +891,7 @@ stages:
     title: each
     emoji: 🔹
     each_line: items.txt
-    task: Check it.
+    run!task: Check it.
 `);
   const dir = join(repo, ".qa");
   assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask }).run()), 0);
@@ -912,7 +914,7 @@ test("bad usage in a stage is broken, with the reason", async () => {
 
 test("TESTEIYA_PIPELINE_SPAWN=1 still spawns the CLI", async () => {
   const { repo, log, cli } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    task: One.\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: one\n    title: one\n    emoji: 🔹\n    run!task: One.\n");
   process.env.TESTEIYA_PIPELINE_SPAWN = "1";
   const code = await inRepo(repo, () => new Pipeline({ name: file, dir: join(repo, ".qa"), cli }).run());
   delete process.env.TESTEIYA_PIPELINE_SPAWN;
@@ -945,30 +947,47 @@ test("a task left behind keeps the crash guard until it settles", async () => {
   assert.equal(process.listenerCount("uncaughtException"), before);
 });
 
-test("a decide stage takes a question and a threshold; an extract stage a format", () => {
+test("run!decide takes a question, its context and a threshold; run!extract what to find and the values", () => {
   const spec = parse(`
 stages:
+  - id: review
+    session: qa
+    run!task: Review it.
   - id: ready
-    decide: Is the build green?
-    threshold: 0.8
+    run!decide:
+      question: Is the build green?
+      context: { stages: review, sessions: [qa], files: spec.md, sh: [git log -1, git diff --stat] }
+      threshold: 0.8
   - id: deploy
-    extract: The deployment url
-    format: ["url: public url of a page"]
+    run!extract:
+      what: The preview deployment of this pull request
+      values:
+        url: public url of a page
 `);
-  const [ready, deploy] = spec.stages;
-  assert.equal(ready.decide, "Is the build green?");
-  assert.equal(ready.threshold, 0.8);
-  assert.equal(deploy.extract, "The deployment url");
-  assert.deepEqual(deploy.format, ["url: public url of a page"]);
+  const [, ready, deploy] = spec.stages;
+  assert.deepEqual(ready.decide, {
+    question: "Is the build green?",
+    context: { stages: ["review"], sessions: ["qa"], files: ["spec.md"], sh: ["git log -1", "git diff --stat"] },
+    threshold: 0.8,
+  });
+  assert.deepEqual(deploy.extract, { what: "The preview deployment of this pull request", values: ["url: public url of a page"] });
 });
 
-test("threshold, format and session are checked against the stage kind", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n    task: hi\n    threshold: 0.5\n"), /threshold is for a decide stage/);
-  assert.throws(() => parse("stages:\n  - id: a\n    task: hi\n    format: [x]\n"), /format is for an extract stage/);
-  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    session: s\n"), /a decide stage has no session/);
-  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    threshold: 2\n"), /between 0 and 1/);
-  assert.throws(() => parse("stages:\n  - id: a\n    extract: x\n    format: [\"url: a\", \"url: b\"]\n"), /two format values are called "url"/);
-  assert.throws(() => parse("stages:\n  - id: a\n    decide: ok?\n    task: hi\n"), /exactly one of/);
+test("decide and extract are checked against their shape and the stages before them", () => {
+  const stage = (run) => parse(`stages:\n  - id: review\n    session: qa\n    run!task: hi\n  - id: a\n${run}`);
+  assert.throws(() => stage("    run!decide: ok?\n"), /"run!decide" must be a map with the fields of Decide/);
+  assert.throws(() => stage("    run!decide: { questoin: ok? }\n"), /missing required field "question"/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { stage: review } }\n"), /"stage" is not a field of the schema/);
+  assert.throws(() => stage("    run!decide: { question: ok? }\n"), /needs context: stages, sessions, files or sh, or inputs/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { stages: later } }\n"), /context stage "later" is not a stage before it/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { sessions: other } }\n"), /context session "other" is not the session of a stage before it/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md }, threshold: 2 }\n"), /between 0 and 1/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md } }\n    session: s\n"), /run!decide has no session/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md } }\n    threshold: 0.5\n"), /threshold is now run!decide: \{ question, threshold \}/);
+  assert.throws(() => stage("    run!extract: { values: { url: the url } }\n"), /missing required field "what"/);
+  assert.throws(() => stage("    run!extract: { what: x, values: the url }\n"), /run!extract values is a map of the values to find/);
+  assert.throws(() => stage("    run!extract: { what: x, values: { pr-url: the url } }\n"), /"pr-url" is not a name a formula can read/);
+  assert.throws(() => stage("    run!extract: { what: x, values: { sha: \"the {{ vars.X }}\" } }\n"), /sha is plain text: no \{\{ \}\}/);
 });
 
 // Answers yes when any state value says "green"; "BROKEN" in the question is a failed call.
@@ -998,17 +1017,20 @@ function fakeExtractTask(log) {
   };
 }
 
-const DECIDE_PIPELINE = (question, extract = "The deployment url") => `
+const DECIDE_PIPELINE = (question, url = "public url of a page") => `
 stages:
   - id: build
     run!sh: echo "the build is $BUILD" > "$STAGE_DIR/build.txt"
     outputs: [build.txt]
   - id: ready
-    decide: ${question}
+    run!decide: { question: "${question}" }
     inputs: [build.txt]
   - id: deploy
-    extract: ${extract}
-    format: ["url: public url of a page", "version: the version"]
+    run!extract:
+      what: The deployment of this pull request
+      values:
+        url: ${url}
+        version: the version
   - id: use
     run!sh: cat "$STAGE_DIR/deploy.values.json"
     inputs: [deploy.values.json]
@@ -1068,11 +1090,164 @@ test("an extract stage that finds nothing fails", async () => {
 
 test("a pipeline with a decide stage checks the decision model before it runs", async () => {
   const { repo, log } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: ready\n    decide: Is it green?\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: ready\n    run!decide: { question: Is it green?, context: { sh: echo green } }\n");
   const checkDecider = async () => {
     throw new UsageError("No decision model: set TESTEIYA_DECISION_MODEL");
   };
   const options = { name: file, dir: join(repo, ".qa"), runTask: fakeTask(log), decide: fakeDecide(log), checkDecider };
   await assert.rejects(inRepo(repo, () => new Pipeline(options).run()), /No decision model/);
   assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 1);
+});
+
+const GIT_PIPELINE = (prUrl = "pull request url") => `
+prerequisites:
+  git:
+    $value!extract:
+      what: The pull request under test. Use gh and git.
+      values:
+        sha: sha of the commit
+        pr_url: ${prUrl}
+env:
+  GIT_SHA!: prerequisites.git.sha
+stages:
+  - id: review
+    when!: prerequisites.git != null
+    run!task: Review {{ prerequisites.git.pr_url }} at {{ prerequisites.git.sha }}.
+  - id: log
+    run!sh: echo "sha=$GIT_SHA" > "$STAGE_DIR/sha.txt"
+    outputs: [sha.txt]
+`;
+
+test("$value!extract asks the agent what it says, before the first stage; stages and env read the values", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE());
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask: fakeExtractTask(log) }).run()), 0);
+
+  const [asked] = calledWith(log).filter((call) => call.extract);
+  assert.deepEqual(asked.extract.map((field) => field.name), ["sha", "pr_url"]);
+  const review = calledWith(log).find((call) => !call.extract && call.prompt.startsWith("Review"));
+  assert.match(review.prompt, /^Review the pr_url at the sha\./);
+  assert.equal(readFileSync(join(dir, "2-log", "sha.txt"), "utf8"), "sha=the sha\n");
+});
+
+test("a value still empty fails the $value!extract prerequisite: its stages skip, formulas read null", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE("NOTHING to find"));
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask: fakeExtractTask(log) }).run()), 0);
+  const stages = readJson(join(dir, "pipeline.json")).stages;
+  assert.equal(stages[0].status, "skipped");
+  assert.equal(stages[0].reason, "Not found: sha, pr_url.");
+  assert.equal(readFileSync(join(dir, "2-log", "sha.txt"), "utf8"), "sha=\n");
+});
+
+test("a dry run and pipeline-check ask no model: what a run would ask is pending", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE());
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), decide: fakeDecide(log) };
+  assert.equal(await inRepo(repo, () => new Pipeline({ ...options, dryRun: true }).run()), 0);
+  assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 0);
+  assert.equal(calledWith(log).length, 0, "no model is asked");
+});
+
+test("a model is asked only for a run that goes on", async () => {
+  const { repo, log } = setup();
+  const file = write(repo, "pipe.yml", GIT_PIPELINE());
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), gates: { pr: "false" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+  assert.equal(readJson(join(repo, ".qa", "pipeline.json")).status, "skipped");
+  assert.equal(calledWith(log).length, 0, "a skipped run asks no model");
+});
+
+test("run!decide judges its context: an earlier stage's report, a session's last answer, files and commands", async () => {
+  const { repo, log } = setup();
+  write(repo, "spec.md", "# Spec\nThe page is blue.\n");
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: review
+    session: qa
+    run!task: Review it.
+  - id: ready
+    run!decide:
+      question: Is {{ vars.WHAT }} green?
+      context:
+        stages: review
+        sessions: qa
+        files: spec.md
+        sh: echo "the build is $BUILD"
+      threshold: 0.6
+`);
+  const dir = join(repo, ".qa");
+  const runTask = async (request, control) => {
+    const outcome = await fakeTask(log)(request, control);
+    // The session the fake task does not write: one answer.
+    const session = SessionManager.open(request.sessionFile, undefined, repo);
+    session.appendMessage({ role: "user", content: "Review it.", timestamp: 1 });
+    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    session.appendMessage({ role: "assistant", content: [{ type: "text", text: "Two scenarios break." }], api: "x", provider: "x", model: "x", usage, stopReason: "stop", timestamp: 2 });
+    return outcome;
+  };
+  const options = { name: file, dir, runTask, decide: fakeDecide(log), sets: { BUILD: "green", WHAT: "the build" } };
+  assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
+  const decided = calledWith(log).find((call) => call.decide);
+  assert.equal(decided.decide, "Is the build green?");
+  assert.equal(decided.threshold, 0.6);
+  assert.deepEqual(Object.keys(decided.state), ["stage review", "session qa", "spec.md", '$ echo "the build is $BUILD"']);
+  assert.match(decided.state["stage review"], /\S/);
+  assert.equal(decided.state["session qa"], "Two scenarios break.");
+  assert.equal(decided.state["spec.md"], "# Spec\nThe page is blue.\n");
+  assert.equal(decided.state['$ echo "the build is $BUILD"'], "the build is green\n");
+});
+
+test("$value!decide asks the decision model before the first stage; a no skips the stages that read it", async () => {
+  const { repo, log } = setup();
+  const pipeline = (build) => `
+prerequisites:
+  green:
+    $value!decide:
+      question: Is the build green?
+      context: { sh: echo "${build}" }
+    message: The build is not green.
+stages:
+  - id: ship
+    when!: prerequisites.green
+    run!sh: echo shipped > "$STAGE_DIR/out.txt"
+`;
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: write(repo, "yes.yml", pipeline("green")), dir, runTask: fakeTask(log), decide: fakeDecide(log) }).run()), 0);
+  assert.equal(readJson(join(dir, "pipeline.json")).stages[0].status, "pass");
+  assert.deepEqual(calledWith(log).find((call) => call.decide).state, { '$ echo "green"': "green\n" });
+
+  const no = join(repo, ".qb");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: write(repo, "no.yml", pipeline("red")), dir: no, runTask: fakeTask(log), decide: fakeDecide(log) }).run()), 0);
+  const [ship] = readJson(join(no, "pipeline.json")).stages;
+  assert.equal(ship.status, "skipped");
+  assert.equal(ship.reason, "The build is not green.");
+});
+
+test("$value!decide judges files and commands only: no stage has run before it", () => {
+  const gate = (context) => parse(`prerequisites:\n  a:\n    $value!decide: { question: ok?, context: ${context} }\n    message: m\nstages:\n  - id: a\n    run!sh: echo\n`);
+  assert.deepEqual(gate("{ files: a.md }").prerequisites.a.decide, { question: "ok?", context: { stages: [], sessions: [], files: ["a.md"], sh: [] } });
+  assert.throws(() => gate("{ stages: a }"), /context takes files and sh, not stages or sessions/);
+  assert.throws(() => gate("{}"), /needs context: files or sh/);
+});
+
+test("the old stage keys in a patch fail with the new spelling", () => {
+  assert.throws(() => overridden(Override.stage("plan:task: { $after: x }")), /--stage plan: task is now run!task/);
+  assert.throws(() => overridden(Override.stage("plan:$add: { decide: ok? }")), /--stage plan: decide is now run!decide/);
+  assert.throws(() => overridden(Override.pipeline("stages: { $after: { late: { extract: x } } }")), /--pipeline: extract is now run!extract/);
+});
+
+test("$value!extract says what to find and the values; its message is optional", () => {
+  const extract = (value) => parse(`prerequisites:\n  git:\n    $value!extract: ${value}\nstages:\n  - id: a\n    run!sh: echo\n`);
+  assert.deepEqual(extract("{ what: The PR, values: { sha: the commit } }").prerequisites.git, {
+    message: "Not found: sha.",
+    env: [],
+    needs: [],
+    secret: false,
+    extract: { what: "The PR", values: ["sha: the commit"] },
+  });
+  assert.throws(() => extract("{ sha: the commit }"), /missing required field "what"/);
+  assert.throws(() => extract("{ what: x, values: { pr-url: the url } }"), /"pr-url" is not a name a formula can read/);
 });

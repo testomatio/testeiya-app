@@ -90,6 +90,18 @@ export class PipelineLog {
     else this.note(`  ${mark} gate ${name}${c.dim(`  ${message}`)}`);
   }
 
+  /** A `$value!extract` prerequisite: what it found, or what it did not. */
+  extracted(name: string, values: Record<string, string> | undefined, message: string): void {
+    if (!values) return this.gate(name, false, message);
+    const found = Object.entries(values).map(([field, value]) => `${field}=${value}`).join(" ");
+    this.note(`  ${c.green("✓")} ${name}${c.dim(`  ${found}`)}`);
+  }
+
+  /** A check a dry run or `pipeline-check` leaves to a run: it asks a model. */
+  pending(name: string, note: string): void {
+    this.note(`  ${c.cyan("○")} gate ${name}${c.dim(`  ${note}`)}`);
+  }
+
   aiGate(problem: string | null): void {
     this.gate("ai", !problem, problem ?? "", c.red("✗"));
   }
