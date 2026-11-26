@@ -303,7 +303,7 @@ stages:
   `when!:` is a formula over them. When it is false the stage is skipped with the
   message of the prerequisite that failed. In the top-level `when!:` it skips the
   whole run.
-- `npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes` checks
+- `npx scripted-yaml validate pipelines/*.yml --markers sh,file,changes --computed task,decide,extract` checks
   a file's shape; `npm run validate:pipelines` does it for the bundled ones.
 - `session: <name>` keeps a conversation. Stages with the same name share it.
   No `session` is a fresh one.

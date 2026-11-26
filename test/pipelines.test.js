@@ -423,7 +423,7 @@ test("every bundled pipeline passes its own $tests", async () => {
 
 test("scripted-yaml validates every bundled pipeline against the DSL", () => {
   const files = pipelines.names().map((name) => join(ROOT, "pipelines", `${name}.yml`));
-  const out = execFileSync(join(ROOT, "node_modules", ".bin", "scripted-yaml"), ["validate", ...files, "--markers", "sh,file,changes,extract", "--computed", "task,decide"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const out = execFileSync(join(ROOT, "node_modules", ".bin", "scripted-yaml"), ["validate", ...files, "--markers", "sh,file,changes", "--computed", "task,decide,extract"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   assert.equal(out.trim().split("\n").filter((line) => line.startsWith("ok")).length, files.length, out);
 });
 

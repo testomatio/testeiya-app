@@ -875,8 +875,8 @@ pipelines.parse("$extends: team-review\n", { name: "my-agent" });
 | `errors()` | A list of `PipelineError`. Empty when the pipeline is valid |
 | `isValid()` | `true` when there are no errors |
 | `inputs()` | Every variable a user can set |
-| `stages()` | The stages in order: `id`, `title`, `emoji`, `kind`, `text`, `when`, `inputs`, `outputs`, `loop` |
-| `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks`, `secret` |
+| `stages()` | The stages in order: `id`, `title`, `emoji`, `kind` (`task`, `run`, `decide`, `extract`), `text` (the task, command, question or `what`), `when`, `inputs`, `outputs`, `loop`; a decide stage's `decide` (`question`, `context`, `threshold`) and an extract stage's `extract` (`what`, `values`) |
+| `prerequisites()` | The named checks: `message`, `scope`, `stages`, `env`, `checks` (`file`, `run`, `changes`, `decide`, `extract`), `secret` |
 | `describe()` | All of the above with `name`, `description`, `target` and `summary`, as one plain object for JSON |
 | `yaml()` | The YAML with `$extends` and overrides applied, `base` written out. It needs nothing else to run |
 | `spec()` | The pipeline key for key, with defaults filled in |

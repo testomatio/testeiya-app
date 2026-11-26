@@ -131,6 +131,10 @@ Extracting
 
     VERSION=$(testeiya extract "the version being released" -o "a semver")
 
+  In a pipeline both are stages and prerequisites: run!decide: { question,
+  context, threshold } judges the stages, sessions, files and sh it is given;
+  run!extract: { what, values } finds the values with the agent's tools.
+
 Where the report goes
 
   --output names a destination and can repeat. Without one the report goes to
