@@ -28,9 +28,9 @@ export class ExtractStage extends TaskStage {
     return request;
   }
 
-  /** No text is written: the values say what to find. */
-  protected text(_context: StageContext, _vars: Variables): string {
-    return ExtractFields.prompt(this.fields());
+  /** `what`, `{{ }}` filled in, then the values. */
+  protected text(context: StageContext, vars: Variables): string {
+    return ExtractFields.prompt(context.task(this, vars), this.fields());
   }
 
   protected finished(dir: string, item: Item, outcome: TaskOutcome): void {
@@ -42,6 +42,6 @@ export class ExtractStage extends TaskStage {
   }
 
   private fields(): ExtractField[] {
-    return ExtractFields.checked(this.spec.extract ?? []);
+    return ExtractFields.checked(this.spec.extract?.values ?? []);
   }
 }

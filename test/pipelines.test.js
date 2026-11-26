@@ -461,7 +461,19 @@ test("a $value!extract prerequisite is a check, and its values are readable in t
   const git = prerequisites.find((gate) => gate.name === "git");
   assert.deepEqual(git.checks, ["extract"]);
   assert.equal(git.message, "Not found: sha, pr, pr_url, branch.");
-  const text = "prerequisites:\n  git:\n    $value!extract: { sha: the commit }\nstages:\n  - id: a\n    run!task: At {{ prerequisites.git.sha }}.\n";
+  const text = "prerequisites:\n  git:\n    $value!extract: { what: The PR, values: { sha: the commit } }\nstages:\n  - id: a\n    run!task: At {{ prerequisites.git.sha }}.\n";
   assert.deepEqual(parse(text).describe().stages[0], { ...parse(text).describe().stages[0], kind: "task", text: "At {{ prerequisites.git.sha }}." });
   assert.equal(stages.find((stage) => stage.id === "review").kind, "task");
+});
+
+test("a stage's view carries its decide and extract whole", () => {
+  const text = "stages:\n  - id: a\n    run!sh: echo\n  - id: b\n    run!decide: { question: Ok?, context: { stages: a }, threshold: 0.7 }\n  - id: c\n    run!extract: { what: The url, values: { url: a url } }\n";
+  const [, decide, extract] = parse(text).describe().stages;
+  assert.equal(decide.kind, "decide");
+  assert.equal(decide.text, "Ok?");
+  assert.deepEqual(decide.decide, { question: "Ok?", context: { stages: ["a"], sessions: [], files: [], sh: [] }, threshold: 0.7 });
+  assert.equal(extract.text, "The url");
+  assert.deepEqual(extract.extract, { what: "The url", values: ["url: a url"] });
+  const gate = parse("prerequisites:\n  ok:\n    $value!decide: { question: Ok?, context: { sh: echo } }\n    message: m\nstages:\n  - id: a\n    run!sh: echo\n").describe().prerequisites[0];
+  assert.deepEqual(gate.checks, ["decide"]);
 });

@@ -43,16 +43,9 @@ export class ExtractFields {
     return fields;
   }
 
-  /**
-   * The task for values a pipeline asks for with `run!extract:` or `$value!extract:`,
-   * where there is no text of what to find: the names and descriptions say it.
-   */
-  static prompt(fields: ExtractField[]): string {
+  /** The task of a pipeline's `run!extract:` or `$value!extract:`: what to find and why, then each value. */
+  static prompt(what: string, fields: ExtractField[]): string {
     const lines = fields.map((field) => `- ${field.name}: ${field.description}`);
-    return [
-      "Find these values. Look where this job runs: the git checkout, the environment variables of the CI job, files in this folder, and the tools you have.",
-      ...lines,
-      "Submit them all at once. Do not guess a value you cannot find.",
-    ].join("\n");
+    return [what.trim(), "", "Find these values with your tools:", ...lines, "", "Submit them all at once. Do not guess a value you cannot find."].join("\n");
   }
 }

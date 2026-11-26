@@ -1,11 +1,12 @@
 import { Expression, type Document } from "scripted-yaml/core";
 
 import { ExtractFields } from "../extract-fields.js";
+import { DecideContexts } from "./decide-contexts.js";
 import { Duration } from "./duration.js";
 import { ChangesMarker, DecideMarker, ExtractMarker, FileMarker, Marked, ShellMarker, TaskMarker } from "./markers.js";
 import { PipelineDefinition, type InputRead } from "./pipeline-definition.js";
 import type { Path } from "./pipeline-source.js";
-import type { ChangesSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
+import type { ChangesSpec, DecideContext, DecideSpec, ExtractSpec, GateSpec, PipelineSpec, StageSpec, StopOn } from "./spec.js";
 import { Variables } from "./variables.js";
 
 /** `pipeline.json` and the summary's own files live beside the stages' files. */
@@ -50,6 +51,7 @@ export class PipelineBuilder {
       if (ids.has(stage.id)) this.fail(`two stages are called "${stage.id}"`, ["stages", stage.id, "id"]);
       ids.add(stage.id);
     }
+    stages.forEach((stage, index) => this.contextOf(stage, stages.slice(0, index)));
 
     const when = this.condition(data.when, "when", ["when"]);
     const spec: PipelineSpec = {
@@ -86,10 +88,15 @@ export class PipelineBuilder {
     } else if (check instanceof ChangesMarker) {
       spec.changes = this.changes(check.rule, where, [...at, "$value"]);
     } else if (check instanceof ExtractMarker) {
-      spec.extract = this.fields(check.fields, `${where} $value!extract`, [...at, "$value"]);
-      if (message === undefined) spec.message = ExtractMarker.notFound(ExtractFields.names(spec.extract));
+      spec.extract = this.extract(check, `${where} $value!extract`, [...at, "$value"]);
+      if (message === undefined) spec.message = ExtractMarker.notFound(ExtractFields.names(spec.extract.values));
+    } else if (check instanceof DecideMarker) {
+      spec.decide = this.decide(check, `${where} $value!decide`, [...at, "$value"]);
+      const { context } = spec.decide;
+      if (context.stages.length || context.sessions.length) this.fail(`${where} $value!decide is asked before the first stage: its context takes files and sh, not stages or sessions`, [...at, "$value"]);
+      if (!context.files.length && !context.sh.length) this.fail(`${where} $value!decide needs context: files or sh for the model to judge`, [...at, "$value"]);
     } else {
-      this.fail(`${where}: $value is a formula ($value!:) or a check ($value!sh:, $value!file:, $value!changes:, $value!extract:)`, [...at, "$value"]);
+      this.fail(`${where}: $value is a formula ($value!:) or a check ($value!sh:, $value!file:, $value!changes:, $value!decide:, $value!extract:)`, [...at, "$value"]);
     }
     if (message === undefined && !spec.extract) this.fail(`${where} needs a message: what to do when it does not pass`, at);
     if (check instanceof Marked) this.markers.set(name, check);
@@ -120,10 +127,9 @@ export class PipelineBuilder {
     const where = `stage "${id}"`;
     if (RESERVED_IDS.includes(id)) this.fail(`${where}: "${id}" is reserved`, [...at, "id"]);
     const run = value.run;
-    if (!(run instanceof ShellMarker || run instanceof TaskMarker || run instanceof ExtractMarker)) {
-      return this.fail(`${where} runs something: run!task: <task>, run!sh: <command>, run!decide: <question> or run!extract: { name: what it is }`, [...at, "run"]);
+    if (!(run instanceof ShellMarker || run instanceof TaskMarker || run instanceof DecideMarker || run instanceof ExtractMarker)) {
+      return this.fail(`${where} runs something: run!task: <task>, run!sh: <command>, run!decide: { question } or run!extract: { what, values }`, [...at, "run"]);
     }
-    if (value.threshold !== undefined && !(run instanceof DecideMarker)) this.fail(`${where}: threshold is for run!decide`, [...at, "threshold"]);
     if (value.session !== undefined && run instanceof DecideMarker) this.fail(`${where}: run!decide has no session, a decision model does not chat`, [...at, "session"]);
     if (value.each_line !== undefined && value.each_file !== undefined) this.fail(`${where} can loop over each_line or each_file, not both`, at);
 
@@ -148,17 +154,12 @@ export class PipelineBuilder {
     if (goesOn && stage.stopOn.includes("fail")) this.fail(`${where} cannot both stop and go on after a fail`, [...at, "stopOn"]);
     if (!goesOn && !stage.stopOn.includes("fail")) stage.stopOn = ["fail", ...stage.stopOn];
 
-    if (run instanceof DecideMarker) stage.decide = this.written(run.text, `${where} run!decide`, [...at, "run"], "task") ?? "";
+    if (run instanceof DecideMarker) stage.decide = this.decide(run, `${where} run!decide`, [...at, "run"]);
     else if (run instanceof TaskMarker) stage.task = this.written(run.text, `${where} run!task`, [...at, "run"], "task") ?? "";
-    else if (run instanceof ExtractMarker) stage.extract = this.fields(run.fields, `${where} run!extract`, [...at, "run"]);
+    else if (run instanceof ExtractMarker) stage.extract = this.extract(run, `${where} run!extract`, [...at, "run"]);
     else {
       stage.run = this.plain(run.command, `${where} run!sh`, [...at, "run"]) ?? "";
       this.shell(stage.run, "run");
-    }
-    if (value.threshold !== undefined) {
-      const threshold = value.threshold;
-      if (typeof threshold !== "number" || threshold <= 0 || threshold >= 1) this.fail(`${where} threshold is a probability between 0 and 1, like 0.7`, [...at, "threshold"]);
-      stage.threshold = threshold;
     }
     if (value.session !== undefined) {
       const session = this.plain(value.session, `${where} session`, [...at, "session"]);
@@ -174,17 +175,58 @@ export class PipelineBuilder {
     return stage;
   }
 
+  /** `run!decide:` or `$value!decide:`, its shape already checked by the DSL. */
+  private decide(marker: DecideMarker, what: string, at: Path): DecideSpec {
+    const spec: DecideSpec = { question: this.written(marker.question, `${what} question`, [...at, "question"], "task") ?? "", context: this.context(marker.context, what, [...at, "context"]) };
+    const threshold = marker.threshold;
+    if (threshold !== undefined && threshold !== null) {
+      if (typeof threshold !== "number" || threshold <= 0 || threshold >= 1) this.fail(`${what} threshold is a probability between 0 and 1, like 0.7`, [...at, "threshold"]);
+      spec.threshold = threshold;
+    }
+    return spec;
+  }
+
+  /** Each kind of context, one entry or a list. `{{ }}` is filled in for a run. */
+  private context(value: unknown, what: string, at: Path): DecideContext {
+    const context = DecideContexts.read(value, (item, kind, index) => this.written(item, `${what} context.${kind}`, [...at, kind, index], "task") ?? "");
+    for (const command of context.sh) this.shell(command, "run");
+    return context;
+  }
+
+  /** A decide stage's context names earlier stages and their sessions. Without context it judges its inputs. */
+  private contextOf(stage: StageSpec, earlier: StageSpec[]): void {
+    const decide = stage.decide;
+    if (!decide) return;
+    const at: Path = ["stages", stage.id, "run"];
+    const where = `stage "${stage.id}" run!decide`;
+    const { context } = decide;
+    for (const id of context.stages) {
+      if (id.includes("{{")) continue;
+      if (!earlier.some((other) => other.id === id)) this.fail(`${where}: context stage "${id}" is not a stage before it`, at);
+    }
+    for (const session of context.sessions) {
+      if (session.includes("{{")) continue;
+      if (!earlier.some((other) => other.session === session)) this.fail(`${where}: context session "${session}" is not the session of a stage before it`, at);
+    }
+    if (DecideContexts.isEmpty(context) && stage.inputs.length === 0) this.fail(`${where} needs context: stages, sessions, files or sh, or inputs for the model to judge`, at);
+  }
+
+  /** `run!extract:` or `$value!extract:`: what to find, and the values. */
+  private extract(marker: ExtractMarker, what: string, at: Path): ExtractSpec {
+    return { what: this.written(marker.what, `${what} what`, [...at, "what"], "task") ?? "", values: this.fields(marker.fields, `${what} values`, [...at, "values"]) };
+  }
+
   /**
    * The values of `run!extract:` or `$value!extract:`: a map of a name to what the value is. A name is
    * what a formula reads, `prerequisites.git.pr_url`, so it has no dash.
    */
   private fields(value: unknown, what: string, at: Path): string[] {
-    if (!PipelineBuilder.isRecord(value) || Object.keys(value).length === 0) return this.fail(`${what} is a map of values to find: { sha: the commit under test }`, at);
+    if (!PipelineBuilder.isRecord(value) || Object.keys(value).length === 0) return this.fail(`${what} is a map of the values to find: { sha: the commit under test }`, at);
     const lines: string[] = [];
     for (const [name, description] of Object.entries(value)) {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) this.fail(`${what}: "${name}" is not a name a formula can read; use letters, digits and underscores`, [...at, name]);
+      if (description instanceof Expression) this.fail(`${what}.${name} is plain text: no {{ }}`, [...at, name]);
       if (typeof description !== "string" || !description.trim()) this.fail(`${what}.${name} says what the value is, as text`, [...at, name]);
-      if (description.includes("{{")) this.fail(`${what}.${name} is plain text: no {{ }}`, [...at, name]);
       lines.push(`${name}: ${description.trim()}`);
     }
     const fields = ExtractFields.parse(lines, what);

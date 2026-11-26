@@ -21,7 +21,7 @@ import { SummaryStage } from "../dist/src/pipeline/summary-stage.js";
 import { TaskStage } from "../dist/src/pipeline/task-stage.js";
 import { KILL_GRACE_MS } from "../dist/src/pipeline/launcher.js";
 import { Variables } from "../dist/src/pipeline/variables.js";
-import { InputValues } from "../dist/src/pipeline/input-values.js";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { UsageError } from "../dist/src/model.js";
 
 // A pull request run in CI names its own branches; the tests name theirs.
@@ -121,7 +121,7 @@ test("a stage runs one thing, said by the marker of run", () => {
   const both = "stages:\n  - id: a\n    title: a\n    emoji: 🔹\n    run!sh: echo\n    run!task: hi\n";
   assert.throws(() => parse(both), /"run!sh" and "run!task" are the same key "run"/);
   assert.throws(() => parse("stages:\n  - id: a\n    run!file: x\n"), /runs something: run!task: <task>, run!sh: <command>/);
-  for (const [old, now] of [["task: hi", "run!task: <task>"], ["decide: ok?", "run!decide: <question>"], ["extract: x", "run!extract: { name: what it is }"]]) {
+  for (const [old, now] of [["task: hi", "run!task: <task>"], ["decide: ok?", "run!decide: { question, context, threshold }"], ["extract: x", "run!extract: { what, values: { name: what it is } }"]]) {
     assert.throws(() => parse(`stages:\n  - id: a\n    ${old}\n`), new RegExp(`${old.split(":")[0]} is now ${now.replace(/[{}!?<>]/g, "\\$&")}`));
   }
 });
@@ -163,7 +163,7 @@ test("a task fills in {{ }} with the run's variables; unset is empty", () => {
 test("a changes check counts what is not ignored", async () => {
   const files = ["src/api/users.ts", "README.md", "docs/a.md"];
   const passes = (changes, filesChanged = files) =>
-    new Gate("g", "m", new ChangesMarker(changes), { changes }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" }, input: new InputValues() });
+    new Gate("g", "m", new ChangesMarker(changes), { changes }).passes({ cwd: ".", vars: new Variables({}), changes: { files: filesChanged, from: "x" }, values: () => null });
   assert.equal(await passes({ min_files: 2, ignore: ["**/*.md", "*.md"] }), false);
   assert.equal(await passes({ paths: ["src/api/**"] }), true);
   assert.equal(await passes({ paths: ["src/ui/**"] }), false);
@@ -947,29 +947,47 @@ test("a task left behind keeps the crash guard until it settles", async () => {
   assert.equal(process.listenerCount("uncaughtException"), before);
 });
 
-test("run!decide takes a question and a threshold; run!extract the values to find", () => {
+test("run!decide takes a question, its context and a threshold; run!extract what to find and the values", () => {
   const spec = parse(`
 stages:
+  - id: review
+    session: qa
+    run!task: Review it.
   - id: ready
-    run!decide: Is the build green?
-    threshold: 0.8
+    run!decide:
+      question: Is the build green?
+      context: { stages: review, sessions: [qa], files: spec.md, sh: [git log -1, git diff --stat] }
+      threshold: 0.8
   - id: deploy
     run!extract:
-      url: public url of a page
+      what: The preview deployment of this pull request
+      values:
+        url: public url of a page
 `);
-  const [ready, deploy] = spec.stages;
-  assert.equal(ready.decide, "Is the build green?");
-  assert.equal(ready.threshold, 0.8);
-  assert.deepEqual(deploy.extract, ["url: public url of a page"]);
+  const [, ready, deploy] = spec.stages;
+  assert.deepEqual(ready.decide, {
+    question: "Is the build green?",
+    context: { stages: ["review"], sessions: ["qa"], files: ["spec.md"], sh: ["git log -1", "git diff --stat"] },
+    threshold: 0.8,
+  });
+  assert.deepEqual(deploy.extract, { what: "The preview deployment of this pull request", values: ["url: public url of a page"] });
 });
 
-test("threshold, session and the values to extract are checked against the stage kind", () => {
-  assert.throws(() => parse("stages:\n  - id: a\n    run!task: hi\n    threshold: 0.5\n"), /threshold is for run!decide/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run!decide: ok?\n    session: s\n"), /run!decide has no session/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run!decide: ok?\n    threshold: 2\n"), /between 0 and 1/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run!extract: the url\n"), /run!extract is a map of values to find/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run!extract: { pr-url: the url }\n"), /"pr-url" is not a name a formula can read/);
-  assert.throws(() => parse("stages:\n  - id: a\n    run!extract: { url: [] }\n"), /url says what the value is/);
+test("decide and extract are checked against their shape and the stages before them", () => {
+  const stage = (run) => parse(`stages:\n  - id: review\n    session: qa\n    run!task: hi\n  - id: a\n${run}`);
+  assert.throws(() => stage("    run!decide: ok?\n"), /"run!decide" must be a map with the fields of Decide/);
+  assert.throws(() => stage("    run!decide: { questoin: ok? }\n"), /missing required field "question"/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { stage: review } }\n"), /"stage" is not a field of the schema/);
+  assert.throws(() => stage("    run!decide: { question: ok? }\n"), /needs context: stages, sessions, files or sh, or inputs/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { stages: later } }\n"), /context stage "later" is not a stage before it/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { sessions: other } }\n"), /context session "other" is not the session of a stage before it/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md }, threshold: 2 }\n"), /between 0 and 1/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md } }\n    session: s\n"), /run!decide has no session/);
+  assert.throws(() => stage("    run!decide: { question: ok?, context: { files: a.md } }\n    threshold: 0.5\n"), /threshold is now run!decide: \{ question, threshold \}/);
+  assert.throws(() => stage("    run!extract: { values: { url: the url } }\n"), /missing required field "what"/);
+  assert.throws(() => stage("    run!extract: { what: x, values: the url }\n"), /run!extract values is a map of the values to find/);
+  assert.throws(() => stage("    run!extract: { what: x, values: { pr-url: the url } }\n"), /"pr-url" is not a name a formula can read/);
+  assert.throws(() => stage("    run!extract: { what: x, values: { sha: \"the {{ vars.X }}\" } }\n"), /sha is plain text: no \{\{ \}\}/);
 });
 
 // Answers yes when any state value says "green"; "BROKEN" in the question is a failed call.
@@ -1005,12 +1023,14 @@ stages:
     run!sh: echo "the build is $BUILD" > "$STAGE_DIR/build.txt"
     outputs: [build.txt]
   - id: ready
-    run!decide: ${question}
+    run!decide: { question: "${question}" }
     inputs: [build.txt]
   - id: deploy
     run!extract:
-      url: ${url}
-      version: the version
+      what: The deployment of this pull request
+      values:
+        url: ${url}
+        version: the version
   - id: use
     run!sh: cat "$STAGE_DIR/deploy.values.json"
     inputs: [deploy.values.json]
@@ -1070,7 +1090,7 @@ test("an extract stage that finds nothing fails", async () => {
 
 test("a pipeline with a decide stage checks the decision model before it runs", async () => {
   const { repo, log } = setup();
-  const file = write(repo, "pipe.yml", "stages:\n  - id: ready\n    run!decide: Is it green?\n");
+  const file = write(repo, "pipe.yml", "stages:\n  - id: ready\n    run!decide: { question: Is it green?, context: { sh: echo green } }\n");
   const checkDecider = async () => {
     throw new UsageError("No decision model: set TESTEIYA_DECISION_MODEL");
   };
@@ -1080,13 +1100,13 @@ test("a pipeline with a decide stage checks the decision model before it runs", 
 });
 
 const GIT_PIPELINE = (prUrl = "pull request url") => `
-$vars:
-  PR: { optional: true }
 prerequisites:
   git:
     $value!extract:
-      sha: sha of the commit
-      pr_url: ${prUrl}
+      what: The pull request under test. Use gh and git.
+      values:
+        sha: sha of the commit
+        pr_url: ${prUrl}
 env:
   GIT_SHA!: prerequisites.git.sha
 stages:
@@ -1098,33 +1118,17 @@ stages:
     outputs: [sha.txt]
 `;
 
-test("$value!extract takes values from the input and asks the agent for the rest; stages read them", async () => {
+test("$value!extract asks the agent what it says, before the first stage; stages and env read the values", async () => {
   const { repo, log } = setup();
   const file = write(repo, "pipe.yml", GIT_PIPELINE());
-  const input = write(repo, "git.json", JSON.stringify({ sha: "abc123", pr: 7 }));
   const dir = join(repo, ".qa");
-  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask: fakeExtractTask(log), inputs: [input] }).run()), 0);
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask: fakeExtractTask(log) }).run()), 0);
 
-  const asked = calledWith(log).filter((call) => call.extract);
-  assert.deepEqual(asked.map((call) => call.extract.map((field) => field.name)), [["pr_url"]], "only what the input lacks");
+  const [asked] = calledWith(log).filter((call) => call.extract);
+  assert.deepEqual(asked.extract.map((field) => field.name), ["sha", "pr_url"]);
   const review = calledWith(log).find((call) => !call.extract && call.prompt.startsWith("Review"));
-  assert.match(review.prompt, /^Review the pr_url at abc123\./);
-  assert.equal(readFileSync(join(dir, "2-log", "sha.txt"), "utf8"), "sha=abc123\n");
-});
-
-test("$value!extract reads TESTEIYA_PIPELINE_INPUT_JSON and _FILE, under its own name first, and asks no agent when all are there", async () => {
-  const { repo, log } = setup();
-  const file = write(repo, "pipe.yml", GIT_PIPELINE());
-  const json = JSON.stringify({ git: { sha: "own" }, sha: "top", pr_url: "https://x/pull/1" });
-  const dir = join(repo, ".qa");
-  const sets = { TESTEIYA_PIPELINE_INPUT_JSON: json };
-  assert.equal(await inRepo(repo, () => new Pipeline({ name: file, dir, runTask: fakeExtractTask(log), sets }).run()), 0);
-  assert.equal(calledWith(log).filter((call) => call.extract).length, 0);
-  assert.match(calledWith(log).find((call) => call.prompt.startsWith("Review")).prompt, /^Review https:\/\/x\/pull\/1 at own\./);
-
-  const broken = write(repo, "broken.json", "{ nope");
-  const options = { name: file, dir: join(repo, ".qb"), runTask: fakeExtractTask(log), sets: { TESTEIYA_PIPELINE_INPUT_FILE: broken } };
-  await assert.rejects(inRepo(repo, () => new Pipeline(options).run()), /TESTEIYA_PIPELINE_INPUT_FILE .*broken.json is not JSON/);
+  assert.match(review.prompt, /^Review the pr_url at the sha\./);
+  assert.equal(readFileSync(join(dir, "2-log", "sha.txt"), "utf8"), "sha=the sha\n");
 });
 
 test("a value still empty fails the $value!extract prerequisite: its stages skip, formulas read null", async () => {
@@ -1138,35 +1142,95 @@ test("a value still empty fails the $value!extract prerequisite: its stages skip
   assert.equal(readFileSync(join(dir, "2-log", "sha.txt"), "utf8"), "sha=\n");
 });
 
-test("a dry run and pipeline-check take extracted values from the input only", async () => {
+test("a dry run and pipeline-check ask no model: what a run would ask is pending", async () => {
   const { repo, log } = setup();
   const file = write(repo, "pipe.yml", GIT_PIPELINE());
-  const input = write(repo, "git.json", JSON.stringify({ sha: "abc123" }));
-  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), inputs: [input] };
+  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), decide: fakeDecide(log) };
   assert.equal(await inRepo(repo, () => new Pipeline({ ...options, dryRun: true }).run()), 0);
-  // What only the agent of a run would find is pending, not failed.
   assert.equal(await inRepo(repo, () => new Pipeline(options).check()), 0);
-  assert.equal(calledWith(log).length, 0, "no agent is asked");
+  assert.equal(calledWith(log).length, 0, "no model is asked");
 });
 
-test("the agent finds values only for a run that goes on", async () => {
+test("a model is asked only for a run that goes on", async () => {
   const { repo, log } = setup();
   const file = write(repo, "pipe.yml", GIT_PIPELINE());
   const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), gates: { pr: "false" } };
   assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
   assert.equal(readJson(join(repo, ".qa", "pipeline.json")).status, "skipped");
-  assert.equal(calledWith(log).length, 0, "a skipped run asks no agent");
+  assert.equal(calledWith(log).length, 0, "a skipped run asks no model");
 });
 
-test("input files merge a prerequisite's map with the one before it", async () => {
+test("run!decide judges its context: an earlier stage's report, a session's last answer, files and commands", async () => {
   const { repo, log } = setup();
-  const file = write(repo, "pipe.yml", GIT_PIPELINE());
-  const first = write(repo, "a.json", JSON.stringify({ git: { sha: "abc" } }));
-  const second = write(repo, "b.json", JSON.stringify({ git: { pr_url: "https://x/pull/2" } }));
-  const options = { name: file, dir: join(repo, ".qa"), runTask: fakeExtractTask(log), inputs: [first, second] };
+  write(repo, "spec.md", "# Spec\nThe page is blue.\n");
+  const file = write(repo, "pipe.yml", `
+stages:
+  - id: review
+    session: qa
+    run!task: Review it.
+  - id: ready
+    run!decide:
+      question: Is {{ vars.WHAT }} green?
+      context:
+        stages: review
+        sessions: qa
+        files: spec.md
+        sh: echo "the build is $BUILD"
+      threshold: 0.6
+`);
+  const dir = join(repo, ".qa");
+  const runTask = async (request, control) => {
+    const outcome = await fakeTask(log)(request, control);
+    // The session the fake task does not write: one answer.
+    const session = SessionManager.open(request.sessionFile, undefined, repo);
+    session.appendMessage({ role: "user", content: "Review it.", timestamp: 1 });
+    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    session.appendMessage({ role: "assistant", content: [{ type: "text", text: "Two scenarios break." }], api: "x", provider: "x", model: "x", usage, stopReason: "stop", timestamp: 2 });
+    return outcome;
+  };
+  const options = { name: file, dir, runTask, decide: fakeDecide(log), sets: { BUILD: "green", WHAT: "the build" } };
   assert.equal(await inRepo(repo, () => new Pipeline(options).run()), 0);
-  assert.equal(calledWith(log).filter((call) => call.extract).length, 0);
-  assert.match(calledWith(log).find((call) => call.prompt.startsWith("Review")).prompt, /^Review https:\/\/x\/pull\/2 at abc\./);
+  const decided = calledWith(log).find((call) => call.decide);
+  assert.equal(decided.decide, "Is the build green?");
+  assert.equal(decided.threshold, 0.6);
+  assert.deepEqual(Object.keys(decided.state), ["stage review", "session qa", "spec.md", '$ echo "the build is $BUILD"']);
+  assert.match(decided.state["stage review"], /\S/);
+  assert.equal(decided.state["session qa"], "Two scenarios break.");
+  assert.equal(decided.state["spec.md"], "# Spec\nThe page is blue.\n");
+  assert.equal(decided.state['$ echo "the build is $BUILD"'], "the build is green\n");
+});
+
+test("$value!decide asks the decision model before the first stage; a no skips the stages that read it", async () => {
+  const { repo, log } = setup();
+  const pipeline = (build) => `
+prerequisites:
+  green:
+    $value!decide:
+      question: Is the build green?
+      context: { sh: echo "${build}" }
+    message: The build is not green.
+stages:
+  - id: ship
+    when!: prerequisites.green
+    run!sh: echo shipped > "$STAGE_DIR/out.txt"
+`;
+  const dir = join(repo, ".qa");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: write(repo, "yes.yml", pipeline("green")), dir, runTask: fakeTask(log), decide: fakeDecide(log) }).run()), 0);
+  assert.equal(readJson(join(dir, "pipeline.json")).stages[0].status, "pass");
+  assert.deepEqual(calledWith(log).find((call) => call.decide).state, { '$ echo "green"': "green\n" });
+
+  const no = join(repo, ".qb");
+  assert.equal(await inRepo(repo, () => new Pipeline({ name: write(repo, "no.yml", pipeline("red")), dir: no, runTask: fakeTask(log), decide: fakeDecide(log) }).run()), 0);
+  const [ship] = readJson(join(no, "pipeline.json")).stages;
+  assert.equal(ship.status, "skipped");
+  assert.equal(ship.reason, "The build is not green.");
+});
+
+test("$value!decide judges files and commands only: no stage has run before it", () => {
+  const gate = (context) => parse(`prerequisites:\n  a:\n    $value!decide: { question: ok?, context: ${context} }\n    message: m\nstages:\n  - id: a\n    run!sh: echo\n`);
+  assert.deepEqual(gate("{ files: a.md }").prerequisites.a.decide, { question: "ok?", context: { stages: [], sessions: [], files: ["a.md"], sh: [] } });
+  assert.throws(() => gate("{ stages: a }"), /context takes files and sh, not stages or sessions/);
+  assert.throws(() => gate("{}"), /needs context: files or sh/);
 });
 
 test("the old stage keys in a patch fail with the new spelling", () => {
@@ -1175,10 +1239,15 @@ test("the old stage keys in a patch fail with the new spelling", () => {
   assert.throws(() => overridden(Override.pipeline("stages: { $after: { late: { extract: x } } }")), /--pipeline: extract is now run!extract/);
 });
 
-test("$value!extract is a map of names a formula reads; its message is optional", () => {
-  const extract = (fields) => parse(`prerequisites:\n  git:\n    $value!extract: ${fields}\nstages:\n  - id: a\n    run!sh: echo\n`);
-  assert.deepEqual(extract("{ sha: the commit }").prerequisites.git, { message: "Not found: sha.", env: [], needs: [], secret: false, extract: ["sha: the commit"] });
-  assert.throws(() => extract("the commit"), /\$value!extract is a map of values to find/);
-  assert.throws(() => extract("{ pr-url: the url }"), /"pr-url" is not a name a formula can read/);
-  assert.throws(() => extract("{ sha: \"the {{ vars.X }}\" }"), /sha is plain text: no \{\{ \}\}/);
+test("$value!extract says what to find and the values; its message is optional", () => {
+  const extract = (value) => parse(`prerequisites:\n  git:\n    $value!extract: ${value}\nstages:\n  - id: a\n    run!sh: echo\n`);
+  assert.deepEqual(extract("{ what: The PR, values: { sha: the commit } }").prerequisites.git, {
+    message: "Not found: sha.",
+    env: [],
+    needs: [],
+    secret: false,
+    extract: { what: "The PR", values: ["sha: the commit"] },
+  });
+  assert.throws(() => extract("{ sha: the commit }"), /missing required field "what"/);
+  assert.throws(() => extract("{ what: x, values: { pr-url: the url } }"), /"pr-url" is not a name a formula can read/);
 });

@@ -17,13 +17,15 @@ prerequisites:
   explorbot_ai:
     $value!: vars.EXPLORBOT_AI_PROVIDER != null
     message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
-  # The pull request under test: from --input git.json when the job has it, else the agent finds it.
+  # The pull request under test, which the agent finds with gh and git.
   git:
     $value!extract:
-      sha: sha of the commit under test
-      pr: pull request number
-      pr_url: pull request url
-      branch: name of the branch
+      what: The pull request under test. Use gh and git in this checkout.
+      values:
+        sha: sha of the commit under test
+        pr: pull request number
+        pr_url: pull request url
+        branch: name of the branch
 
 env:
   EXPLORBOT_NO_BANNER: "1"

@@ -375,9 +375,10 @@ class OldFormat {
 
   private static readonly stageKinds: Record<string, string> = {
     task: "run!task: <task>",
-    decide: "run!decide: <question>",
-    extract: "run!extract: { name: what it is } (one key per value; the format goes there)",
-    format: "the keys of run!extract: { name: what it is }",
+    decide: "run!decide: { question, context, threshold }",
+    extract: "run!extract: { what, values: { name: what it is } }",
+    format: "the values of run!extract: { what, values: { name: what it is } }",
+    threshold: "run!decide: { question, threshold }",
   };
 
   constructor(private readonly fail: (message: string, at?: Path) => never) {}

@@ -71,8 +71,6 @@ Pipeline options:
       --set KEY=VALUE        set a variable for every stage, repeatable
       --gate NAME:COMMAND    skip the whole run unless COMMAND exits 0, repeatable
       --stage ID:YAML        patch one stage, e.g. 'explore:$replace: { timeout: 45m }'
-      --input <file.json>    values a $value!extract prerequisite takes before asking the agent, repeatable;
-                             also TESTEIYA_PIPELINE_INPUT_FILE and TESTEIYA_PIPELINE_INPUT_JSON
       --pipeline YAML        patch the pipeline, e.g. '$replace: { summary: Be brief. }'
   -h, --help                 show this
   -v, --version              show version
@@ -337,7 +335,6 @@ export function parseCliArgs(argv: string[]): CliArgs {
   }
   if (Array.isArray(values.pipeline)) args.pipelineOverrides = values.pipeline as string[];
   if (Array.isArray(values.stage)) args.stageOverrides = values.stage as string[];
-  if (Array.isArray(values.input)) args.inputs = values.input as string[];
   if (Array.isArray(values.output) && first === "extract") args.formats = values.output as string[];
   else if (Array.isArray(values.output)) args.outputs = values.output as string[];
   if (values.json) args.json = true;
@@ -410,7 +407,6 @@ const PIPELINE_OPTIONS: ParseArgsConfig["options"] = {
   gate: { type: "string", multiple: true },
   pipeline: { type: "string", multiple: true },
   stage: { type: "string", multiple: true },
-  input: { type: "string", multiple: true },
   help: HELP_FLAG,
 };
 
@@ -441,7 +437,6 @@ const OPTIONS: Record<Command, ParseArgsConfig["options"]> = {
     gate: PIPELINE_OPTIONS.gate!,
     pipeline: PIPELINE_OPTIONS.pipeline!,
     stage: PIPELINE_OPTIONS.stage!,
-    input: PIPELINE_OPTIONS.input!,
     diagram: { type: "boolean" },
     help: HELP_FLAG,
   },
@@ -525,8 +520,6 @@ export interface CliArgs {
   gates?: Record<string, string>;
   pipelineOverrides?: string[];
   stageOverrides?: string[];
-  /** pipeline: JSON files of values for `$value!extract` prerequisites, from --input. */
-  inputs?: string[];
   /** Set when argv was malformed; the caller prints the message and exits 2. */
   error?: string;
 }

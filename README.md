@@ -297,8 +297,9 @@ stages:
 - `prerequisites` are named checks. `$value!:` is a formula over variables,
   `vars.NAME != null` for "is set". `$value!file:`, `$value!sh:` and
   `$value!changes:` (`paths`, `ignore`, `min_files`) are checks the runner makes.
-  `$value!extract:` finds values, `{ sha: sha of the commit }`, from `--input
-  git.json` or else by the agent, and a stage reads `{{ prerequisites.git.sha }}`.
+  `$value!extract: { what, values }` has the agent find values with its tools,
+  which a stage reads as `{{ prerequisites.git.sha }}`; `$value!decide` asks the
+  decision model, judging the `context` it is given.
   `when!:` is a formula over them. When it is false the stage is skipped with the
   message of the prerequisite that failed. In the top-level `when!:` it skips the
   whole run.
@@ -346,9 +347,7 @@ result instead of starting over. The summary updates its comment.
 Stages ignore `TESTEIYA_FOLLOW_UP`, `TESTEIYA_THREAD` and `TESTEIYA_SESSION_FILE`:
 those belong to a single task. Use `--thread` on the pipeline instead.
 
-`--set KEY=VALUE` sets a variable for every stage. `--input file.json`,
-`TESTEIYA_PIPELINE_INPUT_FILE` and `TESTEIYA_PIPELINE_INPUT_JSON` give the values a
-`$value!extract` prerequisite needs, so the agent is asked only for the rest. `--gate NAME:COMMAND` adds a
+`--set KEY=VALUE` sets a variable for every stage. `--gate NAME:COMMAND` adds a
 check from the CI job: when the command fails, the whole run is skipped and exits
 0, before any output is checked. Use it for what only the job knows, like
 whether this push belongs to a pull request. `--stage ID:YAML` and

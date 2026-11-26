@@ -21,7 +21,6 @@ import { Override } from "./override.js";
 import { Packages } from "./packages.js";
 import type { PipelineDefinition, PipelineValues } from "./pipeline-definition.js";
 import { PipelineFile } from "./pipeline-file.js";
-import { InputValues } from "./input-values.js";
 import { Report } from "./report.js";
 import type { PipelineSpec, StageSpec } from "./spec.js";
 import type { Stage, StageContext } from "./stage.js";
@@ -30,6 +29,7 @@ import {
   CHANGES_FILE,
   COPY_FILE,
   LAST_DIR,
+  SESSIONS_DIR,
   PipelineState,
   type PipelineRecord,
   type StageRecord,
@@ -112,19 +112,18 @@ export class Pipeline {
     }
 
     let aiProblem: string | null = null;
-    if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
+    if (this.needsAi(stages, spec)) aiProblem = await this.aiProblem(stages, spec);
     if (aiProblem && !options.dryRun) throw new UsageError(aiProblem);
 
     const base = await this.variables(definition, dir, round);
     let vars = this.withEnv(definition, base);
-    const input = InputValues.read(options.inputs ?? [], vars.toEnv());
     const changes = await this.git.changes(since, vars.toEnv());
     const used = [...new Set([...spec.when, ...stages.flatMap((stage) => stage.spec.when), ...Object.keys(this.options.gates ?? {}), ...this.extracting(spec)])];
-    let extract: Extractor | undefined;
-    if (!options.dryRun) extract = this.extractor(vars);
-    // The agent finds values only for a run that goes on, unless the top-level when reads them.
-    const later = this.extracting(spec).filter((name) => !spec.when.includes(name));
-    const made = await this.checkGates(gates, used.filter((name) => !later.includes(name)), { vars, changes, input, extract });
+    const gateContext: Omit<GateContext, "cwd"> = { vars, changes, values: () => definition.values(vars.toEnv()) };
+    if (!options.dryRun) Object.assign(gateContext, this.askers(vars));
+    // A model is asked only for a run that goes on, unless the top-level when reads its answer.
+    const later = used.filter((name) => gates.get(name)?.asks && !spec.when.includes(name));
+    const made = await this.checkGates(gates, used.filter((name) => !later.includes(name)), gateContext);
     let values = definition.values(this.withEnv(definition, base).toEnv());
     // In the order the file reads them, a check the runner made or a formula.
     const results = (): Map<string, boolean> => new Map(used.map((name) => [name, made.get(name) ?? values.passes(name)]));
@@ -133,7 +132,7 @@ export class Pipeline {
 
     const reason = this.blocked(spec, values, gates, results());
     if (!reason) {
-      for (const [name, passed] of await this.checkGates(gates, later, { vars, changes, input, extract })) made.set(name, passed);
+      for (const [name, passed] of await this.checkGates(gates, later, gateContext)) made.set(name, passed);
       // `env:` again: it may read what a `$value!extract` found.
       vars = this.withEnv(definition, base);
       values = definition.values(vars.toEnv());
@@ -197,25 +196,24 @@ export class Pipeline {
     await this.test(definition);
 
     let aiProblem: string | null = null;
-    if (this.needsAi(stages)) aiProblem = await this.aiProblem(stages);
+    if (this.needsAi(stages, spec)) aiProblem = await this.aiProblem(stages, spec);
     const base = await this.variables(definition, dir, 1);
     let vars = this.withEnv(definition, base);
-    const input = InputValues.read(this.options.inputs ?? [], vars.toEnv());
     const since = PipelineState.read(dir)?.rounds.at(-1)?.commit ?? null;
     const changes = await this.git.changes(since, vars.toEnv());
     const names = [...Object.keys(spec.prerequisites), ...Object.keys(this.options.gates ?? {})];
-    // A check asks no agent: a value the input does not have is reported as not found.
-    const made = await this.checkGates(gates, names, { vars, changes, input });
+    // A check asks no model: what a run would ask is reported as pending.
+    const made = await this.checkGates(gates, names, { vars, changes, values: () => definition.values(vars.toEnv()) });
     vars = this.withEnv(definition, base);
     const values = definition.values(vars.toEnv());
     const results = new Map(names.map((name) => [name, made.get(name) ?? values.passes(name)]));
 
     const checked: Checked[] = names.map((name) => ({ name, passed: results.get(name)!, message: this.message(spec, gates, name) }));
     for (const gate of checked) {
-      const pending = gates.get(gate.name)?.pending ?? [];
-      if (pending.length) gate.pending = pending;
+      const pending = gates.get(gate.name)?.pending;
+      if (pending) gate.pending = pending;
     }
-    if (this.needsAi(stages)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
+    if (this.needsAi(stages, spec)) checked.unshift({ name: "ai", passed: !aiProblem, message: aiProblem ?? "" });
     const failed = checked.filter((gate) => !gate.passed).length;
     if (this.options.json) {
       process.stdout.write(`${JSON.stringify({ name: spec.name, file: file.path, gates: checked }, null, 2)}\n`);
@@ -319,6 +317,14 @@ export class Pipeline {
       report,
       missing: (input) => this.whyMissing(input, run),
       task: (stage, vars) => run.definition.values(vars.toEnv()).task(stage.id),
+      decision: (stage, vars) => run.definition.values(vars.toEnv()).decide(stage.id),
+      sources: (stage, vars) => ({
+        cwd: this.cwd,
+        dir: join(run.dir, stage.folder),
+        vars,
+        stage: (id) => this.result(id, run),
+        session: (name) => join(run.dir, SESSIONS_DIR, `${name}.jsonl`),
+      }),
       locate: (input, reader) => this.locate(input, reader, run),
     };
   }
@@ -446,10 +452,15 @@ export class Pipeline {
     return Object.keys(spec.prerequisites).filter((name) => spec.prerequisites[name]!.extract);
   }
 
-  /** Asks the agent, in this process, for the values the input does not have. A failed call finds nothing. */
+  /** How a prerequisite asks a model in a run: the agent for values, the decision model for a yes or no. */
+  private askers(vars: Variables): Pick<GateContext, "extract" | "decide"> {
+    return { extract: this.extractor(vars), decide: (request) => this.decide(request, vars.get("TESTEIYA_DECISION_MODEL")) };
+  }
+
+  /** Asks the agent, in this process, for a prerequisite's values. A failed call finds nothing. */
   private extractor(vars: Variables): Extractor {
-    return async (prerequisite: string, fields: ExtractField[]) => {
-      const prompt = ExtractFields.prompt(fields);
+    return async (prerequisite: string, what: string, fields: ExtractField[]) => {
+      const prompt = ExtractFields.prompt(what, fields);
       log.task(`prerequisites.${prerequisite}`, this.options.model, null, prompt);
       const controller = new AbortController();
       this.launcher.track(controller);
@@ -511,6 +522,15 @@ export class Pipeline {
     return null;
   }
 
+  /** An earlier stage's report, or its log, or why it has neither. */
+  private result(id: string, run: Run): { file?: string; reason?: string } {
+    const record = run.state.stage(id);
+    const file = record?.report ?? record?.log;
+    if (file) return { file: join(run.dir, file) };
+    if (record?.status === "skipped") return { reason: `skipped: ${record.reason}` };
+    return { reason: record?.status ?? "it did not run" };
+  }
+
   private whyMissing(input: string, run: Run): string {
     const producer = run.stages.find((stage) => stage.produces(input));
     if (!producer) return "not found";
@@ -529,22 +549,22 @@ export class Pipeline {
   }
 
   /** The summary is an agent, so a pipeline with one needs a model. */
-  private needsAi(stages: Stage[]): boolean {
-    return this.needsChat(stages) || this.needsDecider(stages);
+  private needsAi(stages: Stage[], spec: PipelineSpec): boolean {
+    return this.needsChat(stages, spec) || this.needsDecider(stages, spec);
   }
 
-  private needsChat(stages: Stage[]): boolean {
-    return stages.length > 1 || stages.some((stage) => stage instanceof TaskStage);
+  private needsChat(stages: Stage[], spec: PipelineSpec): boolean {
+    return stages.length > 1 || stages.some((stage) => stage instanceof TaskStage) || this.extracting(spec).length > 0;
   }
 
-  private needsDecider(stages: Stage[]): boolean {
-    return stages.some((stage) => stage instanceof DecideStage);
+  private needsDecider(stages: Stage[], spec: PipelineSpec): boolean {
+    return stages.some((stage) => stage instanceof DecideStage) || Object.values(spec.prerequisites).some((gate) => gate.decide);
   }
 
-  private async aiProblem(stages: Stage[]): Promise<string | null> {
+  private async aiProblem(stages: Stage[], spec: PipelineSpec): Promise<string | null> {
     try {
-      if (this.needsChat(stages)) await this.options.checkAi?.(this.options.model);
-      if (this.needsDecider(stages)) await this.options.checkDecider?.(this.options.sets?.TESTEIYA_DECISION_MODEL);
+      if (this.needsChat(stages, spec)) await this.options.checkAi?.(this.options.model);
+      if (this.needsDecider(stages, spec)) await this.options.checkDecider?.(this.options.sets?.TESTEIYA_DECISION_MODEL);
       return null;
     } catch (err) {
       if (err instanceof UsageError) return err.message;
@@ -559,9 +579,10 @@ export class Pipeline {
   }
 
   private dryRun(spec: PipelineSpec, gates: Map<string, Gate>, stages: Stage[], values: PipelineValues, results: Map<string, boolean>, aiProblem: string | null): number {
-    if (this.needsAi(stages)) log.aiGate(aiProblem);
+    if (this.needsAi(stages, spec)) log.aiGate(aiProblem);
     for (const [name, passed] of results) {
-      if (gates.get(name)?.pending.length) log.pending(name, gates.get(name)!.pending);
+      const pending = gates.get(name)?.pending;
+      if (pending) log.pending(name, pending);
       else log.gate(name, passed, this.message(spec, gates, name));
     }
     log.note("");
@@ -596,8 +617,6 @@ export interface PipelineOptions {
   pipelineOverrides?: string[];
   /** ID:YAML, a patch of one stage, from --stage. */
   stageOverrides?: string[];
-  /** JSON files of values a `$value!extract` prerequisite takes before asking the agent, from --input. */
-  inputs?: string[];
   outputs?: string[];
   thread?: string;
   header?: string;
@@ -620,12 +639,12 @@ export interface PipelineOptions {
 
 type DecideRunner = (request: DecisionRequest, model?: string) => Promise<Decision>;
 
-/** A prerequisite as `pipeline-check` reports it. `pending`: values only the agent of a run would find. */
+/** A prerequisite as `pipeline-check` reports it. `pending`: what only a run would ask a model. */
 interface Checked {
   name: string;
   passed: boolean;
   message: string;
-  pending?: string[];
+  pending?: string;
 }
 
 interface Run {

@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { Decider, DecisionError, type Decision } from "../decision.js";
 import { UsageError } from "../model.js";
 import type { Launched } from "./launcher.js";
+import { ContextReader } from "./decide-context.js";
+import { DecideContexts } from "./decide-contexts.js";
 import { log } from "./log.js";
+import type { DecideContext } from "./spec.js";
 import { Stage, type Item, type StageContext } from "./stage.js";
 import type { StageResult } from "./state.js";
 import type { Variables } from "./variables.js";
@@ -28,7 +31,8 @@ export class DecideStage extends Stage {
     rmSync(join(context.dir, report), { force: true });
     rmSync(join(context.dir, file), { force: true });
 
-    const question = context.task(this, vars).trim();
+    const asked = context.decision(this, vars);
+    const question = asked.question.trim();
     log.command(`decide: ${question.split("\n")[0]}`);
     const controller = new AbortController();
     context.launcher.track(controller);
@@ -37,7 +41,7 @@ export class DecideStage extends Stage {
     const done = (): Launched => ({ code: 1, timedOut: controller.signal.reason === "timeout", interrupted: context.launcher.interrupted });
     try {
       const decision = await context.decide(
-        { question, state: this.state(dir, item), threshold: this.spec.threshold, signal: controller.signal },
+        { question, state: await this.state(context, dir, item, asked.context, vars), threshold: this.spec.decide?.threshold, signal: controller.signal },
         vars.get("TESTEIYA_DECISION_MODEL")
       );
       writeFileSync(join(context.dir, file), `${JSON.stringify(decision, null, 2)}\n`);
@@ -57,10 +61,15 @@ export class DecideStage extends Stage {
     }
   }
 
-  /** The inputs it was given, by name, and the loop's item. */
-  private state(dir: string, item: Item): Record<string, string> {
-    const files = this.inputs().filter((input) => existsSync(join(dir, input)));
-    const state = Decider.state(files.map((input) => join(dir, input)), undefined, dir);
+  /** Its context, else the inputs it was given, by name; and the loop's item. */
+  private async state(context: StageContext, dir: string, item: Item, wanted: DecideContext, vars: Variables): Promise<Record<string, string>> {
+    let state: Record<string, string>;
+    if (!DecideContexts.isEmpty(wanted)) {
+      state = await new ContextReader(context.sources(this, vars)).read(wanted);
+    } else {
+      const files = this.inputs().filter((input) => existsSync(join(dir, input)));
+      state = Decider.state(files.map((input) => join(dir, input)), undefined, dir);
+    }
     if (item.item !== undefined && !(item.item in state)) {
       const path = join(dir, item.item);
       if (existsSync(path)) Object.assign(state, Decider.state([path], undefined, dir));

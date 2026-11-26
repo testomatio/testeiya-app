@@ -38,8 +38,10 @@ export interface GateSpec {
   run?: string;
   /** `$value!changes:` the changed files match. */
   changes?: ChangesSpec;
-  /** `$value!extract:` every value is found, each `name: description`: in the pipeline's input, else by the agent. */
-  extract?: string[];
+  /** `$value!decide:` the decision model answers yes. */
+  decide?: DecideSpec;
+  /** `$value!extract:` the agent finds every value. */
+  extract?: ExtractSpec;
   /** Why the prerequisite failed, shown when it skips something. */
   message: string;
   /** The variables its formula reads: what a user sets to pass it. */
@@ -48,6 +50,35 @@ export interface GateSpec {
   needs: string[];
   /** One of its variables is declared `secret: true` in `$vars`. */
   secret: boolean;
+}
+
+/** A yes or no question for a decision model, and what it is judged against. */
+export interface DecideSpec {
+  /** `{{ }}` as written. */
+  question: string;
+  context: DecideContext;
+  /** The probability of yes that counts as yes. 0.5 by default. */
+  threshold?: number;
+}
+
+/** What a decision model is given with the question, each one block of text. */
+export interface DecideContext {
+  /** Earlier stages: each one's report, or its log for `run!sh`. */
+  stages: string[];
+  /** Sessions of earlier stages: the last assistant answer of each. */
+  sessions: string[];
+  /** Files, relative to the stage's folder, else the checkout. A mask takes every file it matches. */
+  files: string[];
+  /** Shell commands: what each prints. */
+  sh: string[];
+}
+
+/** Values the agent finds with its tools. */
+export interface ExtractSpec {
+  /** What to find and why, `{{ }}` as written. */
+  what: string;
+  /** Each `name: description`, as `testeiya extract --output` takes them. */
+  values: string[];
 }
 
 export interface ChangesSpec {
@@ -69,12 +100,10 @@ export interface StageSpec {
   task?: string;
   /** `run!sh:` a command stage: the shell command. */
   run?: string;
-  /** `run!decide:` a decision stage: the yes or no question, `{{ }}` as written. Yes passes, no fails. */
-  decide?: string;
-  /** The probability of yes a decision stage counts as yes. 0.5 by default. */
-  threshold?: number;
-  /** `run!extract:` an extraction stage: the values to find, each `name: description`, as `--output` takes them. */
-  extract?: string[];
+  /** `run!decide:` a decision stage. Yes passes, no fails. */
+  decide?: DecideSpec;
+  /** `run!extract:` an extraction stage. */
+  extract?: ExtractSpec;
   /** A named, persistent conversation. */
   session?: string;
   inputs: string[];
@@ -113,7 +142,7 @@ export interface StageView {
   title: string;
   emoji: string;
   kind: StageKind;
-  /** The task, the command, the question, or the values to extract one per line. */
+  /** The task, the command, the question, or what to extract. */
   text: string;
   session?: string;
   /** Prerequisite names its `when` reads. */
@@ -126,10 +155,10 @@ export interface StageView {
   stopOn: StopOn[];
   optional: boolean;
   timeout?: string | number;
-  /** A decide stage's threshold. */
-  threshold?: number;
-  /** An extract stage's values, `name: description`. */
-  format?: string[];
+  /** A decide stage: its question, context and threshold. */
+  decide?: DecideSpec;
+  /** An extract stage: what it finds, and the values. */
+  extract?: ExtractSpec;
 }
 
 export interface PrerequisiteView {
@@ -142,7 +171,7 @@ export interface PrerequisiteView {
   /** The part a user can satisfy by setting inputs. */
   env: string[];
   /** Checked in the checkout. A UI shows them, it cannot set them. */
-  checks: Array<"file" | "run" | "changes" | "extract">;
+  checks: Array<"file" | "run" | "changes" | "decide" | "extract">;
   secret: boolean;
 }
 

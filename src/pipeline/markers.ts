@@ -47,45 +47,72 @@ export class ChangesMarker extends Marked {
 }
 
 /**
- * `run!task:` an agent's task, or `run!decide:` a yes or no question. The text is
- * computed: on load it is a scripted-yaml `Text` when it holds `{{ }}`, and each
- * resolve makes the marker again with the text filled in.
+ * `run!task:` an agent's task. Computed, as `run!decide` and `run!extract` are:
+ * on load a text with `{{ }}` is a scripted-yaml `Text`, and each resolve makes
+ * the marker again with it filled in.
  */
 export class TaskMarker extends Marked {
-  readonly marker: string = "task";
+  readonly marker = "task";
 
   constructor(readonly text: unknown) {
     super();
   }
+}
 
-  override toString(): string {
-    return String(this.text);
+/** A marker whose value is a map, as the DSL's `markers` shapes it. */
+abstract class MapMarker extends Marked {
+  constructor(readonly value: unknown) {
+    super();
+  }
+
+  protected field(name: string): unknown {
+    const value = this.value;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+    return (value as Record<string, unknown>)[name];
   }
 }
 
-export class DecideMarker extends TaskMarker {
-  override readonly marker = "decide";
+/**
+ * `run!decide:` or `$value!decide:`: a yes or no question for a decision model,
+ * the `context` it judges it against, a `threshold`. A prerequisite's answer is
+ * set once asked: `prerequisites.ui_change` is true for yes.
+ */
+export class DecideMarker extends MapMarker {
+  readonly marker = "decide";
+
+  get question(): unknown {
+    return this.field("question");
+  }
+
+  get context(): unknown {
+    return this.field("context");
+  }
+
+  get threshold(): unknown {
+    return this.field("threshold");
+  }
 }
 
 /**
- * `run!extract:` or a prerequisite's `$value!extract:`: the values to find, as
- * `name: what it is`. A prerequisite's values are set once found; a formula
- * reads them as `prerequisites.git.sha`.
+ * `run!extract:` or `$value!extract:`: `what` to find and why, and the `values`,
+ * `name: what it is`. The agent finds them with its tools. A prerequisite's values
+ * are set once found; a formula reads them as `prerequisites.git.sha`.
  */
-export class ExtractMarker extends Marked {
+export class ExtractMarker extends MapMarker {
   readonly marker = "extract";
   /** Every value, once each was found. */
   values?: Record<string, string>;
   /** The values that were not found, once it was checked. */
   empty: string[] = [];
-  /**
-   * The values the input does not have, in a dry run or a check, which ask no
-   * agent: a run would. Until then each reads as its name, `<pr_url>`.
-   */
+  /** A dry run or a check asks no agent: the values a run would ask for. Until then each reads as `<name>`. */
   pending: string[] = [];
 
-  constructor(readonly fields: unknown) {
-    super();
+  get what(): unknown {
+    return this.field("what");
+  }
+
+  get fields(): unknown {
+    return this.field("values");
   }
 
   /** The message of a prerequisite that gives none. */
@@ -111,4 +138,4 @@ export const PIPELINE_MARKERS: Record<string, Marker> = {
 };
 
 /** Markers whose text is computed: `{{ }}` in it is checked, and filled in for a run. */
-export const COMPUTED_MARKERS = ["task", "decide"];
+export const COMPUTED_MARKERS = ["task", "decide", "extract"];
